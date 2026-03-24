@@ -1,0 +1,1185 @@
+/**
+ * parent/pages/BookReaderPage.tsx
+ * ─────────────────────────────────────────────────────
+ * ULTIMATE AI ANIMATED STORYBOOK READER
+ *
+ * Premium EdTech-level flipbook reader for Class 1 NCERT books.
+ *
+ * Features:
+ *  ①  react-pageflip two-page spread (desktop) / single (mobile)
+ *  ②  Realistic page turn with shadow, bending, fold effects
+ *  ③  📖 Reading Mode | 🎬 Story Mode toggle
+ *  ④  Page illustration animations (sun glow, clouds float, birds fly…)
+ *  ⑤  🔊 Read Aloud — AI narration with word highlighting
+ *  ⑥  Word tap → Explain / Pronounce / Example popup
+ *  ⑦  🤖 Ask AI about this page — sliding chat panel
+ *  ⑧  🎮 Mini activities — quiz, vocab, fun facts
+ *  ⑨  Focus Reading mode — dims illustrations, highlights text
+ *  ⑩  AI Learning Tracker — pages, time, words, quizzes
+ *  ⑪  Page progress bar + page counter
+ *  ⑫  Wooden table background + book depth shadow
+ *  ⑬  Mobile single-page + flip animation
+ *  ⑭  Lazy load ±2 pages around current
+ *  ⑮  Pastel glass theme throughout
+ */
+
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  forwardRef,
+  memo,
+} from 'react';
+import { pdfjs } from 'react-pdf';
+import HTMLFlipBook from 'react-pageflip';
+import { motion, AnimatePresence } from 'framer-motion';
+import { type BookEntry } from '../../data/bookConfig';
+import { detectLanguage } from '../../services/voiceService';
+
+// Reader sub-modules
+import { detectPageAnimations, generateAnimationCSS, type PageAnimation } from './reader/storyAnimations';
+import { useNarration } from './reader/useNarration';
+import { WordPopover } from './reader/WordPopover';
+import { AskAIPanel } from './reader/AskAIPanel';
+import { PageActivities } from './reader/PageActivities';
+import { useReadingTracker } from './reader/useReadingTracker';
+
+/* ─── PDF.js worker ───────────────────────────── */
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════ */
+const TOOLBAR_H = 56;
+const PROGRESS_H = 4;
+const PRELOAD_BUFFER = 2;
+const BOOKMARK_KEY = 'ncert_bookmarks_';
+
+/* ─── Helpers ─────────────────────────────────── */
+function getBookmarks(bookId: string): number[] {
+  try {
+    const raw = localStorage.getItem(BOOKMARK_KEY + bookId);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveBookmarks(bookId: string, pages: number[]): void {
+  localStorage.setItem(BOOKMARK_KEY + bookId, JSON.stringify(pages));
+}
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return isMobile;
+}
+
+/* ═══════════════════════════════════════════════════
+   PDF PAGE RENDERER
+   ═══════════════════════════════════════════════════ */
+interface PageCache { [n: number]: string }
+interface TextCache { [n: number]: string }
+
+async function renderPdfPage(pdfDoc: any, pageNum: number, scale = 1.5): Promise<{ image: string; text: string }> {
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d')!;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const image = canvas.toDataURL('image/jpeg', 0.92);
+
+  // Extract text
+  let text = '';
+  try {
+    const tc = await page.getTextContent();
+    text = tc.items.map((i: any) => i.str).join(' ');
+  } catch { /* ignore */ }
+
+  return { image, text };
+}
+
+/* ═══════════════════════════════════════════════════
+   FLIPBOOK PAGE (forwardRef for react-pageflip)
+   ═══════════════════════════════════════════════════ */
+interface FlipPageProps {
+  pageNum: number;
+  imageUrl: string | null;
+  isLoading: boolean;
+  bookTitle: string;
+  /* Story mode animations */
+  storyMode: boolean;
+  animations: PageAnimation[];
+  animCSS: string;
+  /* Focus mode */
+  focusMode: boolean;
+  /* Text overlay for interactions */
+  pageText: string;
+  highlightedWord: string;
+  highlightedWordIndex: number;
+  onWordClick?: (word: string, x: number, y: number) => void;
+}
+
+const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
+  pageNum, imageUrl, isLoading, bookTitle,
+  storyMode, animations, animCSS,
+  focusMode,
+  pageText, highlightedWord, highlightedWordIndex,
+  onWordClick,
+}, ref) => {
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: '#FFFEF7',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative',
+        boxShadow: 'inset 0 0 40px rgba(0,0,0,0.04), inset -2px 0 8px rgba(0,0,0,0.03)',
+      }}
+    >
+      {/* Story mode animation CSS injection */}
+      {storyMode && animCSS && (
+        <style dangerouslySetInnerHTML={{ __html: animCSS }} />
+      )}
+
+      {/* Page content area */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 6,
+          overflow: 'hidden',
+          position: 'relative',
+          /* Focus mode: slightly dim illustration */
+          filter: focusMode ? 'contrast(0.7) brightness(1.1)' : 'none',
+        }}
+      >
+        {imageUrl ? (
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              src={imageUrl}
+              alt={`${bookTitle} — Page ${pageNum}`}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: 3,
+                /* Story mode: subtle animation on the whole page */
+                animation: storyMode && animations.length > 0 ? animations[0].cssAnimation : 'none',
+              }}
+              draggable={false}
+            />
+
+            {/* Story mode animation indicators */}
+            {storyMode && animations.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 4,
+                  left: 4,
+                  display: 'flex',
+                  gap: 3,
+                  flexWrap: 'wrap',
+                }}
+              >
+                {animations.map((a) => (
+                  <span
+                    key={a.id}
+                    title={a.description}
+                    style={{
+                      fontSize: 10,
+                      padding: '2px 6px',
+                      borderRadius: 8,
+                      background: 'rgba(255,255,255,0.85)',
+                      backdropFilter: 'blur(4px)',
+                      fontWeight: 700,
+                      color: '#6366F1',
+                    }}
+                  >
+                    {a.emoji} {a.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : isLoading ? (
+          <div style={{ textAlign: 'center' }}>
+            <motion.div
+              style={{
+                width: 36, height: 36, margin: '0 auto',
+                borderRadius: '50%', border: '3px solid #E0E7FF', borderTopColor: '#6366F1',
+              }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+            />
+            <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 10, fontWeight: 600 }}>
+              Loading page {pageNum}…
+            </p>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center' }}>
+            <span style={{ fontSize: 36, opacity: 0.2 }}>📄</span>
+            <p style={{ fontSize: 11, color: '#D1D5DB', marginTop: 8, fontWeight: 600 }}>
+              Page {pageNum}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Text overlay for Focus Mode + word interaction */}
+      {focusMode && pageText && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(255,255,250,0.88)',
+            padding: '20px 16px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+          }}
+        >
+          <p
+            style={{
+              fontSize: 15,
+              lineHeight: 2,
+              color: '#1F2937',
+              fontWeight: 500,
+              textAlign: 'justify',
+              wordSpacing: 2,
+            }}
+          >
+            {pageText.split(/(\s+)/).map((part, idx) => {
+              const isWord = /\S/.test(part);
+              if (!isWord) return <span key={idx}>{part}</span>;
+
+              const isHighlighted =
+                highlightedWord &&
+                part.toLowerCase().includes(highlightedWord.toLowerCase());
+
+              return (
+                <span
+                  key={idx}
+                  onClick={(e) => {
+                    if (onWordClick && isWord) {
+                      onWordClick(part.replace(/[^a-zA-Z\u0900-\u097F\u0A80-\u0AFF]/g, ''), e.clientX, e.clientY);
+                    }
+                  }}
+                  style={{
+                    cursor: isWord ? 'pointer' : 'default',
+                    background: isHighlighted ? 'rgba(250,204,21,0.45)' : 'transparent',
+                    borderRadius: isHighlighted ? 3 : 0,
+                    padding: isHighlighted ? '1px 2px' : 0,
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  {part}
+                </span>
+              );
+            })}
+          </p>
+        </div>
+      )}
+
+      {/* Page number footer */}
+      <div
+        style={{
+          padding: '5px 14px',
+          display: 'flex',
+          justifyContent: pageNum % 2 === 0 ? 'flex-start' : 'flex-end',
+          alignItems: 'center',
+          borderTop: '1px solid rgba(0,0,0,0.04)',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', fontVariantNumeric: 'tabular-nums' }}>
+          {pageNum}
+        </span>
+      </div>
+
+      {/* Paper edge effect */}
+      <div
+        style={{
+          position: 'absolute', top: 0,
+          [pageNum % 2 === 1 ? 'right' : 'left']: 0,
+          bottom: 0, width: 3, pointerEvents: 'none',
+          background: pageNum % 2 === 1
+            ? 'linear-gradient(to left, rgba(0,0,0,0.06), transparent)'
+            : 'linear-gradient(to right, rgba(0,0,0,0.06), transparent)',
+        }}
+      />
+    </div>
+  );
+}));
+FlipPage.displayName = 'FlipPage';
+
+/* ═══════════════════════════════════════════════════
+   COVER PAGE
+   ═══════════════════════════════════════════════════ */
+const CoverPage = memo(forwardRef<HTMLDivElement, { book: BookEntry }>(({ book }, ref) => (
+  <div
+    ref={ref}
+    style={{
+      width: '100%', height: '100%',
+      background: `linear-gradient(135deg, ${book.accentColor}22, ${book.accentColor}11)`,
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 18, position: 'relative', overflow: 'hidden',
+    }}
+  >
+    <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: '50%', background: `${book.accentColor}15` }} />
+    <div style={{ position: 'absolute', bottom: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: `${book.accentColor}10` }} />
+
+    <motion.span
+      style={{ fontSize: 72, filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.08))' }}
+      animate={{ y: [0, -6, 0] }}
+      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      {book.coverEmoji}
+    </motion.span>
+
+    <div style={{ textAlign: 'center', position: 'relative', zIndex: 2, padding: '0 24px' }}>
+      <h2 style={{ fontSize: 20, fontWeight: 900, color: '#1F2937', lineHeight: 1.3, marginBottom: 8 }}>
+        {book.title}
+      </h2>
+      <p style={{ fontSize: 12, color: '#6B7280', fontWeight: 600 }}>
+        {book.board === 'ncert' ? 'NCERT' : 'GSEB'} · {book.subject} · Class 1
+      </p>
+      <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 10, fontWeight: 500 }}>
+        {book.chapters.length} Chapters · AI Animated Reader
+      </p>
+    </div>
+
+    <div style={{ position: 'absolute', bottom: 18, fontSize: 10, color: '#D1D5DB', fontWeight: 600 }}>
+      Tap or swipe to turn pages →
+    </div>
+  </div>
+)));
+CoverPage.displayName = 'CoverPage';
+
+/* ═══════════════════════════════════════════════════
+   BACK COVER
+   ═══════════════════════════════════════════════════ */
+const BackCover = memo(forwardRef<HTMLDivElement, { book: BookEntry; totalPages: number; stats: any }>(({ book, totalPages, stats }, ref) => (
+  <div
+    ref={ref}
+    style={{
+      width: '100%', height: '100%',
+      background: `linear-gradient(135deg, ${book.accentColor}15, ${book.accentColor}08)`,
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 14,
+    }}
+  >
+    <span style={{ fontSize: 48, opacity: 0.6 }}>🎉</span>
+    <h3 style={{ fontSize: 16, fontWeight: 800, color: '#4B5563' }}>Reading Complete!</h3>
+    <p style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 500 }}>
+      {book.title} · {totalPages} pages
+    </p>
+
+    {/* Session stats */}
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+      <StatBadge emoji="📄" label="Pages" value={`${stats.pagesRead}`} />
+      <StatBadge emoji="💬" label="Words" value={`${stats.wordsClicked}`} />
+      <StatBadge emoji="🧠" label="Quizzes" value={`${stats.quizzesTaken}`} />
+    </div>
+
+    <p style={{ fontSize: 10, color: '#D1D5DB', marginTop: 10, fontWeight: 600 }}>
+      ← Swipe back to revisit any page
+    </p>
+  </div>
+)));
+BackCover.displayName = 'BackCover';
+
+const StatBadge: React.FC<{ emoji: string; label: string; value: string }> = ({ emoji, label, value }) => (
+  <div style={{
+    padding: '8px 14px', borderRadius: 12,
+    background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.06)',
+    textAlign: 'center',
+  }}>
+    <span style={{ fontSize: 16 }}>{emoji}</span>
+    <p style={{ fontSize: 14, fontWeight: 900, color: '#1F2937', margin: '2px 0 0' }}>{value}</p>
+    <p style={{ fontSize: 9, color: '#9CA3AF', fontWeight: 600, margin: 0 }}>{label}</p>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════
+   SVG ICONS
+   ═══════════════════════════════════════════════════ */
+const Icon: React.FC<{ name: string; size?: number; className?: string }> = ({ name, size = 16, className = '' }) => {
+  const s = { width: size, height: size };
+  const common = `${className} shrink-0`;
+  const stroke = 'currentColor';
+  switch (name) {
+    case 'back':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>;
+    case 'chevron-left':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>;
+    case 'chevron-right':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>;
+    case 'download':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+    case 'fullscreen':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" /></svg>;
+    case 'fullscreen-exit':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4" /></svg>;
+    case 'bookmark':
+      return <svg {...s} className={common} fill="none" viewBox="0 0 24 24" stroke={stroke} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>;
+    case 'bookmark-fill':
+      return <svg {...s} className={common} fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>;
+    default:
+      return null;
+  }
+};
+
+/* ═══════════════════════════════════════════════════
+   TOOLBAR BUTTON
+   ═══════════════════════════════════════════════════ */
+const TBtn: React.FC<{
+  icon?: string; emoji?: string; label?: string;
+  onClick: () => void; active?: boolean; disabled?: boolean;
+  children?: React.ReactNode;
+}> = ({ icon, emoji, label, onClick, active, disabled, children }) => (
+  <motion.button
+    onClick={onClick}
+    disabled={disabled}
+    title={label}
+    className={`flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed rounded-xl transition-colors ${
+      active
+        ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 border border-transparent'
+    }`}
+    style={{ minWidth: 36, height: 36, padding: children ? '0 10px' : 0, gap: 4, fontSize: 13 }}
+    whileHover={!disabled ? { scale: 1.06 } : {}}
+    whileTap={!disabled ? { scale: 0.92 } : {}}
+  >
+    {icon && <Icon name={icon} size={16} />}
+    {emoji && <span style={{ fontSize: 14 }}>{emoji}</span>}
+    {children}
+  </motion.button>
+);
+
+/* ═══════════════════════════════════════════════════
+   MODE TOGGLE PILL
+   ═══════════════════════════════════════════════════ */
+const ModeToggle: React.FC<{
+  mode: 'reading' | 'story' | 'focus';
+  onChange: (m: 'reading' | 'story' | 'focus') => void;
+}> = ({ mode, onChange }) => {
+  const modes = [
+    { key: 'reading' as const, label: '📖 Read', tip: 'Reading Mode' },
+    { key: 'story' as const, label: '🎬 Story', tip: 'Story Mode — Animated' },
+    { key: 'focus' as const, label: '🎯 Focus', tip: 'Focus Reading' },
+  ];
+  return (
+    <div
+      style={{
+        display: 'inline-flex', borderRadius: 20, padding: 3, gap: 2,
+        background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)',
+      }}
+    >
+      {modes.map((m) => (
+        <motion.button
+          key={m.key}
+          onClick={() => onChange(m.key)}
+          title={m.tip}
+          style={{
+            padding: '4px 10px', borderRadius: 16, border: 'none',
+            fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            background: mode === m.key ? '#6366F1' : 'transparent',
+            color: mode === m.key ? '#fff' : '#6B7280',
+          }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {m.label}
+        </motion.button>
+      ))}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
+   MAIN: BookReaderPage
+   ═══════════════════════════════════════════════════ */
+export interface BookReaderPageProps {
+  book: BookEntry;
+  onBack: () => void;
+}
+
+const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
+  /* ── Core PDF state ─────────────────────────── */
+  const [numPages, setNumPages] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfError, setPdfError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  /* ── Page caches ────────────────────────────── */
+  const [pageCache, setPageCache] = useState<PageCache>({});
+  const [textCache, setTextCache] = useState<TextCache>({});
+  const loadingRef = useRef<Set<number>>(new Set());
+
+  /* ── Modes ──────────────────────────────────── */
+  const [mode, setMode] = useState<'reading' | 'story' | 'focus'>('reading');
+
+  /* ── Narration ──────────────────────────────── */
+  const narration = useNarration();
+
+  /* ── Word interaction ───────────────────────── */
+  const [selectedWord, setSelectedWord] = useState<{ word: string; x: number; y: number } | null>(null);
+
+  /* ── Ask AI panel ───────────────────────────── */
+  const [askAIOpen, setAskAIOpen] = useState(false);
+
+  /* ── Bookmarks ──────────────────────────────── */
+  const [bookmarks, setBookmarksState] = useState<number[]>(() => getBookmarks(book.id));
+
+  /* ── Fullscreen ─────────────────────────────── */
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  /* ── Stats panel ────────────────────────────── */
+  const [showStats, setShowStats] = useState(false);
+
+  /* ── Refs ────────────────────────────────────── */
+  const bookRef = useRef<any>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+
+  /* ── Reading Tracker ────────────────────────── */
+  const tracker = useReadingTracker(book.id, book.title);
+
+  /* ── Flipbook dimensions ────────────────────── */
+  const dimensions = useMemo(() => {
+    const maxW = window.innerWidth;
+    const maxH = window.innerHeight - TOOLBAR_H - PROGRESS_H - 60;
+    if (isMobile) {
+      const w = Math.min(maxW - 24, 500);
+      const h = Math.min(w * 1.414, maxH);
+      return { width: w, height: h };
+    }
+    const pageW = Math.min((maxW - 140) / 2, 460);
+    const pageH = Math.min(pageW * 1.414, maxH);
+    return { width: pageW, height: pageH };
+  }, [isMobile]);
+
+  /* ── Load PDF ───────────────────────────────── */
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setPdfError(false);
+    const load = async () => {
+      try {
+        const doc = await pdfjs.getDocument(book.pdfUrl).promise;
+        if (cancelled) return;
+        setPdfDoc(doc);
+        setNumPages(doc.numPages);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('[BookReader] PDF load error:', err);
+        if (!cancelled) { setPdfError(true); setIsLoading(false); }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [book.pdfUrl]);
+
+  /* ── Pre-render pages ───────────────────────── */
+  const renderPage = useCallback(async (pageNum: number) => {
+    if (!pdfDoc || pageNum < 1 || pageNum > numPages) return;
+    if (pageCache[pageNum] || loadingRef.current.has(pageNum)) return;
+    loadingRef.current.add(pageNum);
+    try {
+      const { image, text } = await renderPdfPage(pdfDoc, pageNum, isMobile ? 1.5 : 2.0);
+      setPageCache((p) => ({ ...p, [pageNum]: image }));
+      if (text) setTextCache((t) => ({ ...t, [pageNum]: text }));
+    } catch (err) {
+      console.warn(`Failed to render page ${pageNum}:`, err);
+    } finally {
+      loadingRef.current.delete(pageNum);
+    }
+  }, [pdfDoc, numPages, pageCache, isMobile]);
+
+  useEffect(() => {
+    if (!pdfDoc || numPages === 0) return;
+    const pages: number[] = [];
+    for (let i = -PRELOAD_BUFFER; i <= PRELOAD_BUFFER + 1; i++) {
+      const p = currentPage + i;
+      if (p >= 1 && p <= numPages) pages.push(p);
+    }
+    for (let i = 1; i <= Math.min(3, numPages); i++) {
+      if (!pages.includes(i)) pages.push(i);
+    }
+    pages.forEach(renderPage);
+  }, [pdfDoc, numPages, currentPage, renderPage]);
+
+  /* ── Track page views ───────────────────────── */
+  useEffect(() => {
+    if (currentPage > 0 && currentPage <= numPages) {
+      tracker.trackPageView(currentPage);
+    }
+  }, [currentPage, numPages]);
+
+  /* ── Flip callbacks ─────────────────────────── */
+  const onFlip = useCallback((e: any) => {
+    setCurrentPage(e.data);
+    narration.stopNarration();
+    setSelectedWord(null);
+  }, [narration]);
+
+  const flipNext = useCallback(() => { bookRef.current?.pageFlip()?.flipNext(); }, []);
+  const flipPrev = useCallback(() => { bookRef.current?.pageFlip()?.flipPrev(); }, []);
+
+  /* ── Display page number ────────────────────── */
+  const displayPage = useMemo(() => {
+    if (currentPage === 0) return 0;
+    if (currentPage > numPages) return numPages;
+    return currentPage;
+  }, [currentPage, numPages]);
+
+  /* ── Bookmark ───────────────────────────────── */
+  const toggleBookmark = useCallback(() => {
+    if (displayPage === 0) return;
+    setBookmarksState((prev) => {
+      const next = prev.includes(displayPage)
+        ? prev.filter((p) => p !== displayPage)
+        : [...prev, displayPage].sort((a, b) => a - b);
+      saveBookmarks(book.id, next);
+      return next;
+    });
+  }, [displayPage, book.id]);
+  const isBookmarked = bookmarks.includes(displayPage);
+
+  /* ── Download ───────────────────────────────── */
+  const handleDownload = useCallback(() => {
+    const a = document.createElement('a');
+    a.href = book.pdfUrl;
+    a.download = book.title.replace(/[^a-zA-Z0-9 ]/g, '') + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [book.pdfUrl, book.title]);
+
+  /* ── Fullscreen ─────────────────────────────── */
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      shellRef.current?.requestFullscreen?.();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.();
+      setIsFullscreen(false);
+    }
+  }, []);
+  useEffect(() => {
+    const h = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', h);
+    return () => document.removeEventListener('fullscreenchange', h);
+  }, []);
+
+  /* ── Narration handler ──────────────────────── */
+  const handleReadAloud = useCallback(() => {
+    const text = textCache[displayPage];
+    if (!text) return;
+    if (narration.state === 'playing') {
+      narration.pause();
+    } else if (narration.state === 'paused') {
+      narration.resume();
+    } else {
+      const lang = detectLanguage(text);
+      narration.play(text, lang);
+      tracker.trackNarrationUse();
+    }
+  }, [displayPage, textCache, narration, tracker]);
+
+  /* ── Word click handler ─────────────────────── */
+  const handleWordClick = useCallback((word: string, x: number, y: number) => {
+    setSelectedWord({ word, x, y });
+    tracker.trackWordClick();
+  }, [tracker]);
+
+  /* ── Keyboard shortcuts ─────────────────────── */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (askAIOpen) return; // Don't steal focus from chat
+      if (e.key === 'Escape') {
+        if (selectedWord) { setSelectedWord(null); return; }
+        if (showStats) { setShowStats(false); return; }
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
+        onBack();
+        return;
+      }
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); flipNext(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); flipPrev(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onBack, selectedWord, askAIOpen, showStats, flipNext, flipPrev]);
+
+  /* ── Progress ───────────────────────────────── */
+  const totalFlipPages = numPages + 2;
+  const progressPercent = totalFlipPages > 0 ? Math.round((currentPage / (totalFlipPages - 1)) * 100) : 0;
+
+  /* ── Story-mode animations for current page ──  */
+  const currentAnimations = useMemo(() => {
+    if (mode !== 'story') return [];
+    const text = textCache[displayPage] || '';
+    return detectPageAnimations(text);
+  }, [mode, displayPage, textCache]);
+
+  const currentAnimCSS = useMemo(() => generateAnimationCSS(currentAnimations), [currentAnimations]);
+
+  /* ── Current page text & language ───────────── */
+  const currentPageText = textCache[displayPage] || '';
+  const currentLang = currentPageText ? detectLanguage(currentPageText) : 'en-IN';
+
+  /* ── Build flip pages ───────────────────────── */
+  const flipPages = useMemo(() => {
+    if (numPages === 0) return [];
+    const pages: React.ReactNode[] = [];
+    pages.push(<CoverPage key="cover" book={book} />);
+    for (let i = 1; i <= numPages; i++) {
+      pages.push(
+        <FlipPage
+          key={`p-${i}`}
+          pageNum={i}
+          imageUrl={pageCache[i] || null}
+          isLoading={loadingRef.current.has(i)}
+          bookTitle={book.title}
+          storyMode={mode === 'story'}
+          animations={i === displayPage ? currentAnimations : []}
+          animCSS={i === displayPage ? currentAnimCSS : ''}
+          focusMode={mode === 'focus'}
+          pageText={textCache[i] || ''}
+          highlightedWord={narration.highlightedWord}
+          highlightedWordIndex={narration.highlightedWordIndex}
+          onWordClick={mode === 'focus' ? handleWordClick : undefined}
+        />,
+      );
+    }
+    pages.push(<BackCover key="back" book={book} totalPages={numPages} stats={tracker.stats} />);
+    return pages;
+  }, [numPages, book, pageCache, textCache, mode, displayPage, currentAnimations, currentAnimCSS, narration.highlightedWord, narration.highlightedWordIndex, handleWordClick, tracker.stats]);
+
+  /* ═════════════════════════════════════════════
+     RENDER
+     ═════════════════════════════════════════════ */
+  return (
+    <div
+      ref={shellRef}
+      className="fixed inset-0 z-[100] flex flex-col"
+      style={{
+        /* Wooden table background */
+        background: `
+          radial-gradient(ellipse at center bottom, rgba(180,140,100,0.12) 0%, transparent 70%),
+          linear-gradient(180deg, #F5F3FF 0%, #EDE9FE 40%, #E8E0D4 100%)
+        `,
+      }}
+    >
+      {/* ─────── TOOLBAR ─────── */}
+      <header
+        className="relative z-30 flex items-center justify-between px-2 lg:px-4 shrink-0 select-none"
+        style={{
+          height: TOOLBAR_H,
+          background: 'rgba(255,255,255,0.92)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          boxShadow: '0 1px 8px rgba(0,0,0,0.04)',
+        }}
+      >
+        {/* LEFT — Back + Title */}
+        <div className="flex items-center gap-1.5 min-w-0 shrink">
+          <motion.button
+            onClick={onBack}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-xl cursor-pointer shrink-0"
+            style={{ background: 'rgba(243,244,246,0.85)', border: '1px solid rgba(0,0,0,0.06)' }}
+            whileHover={{ scale: 1.05, x: -2 }}
+            whileTap={{ scale: 0.94 }}
+          >
+            <Icon name="back" size={14} className="text-gray-500" />
+            <span className="text-[10px] font-semibold text-gray-500 hidden sm:inline">Back</span>
+          </motion.button>
+
+          <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${book.gradient} flex items-center justify-center shadow-sm shrink-0`}>
+            <span className="text-xs">{book.coverEmoji}</span>
+          </div>
+          <div className="min-w-0 hidden sm:block">
+            <h1 className="text-xs font-bold text-gray-800 truncate leading-tight">{book.title}</h1>
+            <p className="text-[9px] text-gray-400 font-medium">{book.board === 'ncert' ? 'NCERT' : 'GSEB'} · Class 1</p>
+          </div>
+        </div>
+
+        {/* CENTER — Mode Toggle + Page Counter */}
+        <div className="flex items-center gap-2">
+          <ModeToggle mode={mode} onChange={setMode} />
+
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(0,0,0,0.03)' }}>
+            <span className="text-[11px] font-black text-indigo-600 tabular-nums">
+              {displayPage === 0 ? 'Cover' : displayPage > numPages ? 'End' : displayPage}
+            </span>
+            {displayPage > 0 && displayPage <= numPages && (
+              <>
+                <span className="text-[10px] text-gray-300 font-bold">/</span>
+                <span className="text-[11px] font-bold text-gray-400 tabular-nums">{numPages}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT — Actions */}
+        <div className="flex items-center gap-0.5">
+          {/* Read Aloud */}
+          <TBtn
+            emoji={narration.state === 'playing' ? '⏸️' : '🔊'}
+            onClick={handleReadAloud}
+            active={narration.state !== 'idle'}
+            label="Read Aloud"
+            disabled={!currentPageText}
+          />
+
+          {/* Ask AI */}
+          <TBtn
+            emoji="🤖"
+            onClick={() => setAskAIOpen(true)}
+            label="Ask AI about this page"
+          />
+
+          {/* Stats */}
+          <TBtn
+            emoji="📊"
+            onClick={() => setShowStats((s) => !s)}
+            active={showStats}
+            label="Reading Stats"
+          />
+
+          {/* Bookmark */}
+          <TBtn
+            icon={isBookmarked ? 'bookmark-fill' : 'bookmark'}
+            onClick={toggleBookmark}
+            active={isBookmarked}
+            label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+            disabled={displayPage === 0}
+          />
+
+          {/* Fullscreen */}
+          <TBtn icon={isFullscreen ? 'fullscreen-exit' : 'fullscreen'} onClick={toggleFullscreen} label="Fullscreen" />
+
+          {/* Download */}
+          <TBtn icon="download" onClick={handleDownload} label="Download PDF" />
+        </div>
+      </header>
+
+      {/* ─────── PROGRESS BAR ─────── */}
+      <div style={{ height: PROGRESS_H, background: 'rgba(0,0,0,0.04)', position: 'relative', overflow: 'hidden' }}>
+        <motion.div
+          style={{ height: '100%', background: 'linear-gradient(90deg, #6366F1, #8B5CF6, #A78BFA)', borderRadius: '0 2px 2px 0' }}
+          initial={{ width: '0%' }}
+          animate={{ width: `${progressPercent}%` }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+        />
+      </div>
+
+      {/* ─────── STATS DROPDOWN ─────── */}
+      <AnimatePresence>
+        {showStats && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              overflow: 'hidden',
+              background: 'rgba(255,255,255,0.96)',
+              borderBottom: '1px solid rgba(0,0,0,0.06)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            <div style={{ padding: '10px 20px', display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <MiniStat emoji="📄" label="Pages Read" value={`${tracker.stats.pagesRead}`} />
+              <MiniStat emoji="⏱️" label="Time" value={formatMs(tracker.getElapsedTime())} />
+              <MiniStat emoji="💬" label="Words Explored" value={`${tracker.stats.wordsClicked}`} />
+              <MiniStat emoji="❓" label="AI Questions" value={`${tracker.stats.questionsAsked}`} />
+              <MiniStat emoji="📝" label="Quizzes" value={`${tracker.stats.quizzesTaken} (${tracker.stats.quizzesCorrect} correct)`} />
+              <MiniStat emoji="🔊" label="Narrations" value={`${tracker.stats.narrationUsed}`} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════ FLIPBOOK AREA ═══════ */}
+      <div
+        className="flex-1 flex flex-col items-center justify-center relative"
+        style={{
+          minHeight: 0, overflow: 'hidden',
+          padding: isMobile ? '4px 2px 0' : '8px 24px 0',
+        }}
+      >
+        {/* Error state */}
+        {pdfError && (
+          <motion.div className="text-center max-w-sm mx-auto px-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <span className="text-6xl inline-block mb-5">📚</span>
+            <h2 className="text-lg font-black text-gray-700 mb-2">Unable to load book</h2>
+            <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+              We couldn't open <strong>{book.title}</strong>. Check your connection and try again.
+            </p>
+            <motion.button onClick={onBack} className="px-6 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-bold cursor-pointer shadow-lg" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
+              Go Back
+            </motion.button>
+          </motion.div>
+        )}
+
+        {/* Loading state */}
+        {isLoading && !pdfError && (
+          <motion.div className="text-center" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+            <motion.div
+              className="w-14 h-14 mx-auto rounded-full border-[3px] border-indigo-200 border-t-indigo-500"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+            />
+            <p className="text-sm font-semibold text-gray-500 mt-5">Preparing your animated storybook…</p>
+            <p className="text-[11px] text-gray-400 mt-1.5">{book.title}</p>
+          </motion.div>
+        )}
+
+        {/* FLIPBOOK */}
+        {!isLoading && !pdfError && numPages > 0 && (
+          <>
+            {/* Left arrow (desktop) */}
+            {!isMobile && (
+              <motion.button
+                onClick={flipPrev}
+                disabled={currentPage === 0}
+                className="absolute left-2 lg:left-5 z-20 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
+                whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+              >
+                <Icon name="chevron-left" size={20} className="text-gray-600" />
+              </motion.button>
+            )}
+
+            {/* Flipbook container with book shadow */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              style={{
+                filter: 'drop-shadow(0 12px 40px rgba(0,0,0,0.15)) drop-shadow(0 4px 12px rgba(0,0,0,0.08))',
+              }}
+            >
+              {/* @ts-ignore - react-pageflip types */}
+              <HTMLFlipBook
+                ref={bookRef}
+                width={dimensions.width}
+                height={dimensions.height}
+                size="fixed"
+                minWidth={280}
+                maxWidth={600}
+                minHeight={400}
+                maxHeight={900}
+                maxShadowOpacity={0.5}
+                showCover={true}
+                mobileScrollSupport={true}
+                onFlip={onFlip}
+                className="flipbook"
+                style={{}}
+                startPage={0}
+                drawShadow={true}
+                flippingTime={600}
+                usePortrait={isMobile}
+                startZIndex={0}
+                autoSize={false}
+                clickEventForward={true}
+                useMouseEvents={true}
+                swipeDistance={30}
+                showPageCorners={true}
+                disableFlipByClick={false}
+              >
+                {flipPages}
+              </HTMLFlipBook>
+            </motion.div>
+
+            {/* Right arrow (desktop) */}
+            {!isMobile && (
+              <motion.button
+                onClick={flipNext}
+                disabled={currentPage >= totalFlipPages - 1}
+                className="absolute right-2 lg:right-5 z-20 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
+                whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+              >
+                <Icon name="chevron-right" size={20} className="text-gray-600" />
+              </motion.button>
+            )}
+          </>
+        )}
+
+        {/* Page Activities (below flipbook) */}
+        {!isLoading && !pdfError && displayPage > 0 && displayPage <= numPages && (
+          <div style={{ width: Math.min(dimensions.width * (isMobile ? 1 : 2) + 20, window.innerWidth - 40), marginTop: 4, flexShrink: 0 }}>
+            <PageActivities
+              pageNum={displayPage}
+              pageText={currentPageText}
+              bookTitle={book.title}
+              onQuizComplete={(correct) => tracker.trackQuizResult(correct)}
+              onVocabInteraction={() => tracker.trackWordClick()}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ─────── MOBILE BOTTOM BAR ─────── */}
+      {numPages > 0 && !isLoading && isMobile && (
+        <div
+          className="shrink-0 flex items-center justify-between px-3 py-2"
+          style={{ background: 'rgba(255,255,255,0.94)', borderTop: '1px solid rgba(0,0,0,0.06)', backdropFilter: 'blur(16px)' }}
+        >
+          <motion.button onClick={flipPrev} disabled={currentPage === 0}
+            className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-[11px] font-bold disabled:opacity-30 cursor-pointer"
+            whileTap={{ scale: 0.95 }}>
+            ← Prev
+          </motion.button>
+          <span className="text-[11px] font-bold text-gray-700 tabular-nums">
+            {displayPage === 0 ? 'Cover' : displayPage > numPages ? 'End' : `${displayPage} / ${numPages}`}
+          </span>
+          <motion.button onClick={flipNext} disabled={currentPage >= totalFlipPages - 1}
+            className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-[11px] font-bold disabled:opacity-30 cursor-pointer"
+            whileTap={{ scale: 0.95 }}>
+            Next →
+          </motion.button>
+        </div>
+      )}
+
+      {/* ─────── DESKTOP BOTTOM INFO ─────── */}
+      {numPages > 0 && !isLoading && !isMobile && (
+        <div
+          className="hidden md:flex items-center justify-center gap-3 py-2 shrink-0"
+          style={{ background: 'rgba(255,255,255,0.65)', borderTop: '1px solid rgba(0,0,0,0.04)', backdropFilter: 'blur(12px)' }}
+        >
+          <span className="text-[10px] font-bold text-gray-400">
+            {displayPage === 0 ? 'Cover' : displayPage > numPages ? 'End' : `Page ${displayPage} of ${numPages}`}
+          </span>
+          <span className="text-[10px] text-gray-300">·</span>
+          <span className="text-[10px] font-bold text-indigo-500">{progressPercent}% read</span>
+          <span className="text-[10px] text-gray-300">·</span>
+          <span className="text-[10px] text-gray-400">
+            {mode === 'reading' ? '📖 Reading' : mode === 'story' ? '🎬 Story Mode' : '🎯 Focus Mode'}
+          </span>
+          <span className="text-[10px] text-gray-300">·</span>
+          <span className="text-[10px] text-gray-400">← → keys or click page edges to turn</span>
+        </div>
+      )}
+
+      {/* ─────── WORD POPOVER ─────── */}
+      <AnimatePresence>
+        {selectedWord && (
+          <WordPopover
+            word={selectedWord.word}
+            x={selectedWord.x}
+            y={selectedWord.y}
+            lang={currentLang}
+            onClose={() => setSelectedWord(null)}
+            onAskAI={(q) => {
+              tracker.trackAIQuestion(q);
+              setAskAIOpen(true);
+              setSelectedWord(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ─────── ASK AI PANEL ─────── */}
+      <AskAIPanel
+        open={askAIOpen}
+        onClose={() => setAskAIOpen(false)}
+        pageText={currentPageText}
+        pageNum={displayPage}
+        bookTitle={book.title}
+        onQuestionAsked={(q) => tracker.trackAIQuestion(q)}
+      />
+
+      {/* ─────── NARRATION INDICATOR ─────── */}
+      <AnimatePresence>
+        {narration.state !== 'idle' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            style={{
+              position: 'fixed',
+              bottom: isMobile ? 60 : 50,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 150,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 16px',
+              borderRadius: 20,
+              background: 'rgba(99,102,241,0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 4px 20px rgba(99,102,241,0.3)',
+            }}
+          >
+            <motion.span
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+              style={{ fontSize: 14 }}
+            >
+              🔊
+            </motion.span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>
+              {narration.state === 'playing' ? 'Reading aloud…' : 'Paused'}
+            </span>
+            {narration.highlightedWord && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
+                — "{narration.highlightedWord}"
+              </span>
+            )}
+            <motion.button
+              onClick={() => narration.stopNarration()}
+              style={{
+                width: 22, height: 22, borderRadius: '50%',
+                border: 'none', background: 'rgba(255,255,255,0.2)',
+                color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 900,
+              }}
+              whileTap={{ scale: 0.9 }}
+            >
+              ✕
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/* ── Helper ───────────────────────────────────── */
+function formatMs(ms: number): string {
+  if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3600000) return `${Math.round(ms / 60000)}m`;
+  return `${Math.floor(ms / 3600000)}h ${Math.round((ms % 3600000) / 60000)}m`;
+}
+
+const MiniStat: React.FC<{ emoji: string; label: string; value: string }> = ({ emoji, label, value }) => (
+  <div style={{ textAlign: 'center', minWidth: 70 }}>
+    <span style={{ fontSize: 14 }}>{emoji}</span>
+    <p style={{ fontSize: 12, fontWeight: 800, color: '#1F2937', margin: '1px 0 0' }}>{value}</p>
+    <p style={{ fontSize: 9, color: '#9CA3AF', fontWeight: 600, margin: 0 }}>{label}</p>
+  </div>
+);
+
+export default BookReaderPage;

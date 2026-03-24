@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Progress - Smart School System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-school"></i>
+            <h2>Smart School</h2>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('hod_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="{{ url_for('upload_exam_timetable') }}"><i class="fas fa-calendar-alt"></i> Exam Timetable</a></li>
+                <li><a href="{{ url_for('teacher_progress') }}"><i class="fas fa-chalkboard-teacher"></i> Teacher Progress</a></li>
+                <li class="active"><a href="#"><i class="fas fa-users"></i> Class Progress</a></li>
+                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h1>Class Progress</h1>
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span>HOD</span>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            {% for class_stat in class_stats %}
+            <div class="card">
+                <div class="card-icon bg-blue">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+                <div class="card-content">
+                    <h3>{{ class_stat[0] }}</h3>
+                    <p>Students: {{ class_stat[1] }}</p>
+                    <p>Avg. Score: {{ "%.2f"|format(class_stat[2]|float) }}%</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="chart-container" style="background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); margin-top: 30px;">
+            <h2>Class Performance Comparison</h2>
+            <canvas id="classChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        // Chart for class performance
+        const ctx = document.getElementById('classChart').getContext('2d');
+        const classChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Class 8', 'Class 9', 'Class 10'],
+                datasets: [{
+                    label: 'Average Score (%)',
+                    data: [85.5, 82.3, 87.8],
+                    backgroundColor: [
+                        'rgba(102, 126, 234, 0.6)',
+                        'rgba(118, 75, 162, 0.6)',
+                        'rgba(79, 172, 254, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(102, 126, 234, 1)',
+                        'rgba(118, 75, 162, 1)',
+                        'rgba(79, 172, 254, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

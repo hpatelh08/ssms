@@ -1,0 +1,39 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Frontend dependency and build output
+**/node_modules/
+**/dist/
+**/build/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+**/.git.disabled-for-root-upload/
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local runtime data
+school.db
+*.sqlite
+*.sqlite3
+
+# Generated or sensitive local exports
+ALL_CREDENTIALS.csv
+generated_accounts.csv
+generated_accounts_final.csv
+generated_accounts_full.csv
+DEMO_CREDENTIALS.txt
+_tmp_*.txt
+
+# Large content assets kept locally
+**/*.pdf

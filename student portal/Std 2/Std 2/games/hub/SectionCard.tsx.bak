@@ -1,0 +1,88 @@
+/**
+ * games/hub/SectionCard.tsx — Animated section card for Games Hub
+ * ────────────────────────────────────────────────────────────────
+ * Each card represents a major section (Arcade, Maths, English, Library).
+ * Child-friendly design with warm theme, hover glow, and staggered entry.
+ */
+
+import React from 'react';
+import { motion } from 'framer-motion';
+
+export interface SectionCardProps {
+  title: string;
+  subtitle: string;
+  icon: string;
+  /** Warm gradient string, e.g. 'linear-gradient(135deg, #FF7F50, #FFB347)' */
+  gradient: string;
+  /** Glow colour for hover, e.g. 'rgba(255,127,80,0.35)' */
+  glowColor: string;
+  /** Stagger delay index (0..3) */
+  index: number;
+  onClick: () => void;
+}
+
+const SectionCard: React.FC<SectionCardProps> = ({
+  title, subtitle, icon, gradient, glowColor, index, onClick,
+}) => (
+  <motion.button
+    onClick={onClick}
+    initial={{ opacity: 0, y: 40 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.15 + index * 0.1, type: 'spring', stiffness: 260, damping: 20 }}
+    whileHover={{ scale: 1.05, y: -6 }}
+    whileTap={{ scale: 0.96 }}
+    style={{
+      flex: '0 0 auto',
+      width: 'clamp(200px, 20vw, 260px)',
+      aspectRatio: '3 / 4',
+      background: gradient,
+      borderRadius: 24,
+      border: '2.5px solid rgba(255,255,255,0.4)',
+      cursor: 'pointer',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      padding: '24px 16px',
+      position: 'relative',
+      overflow: 'hidden',
+      outline: 'none',
+      WebkitTapHighlightColor: 'transparent',
+      boxShadow: `0 8px 32px ${glowColor}, 0 2px 8px rgba(0,0,0,0.08)`,
+      transition: 'box-shadow 0.3s ease',
+    }}
+  >
+    {/* Gloss overlay */}
+    <div style={{
+      position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 100%)',
+      borderRadius: '24px 24px 0 0',
+      pointerEvents: 'none',
+    }} />
+
+    {/* Icon */}
+    <span style={{ fontSize: 'clamp(48px, 6vw, 72px)', lineHeight: 1, zIndex: 1 }}>
+      {icon}
+    </span>
+
+    {/* Title */}
+    <span style={{
+      fontSize: 'clamp(18px, 2.2vw, 24px)', fontWeight: 900,
+      color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+      zIndex: 1, textAlign: 'center', lineHeight: 1.2,
+    }}>
+      {title}
+    </span>
+
+    {/* Subtitle */}
+    <span style={{
+      fontSize: 'clamp(12px, 1.4vw, 15px)', fontWeight: 600,
+      color: 'rgba(255,255,255,0.85)', zIndex: 1, textAlign: 'center',
+    }}>
+      {subtitle}
+    </span>
+  </motion.button>
+);
+
+export default React.memo(SectionCard);

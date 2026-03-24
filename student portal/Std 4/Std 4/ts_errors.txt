@@ -1,0 +1,15 @@
+child/colorMagicEngine.ts(460,34): error TS2345: Argument of type 'readonly string[]' is not assignable to parameter of type 'string[]'.
+  The type 'readonly string[]' is 'readonly' and cannot be assigned to the mutable type 'string[]'.
+child/useSoundEngine.ts(126,31): error TS2339: Property 'volume' does not exist on type 'unknown'.
+child/useSoundEngine.ts(127,12): error TS2339: Property 'volume' does not exist on type 'unknown'.
+child/useSoundEngine.ts(128,12): error TS2339: Property 'currentTime' does not exist on type 'unknown'.
+child/useSoundEngine.ts(129,22): error TS2339: Property 'play' does not exist on type 'unknown'.
+child/useSoundEngine.ts(132,16): error TS2339: Property 'pause' does not exist on type 'unknown'.
+child/useSoundEngine.ts(133,16): error TS2339: Property 'currentTime' does not exist on type 'unknown'.
+child/useSoundEngine.ts(134,16): error TS2339: Property 'volume' does not exist on type 'unknown'.
+child/useSoundEngine.ts(137,16): error TS2339: Property 'volume' does not exist on type 'unknown'.
+games/DifficultySelector.tsx(150,74): error TS2339: Property 'completed' does not exist on type 'unknown'.
+games/GameShell.tsx(245,85): error TS2339: Property 'completed' does not exist on type 'unknown'.
+games/LevelGrid.tsx(245,86): error TS2339: Property 'completed' does not exist on type 'unknown'.
+games/subjects/SubjectGamesHub.tsx(69,3): error TS1117: An object literal cannot have multiple properties with the same name.
+parent/analytics/parentTheme.ts(105,25): error TS2503: Cannot find namespace 'React'.

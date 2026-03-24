@@ -1,0 +1,163 @@
+/* ═══════════════════════════════════════════════════════════
+   Layout System — Centralized Architecture
+   ═══════════════════════════════════════════════════════════
+   Single source of truth for the entire app layout.
+   Every page inherits from this — no per-page wrappers.
+
+   Structure:
+     .app-root  → flex row (sidebar + main)
+     .main-area → flex column (topbar + page)
+     .page-container → centered, capped, padded content
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Root flex row: sidebar + main ── */
+.app-root {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ── Main column (fills remaining width after fixed sidebar) ── */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* critical: prevents flex overflow */
+  position: relative;
+  z-index: 10;
+  margin-left: 248px; /* offset for fixed sidebar + gap */
+  margin-top: 8px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  border-radius: 0; /* sharp corners — professional look */
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 40px rgba(100, 120, 200, 0.06);
+}
+
+/* ── Bottom padding for mobile nav ── */
+@media (max-width: 1023px) {
+  .main-area {
+    padding-bottom: 80px; /* room for fixed bottom nav */
+    margin-left: 0; /* no sidebar on mobile */
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    border-radius: 0; /* full width on mobile */
+    box-shadow: none;
+  }
+}
+
+/* ── Content area: centered, capped, padded, with depth ── */
+.page-container {
+  flex: 1;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  perspective: 1200px;
+  border-radius: 0;
+}
+
+.dashboard-header {
+  padding: 20px 0;
+}
+
+.dashboard-header-shell {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 30px;
+  box-sizing: border-box;
+}
+
+.dashboard-header-card {
+  position: relative;
+  width: 100%;
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 20px 30px;
+  box-sizing: border-box;
+}
+
+.dashboard-header-left,
+.dashboard-header-right {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.dashboard-header-right {
+  justify-content: flex-end;
+}
+
+.dashboard-header-center {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-dashboard {
+  width: 100%;
+  max-width: 1400px;
+  margin: 40px auto 0;
+  padding: 20px 30px 40px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-header-shell {
+    padding: 0 18px;
+  }
+
+  .dashboard-header-card {
+    padding: 18px 20px;
+  }
+
+  .main-dashboard {
+    margin-top: 28px;
+    padding: 20px 18px 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-header-shell {
+    padding: 0 16px;
+  }
+
+  .dashboard-header-left,
+  .dashboard-header-right {
+    flex: 1 1 auto;
+  }
+
+  .dashboard-header-center {
+    order: 3;
+    width: 100%;
+  }
+
+  .main-dashboard {
+    margin-top: 24px;
+    padding: 20px 16px 24px;
+  }
+}
+
+/* ── Prevent flex overflow globally ── */
+* {
+  min-width: 0;
+}
+
+/* ── Utility: standard page section container ── */
+.section-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 8px;
+}

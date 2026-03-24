@@ -1,0 +1,127 @@
+Use this master prompt:
+
+```text
+Create a vertical mobile game level map screen with smooth animated path progression for a space-themed game.
+
+Project structure:
+assets/
+- background/space-background.png
+- planets/planet-green-ring.png
+- planets/planet-orange-ring.png
+- characters/astronaut.png
+- characters/role.png
+- vehicles/rocket-blue-red.png
+- space-objects/satellite.png
+- space-objects/asteroid.png
+- galaxies/galaxy-purple-blue.png
+- galaxies/galaxy-golden.png
+- effects/shooting-star.png
+- nebula/nebula-pink-purple.png
+
+Goal:
+Build a polished scrollable level path screen for a casual mobile game. The screen should feel alive, magical, and premium. The player character is role.png. role.png represents the current active player standing on the current level node.
+
+Layout:
+- Vertical 9:16 mobile screen
+- Use space-background.png as the full background
+- Add decorative assets around the sides, not blocking the path center
+- Keep the middle area readable for the level path
+- Path should move vertically through the screen in a smooth curved pattern
+- Path style should feel like a glowing cosmic trail or star-road
+
+Level path system:
+- Create multiple circular level nodes connected by a smooth glowing curved path
+- Path should snake upward like a casual level map
+- Each node should be evenly spaced and visually clear
+- Locked levels should look dark and inactive
+- Completed levels should look glowing green with checkmark feel
+- Current level should be highlighted strongly
+- role.png stands on the current level node
+- role.png should feel like the player avatar placed above or slightly overlapping the current node
+- role.png must be the hero focus of the active level
+
+Animation requirements:
+- The full map should support vertical scroll movement
+- The path should animate subtly with flowing energy or moving glow
+- Current level node should pulse softly
+- role.png should have idle animation:
+  - gentle floating up and down
+  - tiny hover bounce
+  - slight glow
+- Decorative assets should have parallax movement on scroll
+- galaxies and nebula move slower
+- planets and satellites move medium
+- shooting stars occasionally streak across
+- rocket can have subtle drift animation
+- stars can twinkle softly
+- path glow should shimmer very gently
+
+Path visual style:
+- Bright cosmic line
+- Purple, blue, cyan glow
+- Rounded elegant curves
+- Premium casual game look
+- Similar polish level of modern mobile puzzle/adventure map UI
+
+Current player behavior:
+- role.png should always appear on the active current level
+- role.png should look like it is standing, hovering, or waiting on the node
+- When changing levels, role.png should smoothly move along the path to the next node
+- Movement should follow the curve path, not jump directly
+- Add a short easing animation for movement
+- Add a small landing bounce when role.png reaches the next node
+
+Decor placement:
+- Place planet-green-ring.png and planet-orange-ring.png near outer sides
+- astronaut.png can float near upper or side decorative areas
+- rocket-blue-red.png can appear as side decoration
+- satellite.png and asteroid.png can be placed around edges
+- galaxy-purple-blue.png and galaxy-golden.png stay behind as large soft decorative layers
+- shooting-star.png appears occasionally as animated effect
+- nebula-pink-purple.png can be used in corners or side framing
+
+Important constraints:
+- Keep the center playable path readable
+- Do not overcrowd the middle
+- Do not let decorative assets overlap the current node heavily
+- Maintain consistent scale and polish
+- Make it feel like a real production-ready mobile game map
+
+Need output:
+- Smooth path animation concept
+- Scrollable level map behavior
+- Current level highlight behavior
+- role.png player idle and movement animation
+- Layered parallax motion setup
+- Premium casual space game feel
+```
+
+For developer use, this shorter implementation prompt is better:
+
+```text
+Build a vertical scrollable space-themed level map for a mobile game.
+
+Use:
+- space-background.png as background
+- role.png as the main player avatar on the current level
+- all other assets as decorative parallax elements
+
+Requirements:
+- create a smooth curved glowing level path
+- multiple level nodes connected along the path
+- current node highlighted
+- completed nodes green
+- locked nodes dark
+- role.png stands on current node
+- role.png has idle floating animation
+- role.png moves along the curved path when level changes
+- add landing bounce on arrival
+- add subtle animated glow to the path
+- add parallax scrolling to decorative assets
+- keep center clear and readable
+- premium casual mobile game polish
+- 9:16 layout
+- smooth transitions and clean layering
+```
+
+If you want, I can make the next one as a **full HTML + CSS + JS prompt** for this animated path system.

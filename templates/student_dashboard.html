@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Smart School System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-school"></i>
+            <h2>Smart School</h2>
+        </div>
+        <nav>
+            <ul>
+                <li class="active"><a href="#" onclick="showDashboard()"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="#" onclick="showHomework()"><i class="fas fa-book-open"></i> Homework</a></li>
+                <li><a href="#" onclick="showExams()"><i class="fas fa-calendar-alt"></i> Exams</a></li>
+                <li><a href="#" onclick="showPerformance()"><i class="fas fa-chart-line"></i> Performance</a></li>
+                <li><a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h1>Student Dashboard</h1>
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span>Student</span>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="card" onclick="showHomework()">
+                <div class="card-icon bg-blue">
+                    <i class="fas fa-book-open"></i>
+                </div>
+                <div class="card-content">
+                    <h3>Today's Homework</h3>
+                    <p>View and submit your daily assignments</p>
+                </div>
+            </div>
+
+            <div class="card" onclick="showExams()">
+                <div class="card-icon bg-green">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="card-content">
+                    <h3>Upcoming Exams</h3>
+                    <p>Check schedule and prepare for exams</p>
+                </div>
+            </div>
+
+            <div class="card" onclick="showPerformance()">
+                <div class="card-icon bg-purple">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="card-content">
+                    <h3>Overall Performance</h3>
+                    <p>View your academic and behavioral stats</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Content Sections -->
+        <div id="homeworkSection" class="content-section" style="display: none;">
+            <div class="section-header">
+                <h2><i class="fas fa-book-open"></i> Today's Homework</h2>
+                <button class="close-btn" onclick="hideAllSections()">&times;</button>
+            </div>
+            <div class="homework-grid">
+                <div class="homework-card">
+                    <h3>Mathematics</h3>
+                    <p>Complete exercises 1-20 from chapter 5</p>
+                    <span class="due-date">Due: Today, 5:00 PM</span>
+                    <button class="submit-btn">Submit</button>
+                </div>
+                <div class="homework-card">
+                    <h3>Science</h3>
+                    <p>Write a report on photosynthesis (500 words)</p>
+                    <span class="due-date">Due: Tomorrow</span>
+                    <button class="submit-btn">Submit</button>
+                </div>
+                <div class="homework-card">
+                    <h3>English</h3>
+                    <p>Read chapters 3-4 and summarize key points</p>
+                    <span class="due-date">Due: 2 days</span>
+                    <button class="submit-btn">Submit</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="examsSection" class="content-section" style="display: none;">
+            <div class="section-header">
+                <h2><i class="fas fa-calendar-alt"></i> Upcoming Exams</h2>
+                <button class="close-btn" onclick="hideAllSections()">&times;</button>
+            </div>
+            <div class="exams-container">
+                <div class="exam-card">
+                    <div class="exam-date">Mar 15</div>
+                    <div class="exam-details">
+                        <h3>Mathematics Midterm</h3>
+                        <p>Chapters 1-5 | 2 hours</p>
+                        <span class="status upcoming">Upcoming</span>
+                    </div>
+                </div>
+                <div class="exam-card">
+                    <div class="exam-date">Mar 22</div>
+                    <div class="exam-details">
+                        <h3>Science Final</h3>
+                        <p>Full Syllabus | 3 hours</p>
+                        <span class="status upcoming">Upcoming</span>
+                    </div>
+                </div>
+                <div class="exam-card">
+                    <div class="exam-date">Mar 30</div>
+                    <div class="exam-details">
+                        <h3>English Literature</h3>
+                        <p>Poetry Analysis | 1.5 hours</p>
+                        <span class="status upcoming">Upcoming</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="performanceSection" class="content-section" style="display: none;">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-line"></i> Overall Performance</h2>
+                <button class="close-btn" onclick="hideAllSections()">&times;</button>
+            </div>
+            
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <h3>Subject Performance</h3>
+                    <canvas id="subjectChart" style="background: #f8f9ff; border: 1px solid #e0e6ed;"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Attendance Trend</h3>
+                    <canvas id="attendanceChart" style="background: #f8f9ff; border: 1px solid #e0e6ed;"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Grade Distribution</h3>
+                    <canvas id="gradeChart" style="background: #f8f9ff; border: 1px solid #e0e6ed;"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Monthly Progress</h3>
+                    <canvas id="progressChart" style="background: #f8f9ff; border: 1px solid #e0e6ed;"></canvas>
+                </div>
+            </div>
+            
+            <div class="performance-stats">
+                <div class="stat-card-large">
+                    <div class="stat-icon-large bg-blue">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="stat-info-large">
+                        <h3>Attendance Rate</h3>
+                        <p>95%</p>
+                        <span>171/180 days present</span>
+                    </div>
+                </div>
+                <div class="stat-card-large">
+                    <div class="stat-icon-large bg-green">
+                        <i class="fas fa-smile"></i>
+                    </div>
+                    <div class="stat-info-large">
+                        <h3>Behavior Score</h3>
+                        <p>Excellent</p>
+                        <span>12 positive incidents</span>
+                    </div>
+                </div>
+                <div class="stat-card-large">
+                    <div class="stat-icon-large bg-purple">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <div class="stat-info-large">
+                        <h3>Average Grade</h3>
+                        <p>A-</p>
+                        <span>87% overall average</span>
+                    </div>
+                </div>
+                <div class="stat-card-large">
+                    <div class="stat-icon-large bg-orange">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div class="stat-info-large">
+                        <h3>Rank</h3>
+                        <p>5th</p>
+                        <span>Out of 30 students</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>My Class</h3>
+                    <p>Class 8</p>
+                </div>
+                <div class="stat-icon bg-blue">
+                    <i class="fas fa-building"></i>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Attendance Rate</h3>
+                    <p>95%</p>
+                </div>
+                <div class="stat-icon bg-green">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Next Exam</h3>
+                    <p>Math - Mar 15</p>
+                </div>
+                <div class="stat-icon bg-purple">
+                    <i class="fas fa-calendar-day"></i>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>Average Grade</h3>
+                    <p>A-</p>
+                </div>
+                <div class="stat-icon bg-orange">
+                    <i class="fas fa-star"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        // Interactive dashboard functions
+        
+        function showDashboard() {
+            hideAllSections();
+            // Show the main dashboard grid and header
+            document.querySelector('.dashboard-grid').style.display = 'grid';
+            document.querySelector('header').style.display = 'flex';
+        }
+        
+        function showSettings() {
+            // Student dashboard doesn't have a settings section, so just return to dashboard
+            alert('Settings page would open here in a full implementation');
+            showDashboard();
+        }
+        
+        function showHomework() {
+            hideAllSections();
+            document.getElementById('homeworkSection').style.display = 'block';
+        }
+        
+        function showExams() {
+            hideAllSections();
+            document.getElementById('examsSection').style.display = 'block';
+        }
+        
+        function showPerformance() {
+            hideAllSections();
+            document.getElementById('performanceSection').style.display = 'block';
+            // Initialize charts when performance section is shown
+            setTimeout(initializeCharts, 100);
+        }
+        
+        function hideAllSections() {
+            document.getElementById('homeworkSection').style.display = 'none';
+            document.getElementById('examsSection').style.display = 'none';
+            document.getElementById('performanceSection').style.display = 'none';
+        }
+        
+        function initializeCharts() {
+            console.log("=== Student Dashboard Chart Initialization ===");
+            
+            // Destroy existing charts if they exist
+            if (window.studentCharts) {
+                window.studentCharts.forEach(chart => {
+                    if (chart) chart.destroy();
+                });
+            }
+            window.studentCharts = [];
+            
+            try {
+                // Subject Performance Chart (Radar)
+                const subjectCtx = document.getElementById('subjectChart');
+                if (subjectCtx) {
+                    console.log("Creating Subject Performance chart...");
+                    const subjectChart = new Chart(subjectCtx, {
+                        type: 'radar',
+                        data: {
+                            labels: ['Mathematics', 'Science', 'English', 'History', 'Geography'],
+                            datasets: [{
+                                label: 'Performance %',
+                                data: [92, 88, 95, 85, 90],
+                                backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                                borderColor: '#667eea',
+                                pointBackgroundColor: '#667eea',
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: '#667eea'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                r: {
+                                    angleLines: {
+                                        display: true
+                                    },
+                                    suggestedMin: 70,
+                                    suggestedMax: 100
+                                }
+                            }
+                        }
+                    });
+                    window.studentCharts.push(subjectChart);
+                    console.log("✓ Subject Performance chart created");
+                } else {
+                    console.log("✗ Subject chart canvas not found");
+                }
+
+                // Attendance Trend Chart (Line)
+                const attendanceCtx = document.getElementById('attendanceChart');
+                if (attendanceCtx) {
+                    console.log("Creating Attendance Trend chart...");
+                    const attendanceChart = new Chart(attendanceCtx, {
+                        type: 'line',
+                        data: {
+                            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                            datasets: [{
+                                label: 'Attendance %',
+                                data: [94, 96, 95, 97, 93, 95],
+                                borderColor: '#4facfe',
+                                backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    min: 90,
+                                    max: 100
+                                }
+                            }
+                        }
+                    });
+                    window.studentCharts.push(attendanceChart);
+                    console.log("✓ Attendance Trend chart created");
+                } else {
+                    console.log("✗ Attendance chart canvas not found");
+                }
+
+                // Grade Distribution Chart (Doughnut)
+                const gradeCtx = document.getElementById('gradeChart');
+                if (gradeCtx) {
+                    console.log("Creating Grade Distribution chart...");
+                    const gradeChart = new Chart(gradeCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['A', 'B', 'C', 'D'],
+                            datasets: [{
+                                data: [35, 45, 15, 5],
+                                backgroundColor: [
+                                    '#10b981',
+                                    '#3b82f6',
+                                    '#f59e0b',
+                                    '#ef4444'
+                                ],
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                    window.studentCharts.push(gradeChart);
+                    console.log("✓ Grade Distribution chart created");
+                } else {
+                    console.log("✗ Grade chart canvas not found");
+                }
+
+                // Monthly Progress Chart (Bar)
+                const progressCtx = document.getElementById('progressChart');
+                if (progressCtx) {
+                    console.log("Creating Monthly Progress chart...");
+                    const progressChart = new Chart(progressCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+                            datasets: [{
+                                label: 'Progress Score',
+                                data: [78, 82, 85, 88, 92],
+                                backgroundColor: [
+                                    'rgba(102, 126, 234, 0.7)',
+                                    'rgba(79, 172, 254, 0.7)',
+                                    'rgba(166, 192, 254, 0.7)',
+                                    'rgba(246, 128, 132, 0.7)',
+                                    'rgba(255, 117, 140, 0.7)'
+                                ],
+                                borderColor: [
+                                    '#667eea',
+                                    '#4facfe',
+                                    '#a6c0fe',
+                                    '#f68084',
+                                    '#ff758c'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100
+                                }
+                            }
+                        }
+                    });
+                    window.studentCharts.push(progressChart);
+                    console.log("✓ Monthly Progress chart created");
+                } else {
+                    console.log("✗ Progress chart canvas not found");
+                }
+                
+                console.log("=== All Student Charts Initialized Successfully ===");
+                
+            } catch (error) {
+                console.error("Chart initialization error:", error);
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Student dashboard DOM loaded");
+            // Initialize dashboard view on page load
+            showDashboard();
+            
+            // Add hover effects to sidebar items
+            const sidebarItems = document.querySelectorAll('.sidebar nav ul li');
+            sidebarItems.forEach(item => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateX(5px)';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateX(0)';
+                });
+            });
+            
+            // Initialize charts for dashboard section
+            setTimeout(initializeCharts, 500);
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize dashboard view on page load
+            showDashboard();
+            
+            // Add hover effects to sidebar items
+            const sidebarItems = document.querySelectorAll('.sidebar nav ul li');
+            sidebarItems.forEach(item => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateX(5px)';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateX(0)';
+                });
+            });
+
+            // Add animation to cards
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+                card.classList.add('fade-in');
+            });
+
+            // Add click effects to stat cards
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    this.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        this.style.transform = 'scale(1)';
+                    }, 150);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

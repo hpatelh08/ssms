@@ -1,0 +1,12 @@
+/*
+ * SSMS React — global CSS entry point.
+ * The primary stylesheet is loaded via index.html:
+ *   <link rel="stylesheet" href="/css/style.css" />
+ *
+ * Add any React-specific overrides below.
+ */
+
+/* Ensure the #root fills the viewport like the original body layout */
+#root {
+  display: contents;
+}

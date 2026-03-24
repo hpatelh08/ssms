@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Progress - Smart School System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-school"></i>
+            <h2>Smart School</h2>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('hod_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="{{ url_for('upload_exam_timetable') }}"><i class="fas fa-calendar-alt"></i> Exam Timetable</a></li>
+                <li class="active"><a href="#"><i class="fas fa-chalkboard-teacher"></i> Teacher Progress</a></li>
+                <li><a href="{{ url_for('class_progress') }}"><i class="fas fa-users"></i> Class Progress</a></li>
+                <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h1>Teacher Progress</h1>
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span>HOD</span>
+            </div>
+        </header>
+
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Teacher Name</th>
+                        <th>Subject</th>
+                        <th>Class Assigned</th>
+                        <th>Status</th>
+                        <th>Performance Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for teacher in teachers %}
+                    <tr>
+                        <td>{{ teacher[1] }}</td>
+                        <td>Mathematics</td>
+                        <td>{{ teacher[4] }}</td>
+                        <td><span class="status active">Active</span></td>
+                        <td>92%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ teacher[1] }}</td>
+                        <td>Science</td>
+                        <td>{{ teacher[4] }}</td>
+                        <td><span class="status active">Active</span></td>
+                        <td>88%</td>
+                    </tr>
+                    <tr>
+                        <td>{{ teacher[1] }}</td>
+                        <td>English</td>
+                        <td>{{ teacher[4] }}</td>
+                        <td><span class="status active">Active</span></td>
+                        <td>95%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

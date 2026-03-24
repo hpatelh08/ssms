@@ -1,0 +1,228 @@
+/*
+  LevelPathMap.css — Candy Crush-style winding level map
+  200 levels, 3 difficulty sections, orange SVG path, image-based buttons.
+*/
+
+/* ── Root ─────────────────────────────────────────────── */
+.lpm-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px); /* respects TopBar */
+  overflow: hidden;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+}
+
+/* ── Background ──────────────────────────────────────── */
+.lpm-bg {
+  position: absolute;
+  inset: 0;
+  background: url('/assets/background/background.png') center / cover no-repeat;
+  z-index: 0;
+}
+.lpm-bg-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.12);
+  z-index: 0;
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.lpm-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.lpm-back-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.lpm-back-btn:hover { background: rgba(255, 255, 255, 0.22); }
+
+.lpm-header-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lpm-title {
+  color: #fff;
+  font-weight: 900;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lpm-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lpm-pill {
+  border: 1.5px solid;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-weight: 900;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ── Scroll area ──────────────────────────────────────── */
+.lpm-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.lpm-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Map canvas (centred, holds everything) ──────────── */
+.lpm-canvas {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ── SVG path overlay ─────────────────────────────────── */
+.lpm-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* ── Section banner ───────────────────────────────────── */
+.lpm-banner {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  border: 2px solid;
+  border-radius: 18px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
+}
+.lpm-banner-label {
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.4px;
+}
+.lpm-banner-sub {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* ── Pin (positions each node) ────────────────────────── */
+.lpm-pin {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ── Node button ──────────────────────────────────────── */
+.lpm-node {
+  position: relative;
+  pointer-events: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(.34, 1.56, .64, 1);
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.lpm-node:not(.lpm-node--locked):hover  { transform: translateY(-6px) scale(1.15); }
+.lpm-node:not(.lpm-node--locked):active { transform: scale(0.9); }
+
+/* Current level — golden glow pulse */
+.lpm-node--active {
+  animation: lpm-glow 1.8s ease-in-out infinite;
+}
+@keyframes lpm-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px  rgba(251, 191, 36, 0.5)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(251, 191, 36, 1.0)); }
+}
+
+/* Locked */
+.lpm-node--locked {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* ── Node image ───────────────────────────────────────── */
+.lpm-node-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Level number (overlaid on button) ───────────────── */
+.lpm-node-num {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  font-weight: 900;
+  font-size: 19px;
+  color: #fff;
+  text-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.75),
+    0 0  8px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  font-family: inherit;
+  line-height: 1;
+}
+
+/* ── Lock icon ────────────────────────────────────────── */
+.lpm-lock {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* ── Phone adjustments ────────────────────────────────── */
+@media (max-width: 400px) {
+  .lpm-node-img { width: 62px; height: 62px; }
+  .lpm-node-num { font-size: 16px; }
+}

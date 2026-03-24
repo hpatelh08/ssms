@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart School — Login</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-left">
+      <div class="school-logo">🏫</div>
+      <h1>Smart School</h1>
+      <p>Sign in to manage students, staff, attendance, exams, fees, and notices.</p>
+      <div class="login-features">
+        <div class="login-feature"><span class="feat-icon">📊</span> Real-time dashboard insights</div>
+        <div class="login-feature"><span class="feat-icon">🗂</span> Centralized records management</div>
+        <div class="login-feature"><span class="feat-icon">🔒</span> Secure role-based access</div>
+        <div class="login-feature"><span class="feat-icon">👪</span> Parent portal for Class 1–10</div>
+      </div>
+    </div>
+
+    <div class="login-right">
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:0;border-radius:10px;overflow:hidden;border:1.5px solid #e2e8f0;margin-bottom:24px;">
+        <button id="tab-admin" onclick="switchLoginTab('admin')"
+          style="flex:1;padding:10px 0;font-size:0.88rem;font-weight:700;border:none;cursor:pointer;
+                 background:#4f46e5;color:#fff;border-radius:0;transition:.2s;">
+          🔐 Admin / Staff
+        </button>
+        <button id="tab-parent" onclick="switchLoginTab('parent')"
+          style="flex:1;padding:10px 0;font-size:0.88rem;font-weight:700;border:none;cursor:pointer;
+                 background:#f1f5f9;color:#64748b;border-radius:0;transition:.2s;">
+          👪 Parent Login
+        </button>
+      </div>
+
+      <!-- ===== ADMIN LOGIN ===== -->
+      <div id="adminLoginPane">
+        <div class="login-greeting">Admin Login</div>
+        <div class="login-sub">Use your admin credentials to continue.</div>
+        <form class="login-form" id="loginForm">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" placeholder="admin001@admin.com" required />
+          </div>
+          <div class="form-group" style="position:relative;">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" placeholder="Admin@123" required />
+            <button type="button" id="togglePwd"
+              style="position:absolute;right:10px;top:34px;background:none;border:none;cursor:pointer;font-size:1rem;">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+          <div class="form-group" id="loginError" style="display:none;color:#dc2626;font-size:0.82rem;font-weight:600;"></div>
+          <button type="submit" class="login-btn">Sign In</button>
+        </form>
+        <div class="login-demo">
+          <p>Demo Admin Accounts</p>
+          <div class="demo-accounts">
+            <button class="demo-acc" type="button" data-email="admin001@admin.com" data-pass="Admin@123">
+              <span class="demo-role">Admin</span> admin001@admin.com
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PARENT LOGIN ===== -->
+      <div id="parentLoginPane" style="display:none;">
+        <!-- Sub-tabs: Class 1-7 vs Class 8-10 -->
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <button id="subtab-junior" onclick="switchParentTab('junior')"
+            style="flex:1;padding:8px 0;font-size:0.82rem;font-weight:700;border:1.5px solid #4f46e5;
+                   border-radius:8px;cursor:pointer;background:#4f46e5;color:#fff;transition:.2s;">
+            Class 1–7 🔑
+          </button>
+          <button id="subtab-senior" onclick="switchParentTab('senior')"
+            style="flex:1;padding:8px 0;font-size:0.82rem;font-weight:700;border:1.5px solid #e2e8f0;
+                   border-radius:8px;cursor:pointer;background:#f8fafc;color:#64748b;transition:.2s;">
+            Class 8–10 👤
+          </button>
+        </div>
+
+        <!-- Junior: Access Key -->
+        <div id="juniorPane">
+          <div class="login-greeting" style="font-size:1.1rem;">Parent Access — Class 1 to 7</div>
+          <div class="login-sub">Enter your child's Student ID and the 4-digit Access Key.</div>
+          <form class="login-form" id="accessKeyForm">
+            <div class="form-group">
+              <label class="form-label">Student ID</label>
+              <input type="text" class="form-control" id="ak-student-id" placeholder="e.g. STU00001" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Access Key (Last 4 digits of mobile)</label>
+              <input type="text" class="form-control" id="ak-access-key" placeholder="e.g. 4567" maxlength="4" required />
+            </div>
+            <div class="form-group" id="akError" style="display:none;color:#dc2626;font-size:0.82rem;font-weight:600;"></div>
+            <button type="submit" class="login-btn">Access Portal</button>
+          </form>
+        </div>
+
+        <!-- Senior: Parent ID + Password -->
+        <div id="seniorPane" style="display:none;">
+          <div class="login-greeting" style="font-size:1.1rem;">Parent Login — Class 8 to 10</div>
+          <div class="login-sub">Enter your Parent ID and password provided by the school.</div>
+          <form class="login-form" id="parentLoginForm">
+            <div class="form-group">
+              <label class="form-label">Parent ID</label>
+              <input type="text" class="form-control" id="par-login-id" placeholder="e.g. PAR001" required />
+            </div>
+            <div class="form-group" style="position:relative;">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-control" id="par-login-pwd" placeholder="e.g. Roha@2012" required />
+              <button type="button" id="toggleParPwd"
+                style="position:absolute;right:10px;top:34px;background:none;border:none;cursor:pointer;font-size:1rem;">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <div class="form-group" id="parLoginError" style="display:none;color:#dc2626;font-size:0.82rem;font-weight:600;"></div>
+            <button type="submit" class="login-btn">Sign In</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    // Tab switching
+    function switchLoginTab(tab) {
+      const isAdmin = tab === 'admin';
+      document.getElementById('adminLoginPane').style.display  = isAdmin ? '' : 'none';
+      document.getElementById('parentLoginPane').style.display = isAdmin ? 'none' : '';
+      document.getElementById('tab-admin').style.background  = isAdmin ? '#4f46e5' : '#f1f5f9';
+      document.getElementById('tab-admin').style.color       = isAdmin ? '#fff' : '#64748b';
+      document.getElementById('tab-parent').style.background = isAdmin ? '#f1f5f9' : '#4f46e5';
+      document.getElementById('tab-parent').style.color      = isAdmin ? '#64748b' : '#fff';
+    }
+
+    function switchParentTab(t) {
+      const jr = t === 'junior';
+      document.getElementById('juniorPane').style.display = jr ? '' : 'none';
+      document.getElementById('seniorPane').style.display = jr ? 'none' : '';
+      document.getElementById('subtab-junior').style.background = jr ? '#4f46e5' : '#f8fafc';
+      document.getElementById('subtab-junior').style.color      = jr ? '#fff' : '#64748b';
+      document.getElementById('subtab-junior').style.borderColor = jr ? '#4f46e5' : '#e2e8f0';
+      document.getElementById('subtab-senior').style.background = jr ? '#f8fafc' : '#4f46e5';
+      document.getElementById('subtab-senior').style.color      = jr ? '#64748b' : '#fff';
+      document.getElementById('subtab-senior').style.borderColor = jr ? '#e2e8f0' : '#4f46e5';
+    }
+
+    // Password eye toggles
+    document.getElementById('togglePwd').addEventListener('click', function () {
+      const inp = document.getElementById('password');
+      const icon = this.querySelector('i');
+      if (inp.type === 'password') { inp.type = 'text'; icon.className = 'fa-solid fa-eye-slash'; }
+      else { inp.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+    });
+    document.getElementById('toggleParPwd').addEventListener('click', function () {
+      const inp = document.getElementById('par-login-pwd');
+      const icon = this.querySelector('i');
+      if (inp.type === 'password') { inp.type = 'text'; icon.className = 'fa-solid fa-eye-slash'; }
+      else { inp.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+    });
+
+    // Demo accounts
+    document.querySelectorAll('.demo-acc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const email = btn.dataset.email;
+        const pass = btn.dataset.pass;
+        document.getElementById('email').value = email;
+        document.getElementById('password').value = pass;
+
+        // Determine role by email
+        let role = '';
+        if (email.includes('admin')) role = 'admin';
+        else if (email.includes('teacher')) role = 'teacher';
+        else if (email.includes('parent')) role = 'parent';
+        else if (email.includes('student')) role = 'student';
+
+        // Auto-login
+        const result = await login(email, pass);
+        if (result.success) {
+          // For teacher/parent/student, redirect to their portal
+          if (role === 'teacher') {
+            window.open('http://localhost:3000', '_blank');
+          } else if (role === 'parent') {
+            window.open('http://localhost:3001', '_blank');
+          } else {
+            // For admin/super_admin, stay on admin dashboard
+            redirectToRoleHome(role);
+          }
+        } else {
+          const errEl = document.getElementById('loginError');
+          if (errEl) {
+            errEl.textContent = result.message || 'Login failed.';
+            errEl.style.display = 'block';
+          }
+        }
+      });
+    });
+
+    // Access key form (Class 1-7)
+    document.getElementById('accessKeyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('akError');
+      errEl.style.display = 'none';
+      const result = await loginWithAccessKey(
+        document.getElementById('ak-student-id').value.trim(),
+        document.getElementById('ak-access-key').value.trim()
+      );
+      if (result.success) {
+        redirectToRoleHome('parent');
+      } else {
+        errEl.textContent = result.message || 'Invalid credentials.';
+        errEl.style.display = 'block';
+      }
+    });
+
+    // Parent ID + password form (Class 8-10)
+    document.getElementById('parentLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('parLoginError');
+      errEl.style.display = 'none';
+      const result = await loginParent(
+        document.getElementById('par-login-id').value.trim(),
+        document.getElementById('par-login-pwd').value
+      );
+      if (result.success) {
+        redirectToRoleHome('parent');
+      } else {
+        errEl.textContent = result.message || 'Invalid credentials.';
+        errEl.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

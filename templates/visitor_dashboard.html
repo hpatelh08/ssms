@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Visitor Dashboard</title>
+  <style>body{font-family:Poppins, sans-serif;background:#f7fafc;padding:30px} .box{max-width:1000px;margin:0 auto} h1{color:#333} .list{background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.05);margin-bottom:18px} .item{padding:10px;border-bottom:1px solid #f0f4f8} .item:last-child{border-bottom:none} .status{float:right;font-weight:700}</style>
+</head>
+<body>
+  <div class="box">
+    <h1>Your Bookings & Inquiries</h1>
+    <div class="list">
+      <h3>Bookings</h3>
+      {% if bookings %}
+        {% for b in bookings %}
+          <div class="item">
+            <div><strong>{{ b.full_name }}</strong> — {{ b.visit_date }} {{ b.visit_time }} <span class="status">{{ b.status }}</span></div>
+            <div style="font-size:13px;color:#666">Purpose: {{ b.purpose }} — Visitors: {{ b.num_visitors }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="item">No bookings yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="list">
+      <h3>Inquiries & Responses</h3>
+      {% if inquiries %}
+        {% for i in inquiries %}
+          <div class="item">
+            <div><strong>{{ i.inquiry_type }}</strong> <span class="status">{{ i.status }}</span></div>
+            <div style="font-size:13px;color:#666">{{ i.message }}</div>
+            {% if i.response %}
+              <div style="margin-top:8px;color:#0b6">Response: {{ i.response }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="item">No inquiries yet.</div>
+      {% endif %}
+    </div>
+
+    <a href="/visitor">Back to visitor page</a>
+  </div>
+</body>
+</html>

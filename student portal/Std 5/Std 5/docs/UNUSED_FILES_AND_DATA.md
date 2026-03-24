@@ -1,0 +1,198 @@
+# Unused Files And Data Audit
+
+Generated: 2026-03-13T07:51:44.560Z
+
+This list is based on a static import graph scan from `index.tsx` (reachable vs not reachable).
+
+- Total scanned source files: 272
+- Reachable files: 108
+- Candidate unused files: 164
+- Candidate unused data files: 9
+
+## Candidate Unused Data Files
+
+- `data/englishCurriculum.ts`
+- `data/englishRhymes.ts`
+- `data/gujaratiRhymes.ts`
+- `data/hindiRhymes.ts`
+- `data/knowledgeChunks.ts`
+- `data/mathsCurriculum.ts`
+- `data/mathsRhymes.ts`
+- `data/parentAnalytics.ts`
+- `data/scienceRhymes.ts`
+
+## Candidate Unused Source Files
+
+- `auth/RoleGuard.tsx`
+- `child/ChildLayoutGrade3.tsx`
+- `child/FloatingWorld.tsx`
+- `child/SolarSystemPage.tsx`
+- `child/SpaceWarPage.tsx`
+- `child/StudentNavGrade3.tsx`
+- `child/XPDisplay.tsx`
+- `child/colorMagicEngine.ts`
+- `child/colorMagicShapes.tsx`
+- `child/colorSystem.ts`
+- `child/garden/Birds.tsx`
+- `child/garden/Fruit.tsx`
+- `child/garden/GardenGame.tsx`
+- `child/garden/GardenScene.tsx`
+- `child/garden/Sparkle.tsx`
+- `child/garden/Tree.tsx`
+- `child/garden/WeatherController.tsx`
+- `child/home/BackgroundMagic.tsx`
+- `child/home/ColorMagicHeroCard.tsx`
+- `child/home/DailySurprise.tsx`
+- `child/home/HeroSection.tsx`
+- `child/home/MagicalActionCard.tsx`
+- `child/home/TinyWins.tsx`
+- `child/hooks/useSmoothScroll.ts`
+- `child/levels/ColorMagicLevels.tsx`
+- `child/levels/ColorMagicWorlds.tsx`
+- `child/levels/LevelNode.tsx`
+- `child/levels/WorldBackground.tsx`
+- `child/levels/WorldHeader.tsx`
+- `child/levels/worldConfig.ts`
+- `child/spaceEducationData.ts`
+- `child/spaceWarEngine.ts`
+- `child/useAIEmotionEngine.ts`
+- `child/useSoundEngine.ts`
+- `components/Games/ColorMatch/ColorMatch.tsx`
+- `components/Games/CountObjects/CountObjects.tsx`
+- `components/Games/GuessTheWord/GuessTheWord.tsx`
+- `components/Games/MatchLetters/MatchLetters.tsx`
+- `components/Games/MathPuzzle/MathPuzzle.tsx`
+- `components/Games/PictureIdentify/PictureIdentify.tsx`
+- `components/Games/ShapeQuest/ShapeQuest.tsx`
+- `components/Games/WordBuilder/WordBuilder.tsx`
+- `components/Games/shared/GameEngine.ts`
+- `components/Games/shared/GameUI.tsx`
+- `components/Games/shared/useGameReducer.ts`
+- `components/Garden/AttendanceCalendar.tsx`
+- `components/Garden/GardenContainer.tsx`
+- `components/Garden/GardenEngine.ts`
+- `components/Garden/GardenMascot.tsx`
+- `components/Garden/GardenSky.tsx`
+- `components/Garden/GrowthStage.tsx`
+- `components/Garden/StreakCelebration.tsx`
+- `components/animations/StreakFlame.tsx`
+- `components/tree/AnimatedTree.tsx`
+- `components/ui/AnimatedBackground.tsx`
+- `components/ui/AnimatedBadge.tsx`
+- `components/ui/AnimatedCounter.tsx`
+- `components/ui/AttendanceGardenMini.tsx`
+- `components/ui/BadgesPanel.tsx`
+- `components/ui/DashboardCard.tsx`
+- `components/ui/FloatingIcon.tsx`
+- `components/ui/GardenAnimation.tsx`
+- `components/ui/GlassCard.tsx`
+- `components/ui/HeroSection.tsx`
+- `components/ui/LearningGamesPanel.tsx`
+- `components/ui/StreakIndicator.tsx`
+- `components/ui/XPProgressBar.tsx`
+- `constants.tsx`
+- `context/AttendanceContext.tsx`
+- `games/GameContainer.tsx`
+- `games/GameOrchestrator.tsx`
+- `games/UnifiedGameShell.tsx`
+- `games/curriculum/arcadeCurriculum.ts`
+- `games/curriculum/arcadeGenerators.ts`
+- `games/curriculum/curriculumTypes.ts`
+- `games/curriculum/englishCurriculum.ts`
+- `games/curriculum/englishGenerators.ts`
+- `games/curriculum/index.ts`
+- `games/curriculum/masterySystem.ts`
+- `games/curriculum/mathsCurriculum.ts`
+- `games/curriculum/mathsGenerators.ts`
+- `games/curriculum/revisionEngine.ts`
+- `games/engine/difficultyTypes.ts`
+- `games/engine/difficultyUnlock.ts`
+- `games/engine/gameSessionManager.ts`
+- `games/engine/index.ts`
+- `games/engine/progressStore2.ts`
+- `games/engine/questionHistory.ts`
+- `games/gameReducer.ts`
+- `games/hub/LibrarySection.tsx`
+- `games/modules/ChartGame.tsx`
+- `games/modules/ColorMatch.tsx`
+- `games/modules/CountObjects.tsx`
+- `games/modules/FlipCardMatch.tsx`
+- `games/modules/GuessTheWord.tsx`
+- `games/modules/LetterAfter.tsx`
+- `games/modules/LetterBefore.tsx`
+- `games/modules/MatchLetters.tsx`
+- `games/modules/MathPuzzle.tsx`
+- `games/modules/MultiplicationCasino.tsx`
+- `games/modules/NumberAfter.tsx`
+- `games/modules/NumberBefore.tsx`
+- `games/modules/NumberTap.tsx`
+- `games/modules/NumberTapModule.tsx`
+- `games/modules/PictureIdentify.tsx`
+- `games/modules/ShapeQuest.tsx`
+- `games/modules/WordBuilder.tsx`
+- `games/modules/WordSearchPuzzle.tsx`
+- `games/subjects/GameSessionScreen.tsx`
+- `games/subjects/SubjectGamesHub.tsx`
+- `games/subjects/components/CelebrationModal.tsx`
+- `games/subjects/components/DifficultySelector.tsx`
+- `games/subjects/components/MiniLevelTracker.tsx`
+- `games/subjects/components/QuestionCard.tsx`
+- `games/useGameEngine.ts`
+- `games/xpIntegration.ts`
+- `hooks/useGardenActivity.ts`
+- `middleware/auditLogger.ts`
+- `parent/components/AttendanceSection.tsx`
+- `parent/components/PDFViewerModal.tsx`
+- `parent/components/attendance/AttendanceHero.tsx`
+- `parent/components/attendance/AttendanceInsightCards.tsx`
+- `parent/components/attendance/AttendanceMilestones.tsx`
+- `parent/components/attendance/DailyLearningTimeline.tsx`
+- `parent/components/attendance/MonthlyHeatmap.tsx`
+- `parent/components/attendance/WeeklyPresenceTimeline.tsx`
+- `parent/components/books/AskAITab.tsx`
+- `parent/components/books/ChapterLearningHub.tsx`
+- `parent/components/books/ChapterListView.tsx`
+- `parent/components/books/IntelligentReader.tsx`
+- `parent/components/books/LearnTab.tsx`
+- `parent/components/books/ParentLocksPanel.tsx`
+- `parent/components/books/PlayTab.tsx`
+- `parent/components/books/PracticeTab.tsx`
+- `parent/components/books/QuizTab.tsx`
+- `parent/components/books/RevisionTab.tsx`
+- `parent/components/progress/PerformanceStory.tsx`
+- `parent/components/progress/ProgressHeader.tsx`
+- `parent/components/progress/SkillJourneyCards.tsx`
+- `parent/components/progress/WeeklyEnergy.tsx`
+- `parent/pages/ActivityPage.tsx`
+- `parent/pages/ColorProgressPage.tsx`
+- `parent/pages/EcoSystemProgressPage.tsx`
+- `parent/pages/GardenGrowthPage.tsx`
+- `parent/pages/SpaceWarProgressPage.tsx`
+- `parent/pages/reader/PageActivities.tsx`
+- `services/bookService.ts`
+- `services/chapterFilter.ts`
+- `services/chapterIntelligence.ts`
+- `services/ragService.ts`
+- `services/reportGenerator.ts`
+- `utils/attendanceGenerator.ts`
+- `utils/badgeEngine.ts`
+- `utils/launchConfetti.ts`
+- `utils/streakEngine.ts`
+
+## Backup Or Temporary Files (Likely Safe To Remove)
+
+- `__cleanup_backup__/`
+- `parent/pages/ReportCardPage.tsx.bak`
+- `parent/pages/BookReaderPage.tsx.bak`
+- `games/hub/SectionCard.tsx.bak`
+- `games/hub/GamesHub.tsx.bak`
+- `games/subjects/components/QuestionCard.tsx.bak`
+- `parent/components/progress/PerformanceStory.tsx.bak`
+- `parent/components/progress/ProgressHeader.tsx.bak`
+- `parent/components/progress/SkillJourneyCards.tsx.bak`
+- `parent/components/progress/WeeklyEnergy.tsx.bak`
+
+## Notes
+
+- Static scan can miss files loaded indirectly or by runtime keys.
+- Verify before delete in case a file is planned for upcoming features.
