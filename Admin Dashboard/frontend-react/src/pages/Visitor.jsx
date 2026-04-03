@@ -411,29 +411,6 @@ export default function Visitor() {
           </div>
         </section>
         <section className="visitor-section">
-          <div className="visitor-section__inner">
-            <div className="visitor-section__head">
-              <div>
-                <p className="visitor-section__eyebrow">Quick Information</p>
-                <h3>Important school details visitors ask for first</h3>
-              </div>
-            </div>
-
-            <div className="visitor-quick-grid">
-              {QUICK_CARDS.map((card) => (
-                <article key={card.title} className="visitor-quick-card">
-                  <div className={`visitor-quick-card__icon ${card.tone}`}>
-                    <span className="visitor-glyph">{card.icon}</span>
-                  </div>
-                  <h4>{card.title}</h4>
-                  <p>{card.description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="visitor-section">
           <div className="visitor-section__inner visitor-contact-grid">
             <div id="inquiry" className="visitor-form-card">
               <div className="visitor-section__head visitor-section__head--compact">
