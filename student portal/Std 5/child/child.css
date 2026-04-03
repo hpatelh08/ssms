@@ -1,0 +1,293 @@
+/*
+ * child.css — Trimmed for Phase 20 UI Refactoring
+ * ─────────────────────────────────────────────────────
+ * Removed: .layout, .main, .floating-world, .cloud, .sparkle,
+ *          .topbar, .home-*, .card-btn, .card-icon, .card-label,
+ *          .card-desc, .bottomnav, .nav-tab, .mascot (all states).
+ *
+ * Retained: Celebration overlay, Buddy world, XP display.
+ * These are still used by CelebrationOverlay.tsx, BuddyWorld.tsx,
+ * and XPDisplay.tsx respectively.
+ */
+
+/* ─── XP Display ─────────────────────────────────── */
+
+.xp-display {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+}
+
+.xp-ring {
+  display: block;
+}
+
+.xp-ring__track {
+  stroke: rgba(255, 255, 255, 0.2);
+}
+
+.xp-ring__fill {
+  stroke: #facc15;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.xp-display__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.xp-display__star {
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.3s ease;
+}
+
+.xp-display__level {
+  font-size: 9px;
+  font-weight: 800;
+  color: #fef08a;
+  margin-top: 1px;
+}
+
+/* Glow pulse on XP gain */
+.xp-display--glow .xp-ring__fill {
+  stroke: #fde047;
+  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.7));
+}
+
+.xp-display--glow .xp-display__star {
+  animation: xpStarPop 0.5s ease;
+}
+
+@keyframes xpStarPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Celebration Overlay ─────────────────────────── */
+
+.celeb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Confetti fall */
+@keyframes celebFall {
+  0%   { transform: translateY(-20vh) rotate(0deg);   opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(360deg);  opacity: 0; }
+}
+
+.celeb-confetti {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  will-change: transform, opacity;
+  animation: celebFall ease-in both;
+}
+
+/* Sparkle pulse */
+@keyframes celebSparkle {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50%      { opacity: 1; transform: scale(1.2); }
+}
+
+.celeb-sparkle {
+  position: absolute;
+  border-radius: 50%;
+  background: #fde68a;
+  will-change: transform, opacity;
+  animation: celebSparkle ease-in-out both infinite;
+}
+
+/* Level-up glow */
+@keyframes celebPulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.5; }
+  50%      { transform: scale(1.1); opacity: 0.8; }
+}
+
+.celeb-level-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  margin: -160px 0 0 -160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 70%);
+  will-change: transform, opacity;
+  animation: celebPulse 1s ease-in-out infinite;
+}
+
+/* ─── Buddy World ────────────────────────────────── */
+
+.buddy-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.buddy-header {
+  font-size: 22px;
+  font-weight: 800;
+  color: #312e81;
+  padding: 12px 0 4px;
+  flex-shrink: 0;
+}
+
+.buddy-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* ── Bubbles ── */
+
+.buddy-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 88%;
+  animation: buddyFadeIn 0.25s ease;
+  will-change: transform, opacity;
+}
+
+@keyframes buddyFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.buddy-bubble--buddy {
+  align-self: flex-start;
+}
+
+.buddy-bubble--child {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.buddy-bubble__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.buddy-bubble__text {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  margin: 0;
+}
+
+.buddy-bubble--child .buddy-bubble__text {
+  background: linear-gradient(135deg, #8fcf94, #a7c97f);
+  color: #fff;
+}
+
+/* ── Typing indicator ── */
+
+.buddy-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 18px;
+}
+
+.buddy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a5b4fc;
+  animation: buddyBounce 1.2s ease-in-out infinite;
+}
+
+.buddy-dot:nth-child(2) { animation-delay: 0.15s; }
+.buddy-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes buddyBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-6px); }
+}
+
+/* ── Input bar ── */
+
+.buddy-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 2px;
+  flex-shrink: 0;
+}
+
+.buddy-input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 2px solid #e0e7ff;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.buddy-input:focus {
+  border-color: #8fcf94;
+}
+
+.buddy-input:disabled {
+  opacity: 0.6;
+}
+
+.buddy-send {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8fcf94, #3f8f3a);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.buddy-send:active {
+  transform: scale(0.92);
+}
+
+.buddy-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

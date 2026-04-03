@@ -1,0 +1,582 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Login | Smart School System</title>
+  <style>
+    :root {
+      --bg-1: #f5f8ff;
+      --bg-2: #eef6ff;
+      --panel: rgba(255, 255, 255, 0.84);
+      --border: rgba(37, 99, 235, 0.14);
+      --text: #10233d;
+      --muted: #5f6e86;
+      --muted-strong: #35506f;
+      --shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 12% 15%, rgba(37, 99, 235, 0.18), transparent 0 24%),
+        radial-gradient(circle at 88% 12%, rgba(16, 185, 129, 0.14), transparent 0 20%),
+        radial-gradient(circle at 82% 86%, rgba(124, 58, 237, 0.12), transparent 0 18%),
+        linear-gradient(180deg, #ffffff 0%, var(--bg-1) 55%, var(--bg-2) 100%);
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: -1;
+      filter: blur(12px);
+      opacity: 0.85;
+    }
+
+    body::before {
+      top: -120px;
+      left: -80px;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.16), transparent 68%);
+    }
+
+    body::after {
+      right: -120px;
+      bottom: -120px;
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.14), transparent 68%);
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 26px;
+    }
+
+    .panel {
+      width: min(1180px, 100%);
+      position: relative;
+      overflow: hidden;
+      padding: 30px;
+      border-radius: 34px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, rgba(255,255,255,0.35), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,0.34), transparent 20%);
+      pointer-events: none;
+    }
+
+    .hero,
+    .section-note,
+    .grid,
+    .footer-strip {
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .hero-aside-item {
+      animation: popIn 0.55s ease both;
+      animation-delay: var(--delay, 0ms);
+    }
+
+    .card {
+      animation: cardRise 0.65s ease both;
+      animation-delay: var(--delay, 0ms);
+    }
+
+    .hero {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #2563eb;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-symbol {
+      display: inline-grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+      font-size: 13px;
+    }
+
+    h1 {
+      margin: 16px 0 10px;
+      font-size: clamp(2.35rem, 4.8vw, 4.3rem);
+      line-height: 0.94;
+      letter-spacing: -0.06em;
+    }
+
+    .lead {
+      max-width: 46rem;
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.03rem;
+      line-height: 1.7;
+    }
+
+    .hero-aside {
+      align-self: stretch;
+      padding: 18px;
+      border-radius: 24px;
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,251,255,0.92));
+      box-shadow: 0 18px 30px rgba(15, 23, 42, 0.05);
+    }
+
+    .hero-aside-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .hero-aside-title {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--muted-strong);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-aside-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #2453cc;
+      font-size: 0.8rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .hero-aside-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero-aside-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(37, 99, 235, 0.08);
+    }
+
+    .hero-aside-dot {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      margin-top: 4px;
+      border-radius: 999px;
+      background: var(--dot, #2563eb);
+      box-shadow: 0 0 0 5px var(--dot-soft, rgba(37, 99, 235, 0.12));
+    }
+
+    .item-symbol {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      font-size: 13px;
+      flex: 0 0 auto;
+    }
+
+    .hero-aside-item strong {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--text);
+      font-size: 0.93rem;
+    }
+
+    .hero-aside-item span {
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .section-note {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 4px 0 20px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted-strong);
+    }
+
+    .section-note strong { color: var(--text); }
+
+    .error {
+      position: relative;
+      z-index: 1;
+      margin: 0 0 18px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(194, 65, 12, 0.22);
+      background: rgba(194, 65, 12, 0.08);
+      color: #9a3412;
+      font-weight: 700;
+    }
+
+    .grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card,
+    .card-form {
+      display: block;
+      min-width: 0;
+    }
+
+    .card {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 20px;
+      border: 0;
+      border-radius: 24px;
+      text-decoration: none;
+      color: inherit;
+      text-align: left;
+      background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,250,255,0.98));
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 8px;
+      background: linear-gradient(90deg, var(--accent, #2563eb), color-mix(in srgb, var(--accent, #2563eb) 42%, white));
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      right: -44px;
+      bottom: -38px;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--soft, rgba(37, 99, 235, 0.12)), transparent 68%);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .card:hover,
+    .card:focus-visible {
+      transform: translateY(-4px);
+      border-color: color-mix(in srgb, var(--accent, #2563eb) 32%, white);
+      box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+      outline: none;
+    }
+
+    .card:hover .sparkle,
+    .card:focus-visible .sparkle {
+      transform: rotate(16deg) scale(1.12);
+    }
+
+    .card-top {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: white;
+      background: linear-gradient(135deg, var(--accent, #2563eb), color-mix(in srgb, var(--accent, #2563eb) 72%, black));
+      box-shadow: 0 10px 18px color-mix(in srgb, var(--accent, #2563eb) 18%, transparent);
+    }
+
+    .sparkle {
+      display: inline-block;
+      transition: transform 0.18s ease;
+    }
+
+    .theme-name {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .grade-title {
+      position: relative;
+      margin: 0 0 8px;
+      font-size: 1.45rem;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .grade-copy {
+      position: relative;
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.58;
+    }
+
+    .accent-row {
+      position: relative;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: var(--soft, #edf4ff);
+      color: var(--chip-text, #24456a);
+      font-size: 0.82rem;
+      font-weight: 700;
+      border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 10%, white);
+    }
+
+    .card-form { margin: 0; }
+
+    .card-form .card {
+      font: inherit;
+      appearance: none;
+    }
+
+    .card-form .card::-moz-focus-inner {
+      border: 0;
+    }
+
+    .footer-strip {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(37, 99, 235, 0.1);
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .footer-strip strong { color: var(--text); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes cardRise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1024px) {
+      .hero { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 700px) {
+      .shell { padding: 14px; }
+      .panel {
+        padding: 18px;
+        border-radius: 26px;
+      }
+      h1 { font-size: 2.2rem; }
+      .grid { grid-template-columns: 1fr; }
+      .section-note,
+      .footer-strip {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .hero-aside { padding: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel" aria-labelledby="chooser-title">
+      <div class="hero">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-symbol">✦</span> Smart School System</div>
+          <h1 id="chooser-title">Student Login</h1>
+          <p class="lead">Choose Std 1 to Std 6 and jump straight into the matching student portal. Each standard has its own visual mood to make the experience feel friendly and memorable.</p>
+        </div>
+
+        <aside class="hero-aside" aria-label="Why this page stands out">
+          <div class="hero-aside-top">
+            <h2 class="hero-aside-title">Quick access</h2>
+            <span class="hero-aside-pill">⚡ 6 standards</span>
+          </div>
+          <div class="hero-aside-list">
+            <div class="hero-aside-item" style="--dot: #2563eb; --dot-soft: rgba(37, 99, 235, 0.14); --delay: 0ms;">
+              <span class="item-symbol">🚀</span>
+              <span class="hero-aside-dot"></span>
+              <div>
+                <strong>Direct entry</strong>
+                <span>Tap a standard card and open that login flow instantly.</span>
+              </div>
+            </div>
+            <div class="hero-aside-item" style="--dot: #10b981; --dot-soft: rgba(16, 185, 129, 0.14); --delay: 90ms;">
+              <span class="item-symbol">🌿</span>
+              <span class="hero-aside-dot"></span>
+              <div>
+                <strong>Kid-friendly themes</strong>
+                <span>Each standard uses its own color story and playful detail.</span>
+              </div>
+            </div>
+            <div class="hero-aside-item" style="--dot: #7c3aed; --dot-soft: rgba(124, 58, 237, 0.14); --delay: 180ms;">
+              <span class="item-symbol">✨</span>
+              <span class="hero-aside-dot"></span>
+              <div>
+                <strong>Fast and clear</strong>
+                <span>The layout keeps the choice simple, large, and easy to scan.</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="section-note">
+        <div><strong>Pick a standard.</strong> We will route the student to the right login page for that class.</div>
+        <div>Best for tablets, phones, and classroom kiosks.</div>
+      </div>
+
+      {% if error %}
+        <div class="error" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <div class="grid" aria-label="Standard login themes">
+        {% for card in student_login_cards %}
+          {% if card.login_page %}
+            <a href="{{ url_for('student_login_grade', grade=card.grade) }}" class="card" style="--accent: {{ card.accent }}; --soft: {{ card.accent_soft }}; --chip-text: {{ card.accent_deep }}; --delay: {{ loop.index0 * 80 }}ms;">
+              <div class="card-top">
+                <span class="badge"><span class="sparkle">✦</span> Std {{ card.grade }}</span>
+                <span class="theme-name">{{ card.name }} Theme</span>
+              </div>
+              <h2 class="grade-title">Open Std {{ card.grade }} login</h2>
+              <p class="grade-copy">{{ card.hero_copy }}</p>
+              <div class="accent-row">
+                {% for tag in card.tags %}
+                  <span class="chip">{{ tag }}</span>
+                {% endfor %}
+              </div>
+            </a>
+          {% else %}
+            <form method="post" action="{{ url_for('student_login') }}" class="card-form">
+              <input type="hidden" name="grade" value="{{ card.grade }}" />
+              <button class="card" type="submit" style="--accent: {{ card.accent }}; --soft: {{ card.accent_soft }}; --chip-text: {{ card.accent_deep }}; --delay: {{ loop.index0 * 80 }}ms;">
+                <div class="card-top">
+                  <span class="badge"><span class="sparkle">✦</span> Std {{ card.grade }}</span>
+                  <span class="theme-name">{{ card.name }} Theme</span>
+                </div>
+                <h2 class="grade-title">Open Std {{ card.grade }} login</h2>
+                <p class="grade-copy">{{ card.hero_copy }}</p>
+                <div class="accent-row">
+                  {% for tag in card.tags %}
+                    <span class="chip">{{ tag }}</span>
+                  {% endfor %}
+                </div>
+              </button>
+            </form>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="footer-strip">
+        <div><strong>Tip:</strong> Std 1, 3, 5, and 6 use a dedicated login page for a more tailored experience.</div>
+        <div>The same school account flow stays intact.</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

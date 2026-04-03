@@ -4,6 +4,7 @@ import { Calendar, User, Check, X, Clock, Download, MessageSquare, Phone, Search
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { apiUrl } from '../../config/api';
 
 const AttendanceManagement = ({ currentUser }) => {
   const [classes, setClasses] = useState([]);
@@ -30,6 +31,18 @@ const AttendanceManagement = ({ currentUser }) => {
   const monthlySelectedStudent = students.find((s) => s._id === monthlySelected);
   const individualSelectedStudent = students.find((s) => s._id === individualSelected);
   const summarySelectedStudent = students.find((s) => s._id === summarySelected);
+  const currentStudentIds = new Set(students.map((student) => student._id));
+  const visibleAttendanceEntries = Object.entries(attendanceData).filter(([studentId]) => currentStudentIds.has(studentId));
+  const visibleAttendanceValues = visibleAttendanceEntries.map(([, value]) => value);
+
+  const getClassNumber = (value) => {
+    const match = String(value || '').match(/\d+/);
+    return match ? match[0] : '';
+  };
+
+  const normalizeSection = (value) => String(value || '').trim().toUpperCase() || 'A';
+
+  const buildClassTargetId = (className, section) => `admin-class-${getClassNumber(className) || '1'}-${normalizeSection(section)}`;
 
   useEffect(() => {
     fetchClasses();
@@ -148,7 +161,14 @@ const AttendanceManagement = ({ currentUser }) => {
       const saved = localStorage.getItem(`attendance-data-${classId}-${selectedDate}`);
       if (saved) {
         try {
-          setAttendanceData(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+        const sanitized = {};
+        students.forEach((student) => {
+          if (parsed?.[student._id]) {
+            sanitized[student._id] = parsed[student._id];
+          }
+        });
+        setAttendanceData(sanitized);
         } catch {
           const initialAttendance = {};
           mockStudentsData.forEach(student => {
@@ -177,6 +197,24 @@ const AttendanceManagement = ({ currentUser }) => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching students:', error);
+      // Fallback mock students
+      const mockStudentsData = Array.from({ length: 45 }, (_, i) => ({
+        _id: `MOCK_STU_${i + 1}`,
+        studentId: `STU${String(i + 1).padStart(3, '0')}`,
+        name: `Student ${i + 1}`
+      }));
+      setStudents(mockStudentsData);
+
+      const initialAttendance = {};
+      mockStudentsData.forEach(student => {
+        initialAttendance[student._id] = {
+          status: 'present',
+          uniformStatus: 'yes',
+          idCardStatus: 'yes',
+          remarks: ''
+        };
+      });
+      setAttendanceData(initialAttendance);
       setLoading(false);
     }
   };
@@ -223,12 +261,12 @@ const AttendanceManagement = ({ currentUser }) => {
       }));
 
       // Save attendance summary to localStorage for Dashboard (always runs)
-      const presentCount = Object.values(attendanceData).filter(a => a.status === 'present').length;
-      const absentCount = Object.values(attendanceData).filter(a => a.status === 'absent').length;
-      const uniformYes = Object.values(attendanceData).filter(a => a.uniformStatus === 'yes').length;
-      const uniformNo = Object.values(attendanceData).filter(a => a.uniformStatus === 'no').length;
-      const idCardYes = Object.values(attendanceData).filter(a => a.idCardStatus === 'yes').length;
-      const idCardNo = Object.values(attendanceData).filter(a => a.idCardStatus === 'no').length;
+      const presentCount = visibleAttendanceValues.filter(a => a.status === 'present').length;
+      const absentCount = visibleAttendanceValues.filter(a => a.status === 'absent').length;
+      const uniformYes = visibleAttendanceValues.filter(a => a.uniformStatus === 'yes').length;
+      const uniformNo = visibleAttendanceValues.filter(a => a.uniformStatus === 'no').length;
+      const idCardYes = visibleAttendanceValues.filter(a => a.idCardStatus === 'yes').length;
+      const idCardNo = visibleAttendanceValues.filter(a => a.idCardStatus === 'no').length;
       const totalCount = Object.keys(attendanceData).length;
       const summary = {
         date: selectedDate,
@@ -409,24 +447,27 @@ const AttendanceManagement = ({ currentUser }) => {
 
   const handleBulkAction = (action) => {
     const updatedAttendance = { ...attendanceData };
-    Object.keys(updatedAttendance).forEach(studentId => {
-      updatedAttendance[studentId].status = action;
+    students.forEach((student) => {
+      if (!updatedAttendance[student._id]) return;
+      updatedAttendance[student._id].status = action;
     });
     setAttendanceData(updatedAttendance);
   };
 
   const handleBulkUniformAction = (uniformStatus) => {
     const updatedAttendance = { ...attendanceData };
-    Object.keys(updatedAttendance).forEach((studentId) => {
-      updatedAttendance[studentId].uniformStatus = uniformStatus;
+    students.forEach((student) => {
+      if (!updatedAttendance[student._id]) return;
+      updatedAttendance[student._id].uniformStatus = uniformStatus;
     });
     setAttendanceData(updatedAttendance);
   };
 
   const handleBulkIdCardAction = (idCardStatus) => {
     const updatedAttendance = { ...attendanceData };
-    Object.keys(updatedAttendance).forEach((studentId) => {
-      updatedAttendance[studentId].idCardStatus = idCardStatus;
+    students.forEach((student) => {
+      if (!updatedAttendance[student._id]) return;
+      updatedAttendance[student._id].idCardStatus = idCardStatus;
     });
     setAttendanceData(updatedAttendance);
   };
@@ -434,25 +475,57 @@ const AttendanceManagement = ({ currentUser }) => {
   const sendSMSNotification = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
 
-      // Get absent students
-      const absentStudents = Object.keys(attendanceData).filter(
-        studentId => attendanceData[studentId].status === 'absent'
-      );
+      const absentStudents = visibleAttendanceEntries.filter(([, record]) => record.status === 'absent').map(([studentId]) => studentId);
 
       if (absentStudents.length > 0) {
-        await axios.post('http://localhost:5000/api/teacher/send-sms', {
-          studentIds: absentStudents,
-          message: `Your child was absent on ${selectedDate}. Please contact school for more information.`
-        }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        const nowIso = new Date().toISOString();
+        const selectedClassMeta = classes.find((item) => item._id === selectedClass) || null;
+        const classTargetId = buildClassTargetId(selectedClassMeta?.className, selectedClassMeta?.section);
+        const newParentNotifications = absentStudents.map((studentId, index) => {
+          const student = students.find((s) => s._id === studentId);
+
+          return {
+            id: `attendance-absent-${studentId}-${Date.now()}-${index}`,
+            icon: '🚨',
+            text: `${student?.name || 'Student'} was absent on ${selectedDate}.`,
+            time: 'Just now',
+            bg: 'rgba(239,68,68,0.12)',
+            createdAt: nowIso,
+            type: 'attendance-absent',
+            studentId,
+            studentName: student?.name || '',
+            date: selectedDate,
+            classId: classTargetId,
+            className: selectedClassMeta?.className || '',
+            section: selectedClassMeta?.section || '',
+          };
         });
 
-        setSuccess(`${absentStudents.length} SMS notifications sent successfully!`);
+        const existingParentNotifications = (() => {
+          try {
+            const raw = localStorage.getItem('parent-notifications');
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })();
+
+        localStorage.setItem(
+          'parent-notifications',
+          JSON.stringify([...newParentNotifications, ...existingParentNotifications].slice(0, 100))
+        );
+
+        try {
+          await axios.post(apiUrl('/api/communication/parent-notifications'), {
+            items: newParentNotifications,
+          });
+        } catch (notificationError) {
+          console.warn('Failed to store parent notifications on backend:', notificationError?.message || notificationError);
+        }
+
+        setSuccess(`${absentStudents.length} message${absentStudents.length > 1 ? 's' : ''} sent to absent students' parents!`);
         setTimeout(() => setSuccess(''), 3000);
       } else {
         setSuccess('No absent students to notify.');
@@ -464,6 +537,7 @@ const AttendanceManagement = ({ currentUser }) => {
       setLoading(false);
     }
   };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white/80 backdrop-blur-sm p-5 rounded-2xl shadow-soft border border-gray-100/80">
@@ -552,10 +626,10 @@ const AttendanceManagement = ({ currentUser }) => {
                     <h3 className="text-2xl font-extrabold text-gray-800">Student Attendance</h3>
                     <div className="flex gap-4">
                       <span className="px-4 py-1.5 bg-green-100 text-green-700 font-semibold rounded-full text-sm">
-                        Present: {Object.values(attendanceData).filter(a => a.status === 'present').length}
+                        Present: {visibleAttendanceValues.filter(a => a.status === 'present').length}
                       </span>
                       <span className="px-4 py-1.5 bg-red-100 text-red-700 font-semibold rounded-full text-sm">
-                        Absent: {Object.values(attendanceData).filter(a => a.status === 'absent').length}
+                        Absent: {visibleAttendanceValues.filter(a => a.status === 'absent').length}
                       </span>
                     </div>
                   </div>
@@ -792,3 +866,5 @@ const AttendanceManagement = ({ currentUser }) => {
 };
 
 export default AttendanceManagement;
+
+

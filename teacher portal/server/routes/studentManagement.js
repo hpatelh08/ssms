@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Student from '../models/Student.js'; // Assuming Student model exists
 import Class from '../models/Class.js'; // Assuming Class model exists
+import { findAdminStudentById, getAdminStudents } from '../utils/adminClassroom.js';
 
 const router = express.Router();
 
@@ -22,6 +23,11 @@ router.get('/profile', async (req, res) => {
 // GET /api/student/all
 router.get('/all', async (req, res) => {
   try {
+    const adminStudents = getAdminStudents(req.query);
+    if (adminStudents.length > 0 || req.query.classId || req.query.assignedClass || req.query.class || req.query.std) {
+      return res.json({ data: adminStudents });
+    }
+
     const { classId } = req.query;
     let query = {};
     if (classId) {
@@ -115,6 +121,28 @@ router.post('/remarks', async (req, res) => {
 router.get('/health-records', async (req, res) => {
   try {
     const { studentId } = req.query;
+    const adminStudent = findAdminStudentById(studentId);
+    if (adminStudent) {
+      return res.json({
+        data: {
+          name: adminStudent.name,
+          bloodGroup: adminStudent.bloodGroup,
+          dateOfBirth: adminStudent.dateOfBirth,
+          age: adminStudent.age,
+          healthInfo: adminStudent.healthInfo,
+          allergies: adminStudent.allergies,
+          medicalHistory: '',
+          emergencyContact: adminStudent.parentPhone
+            ? {
+              name: adminStudent.parentName,
+              phone: adminStudent.parentPhone,
+              relationship: 'Parent',
+            }
+            : null,
+        }
+      });
+    }
+
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
@@ -161,6 +189,24 @@ router.put('/health-records', async (req, res) => {
     if (allergies !== undefined) updateData.allergies = allergies;
     if (medicalHistory !== undefined) updateData.medicalHistory = medicalHistory;
     if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
+
+    const adminStudent = findAdminStudentById(studentId);
+    if (adminStudent) {
+      return res.json({
+        success: true,
+        data: {
+          ...adminStudent,
+          name: name !== undefined ? name : adminStudent.name,
+          bloodGroup: bloodGroup !== undefined ? bloodGroup : adminStudent.bloodGroup,
+          dateOfBirth: dateOfBirth !== undefined ? dateOfBirth : adminStudent.dateOfBirth,
+          age: age !== undefined ? age : adminStudent.age,
+          healthInfo: healthInfo !== undefined ? healthInfo : adminStudent.healthInfo,
+          allergies: allergies !== undefined ? allergies : adminStudent.allergies,
+          medicalHistory: medicalHistory !== undefined ? medicalHistory : '',
+          emergencyContact: emergencyContact !== undefined ? emergencyContact : adminStudent.parentPhone,
+        }
+      });
+    }
 
     const updatedStudent = await Student.findByIdAndUpdate(
       studentId,

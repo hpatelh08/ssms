@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Calendar, Clock, CheckCircle, XCircle, User, Plus, Edit, Trash2, Mail, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { apiUrl } from '../../config/api';
 
 const LeaveManagement = () => {
   const [leaveApplications, setLeaveApplications] = useState([]);
@@ -50,7 +51,7 @@ const LeaveManagement = () => {
   const fetchLeaveApplications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/leaves', {
+      const response = await axios.get(apiUrl('/api/teacher/leaves'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -91,7 +92,7 @@ const LeaveManagement = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      const response = await axios.post('http://localhost:5000/api/teacher/leaves', formData, {
+      const response = await axios.post(apiUrl('/api/teacher/leaves'), formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

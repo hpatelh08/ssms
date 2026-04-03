@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Lock, Mail, GraduationCap, Eye, EyeOff } from 'lucide-react';
-import teachers from '../../data/teachers';
+import { Lock, Mail, GraduationCap, Eye, EyeOff, Globe } from 'lucide-react';
+import { findTeacherByLogin } from '../../data/teachers';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '',
+    teacherId: '',
     password: ''
   });
   const [teacherClass, setTeacherClass] = useState('');
   const [teacherDivision, setTeacherDivision] = useState('');
+  const [teacherName, setTeacherName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,32 +19,31 @@ const Login = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    if (e.target.name === 'email' || e.target.name === 'password') {
-      const nextEmail = e.target.name === 'email' ? e.target.value : formData.email;
+    if (e.target.name === 'teacherId' || e.target.name === 'password') {
+      const nextTeacherId = e.target.name === 'teacherId' ? e.target.value : formData.teacherId;
       const nextPassword = e.target.name === 'password' ? e.target.value : formData.password;
-      setTimeout(() => fetchTeacherClass(nextEmail, nextPassword), 0);
+      setTimeout(() => fetchTeacherClass(nextTeacherId, nextPassword), 0);
     }
   };
 
   // Fetch teacher class/division after entering email+password
-  const fetchTeacherClass = (email, password) => {
-    if (!email || !password) {
+  const fetchTeacherClass = (teacherId, password) => {
+    if (!teacherId || !password) {
       setTeacherClass('');
       setTeacherDivision('');
+      setTeacherName('');
       return;
     }
-    const matchedTeacher = teachers.find(
-      (teacher) =>
-        teacher.email.toLowerCase() === email.trim().toLowerCase() &&
-        teacher.password === password
-    );
+    const matchedTeacher = findTeacherByLogin(teacherId, password);
 
     if (!matchedTeacher) {
       setTeacherClass('');
       setTeacherDivision('');
+      setTeacherName('');
       return;
     }
 
+    setTeacherName(matchedTeacher.name);
     setTeacherClass(matchedTeacher.assignedClass);
     setTeacherDivision(matchedTeacher.division);
   };
@@ -53,14 +53,10 @@ const Login = () => {
     setLoading(true);
     setError('');
 
-    const matchedTeacher = teachers.find(
-      (teacher) =>
-        teacher.email.toLowerCase() === formData.email.trim().toLowerCase() &&
-        teacher.password === formData.password
-    );
+    const matchedTeacher = findTeacherByLogin(formData.teacherId, formData.password);
 
     if (!matchedTeacher) {
-      setError('Invalid email or password');
+      setError('Invalid teacher ID or password');
       setLoading(false);
       return;
     }
@@ -68,14 +64,20 @@ const Login = () => {
     const userData = {
       name: matchedTeacher.name,
       email: matchedTeacher.email,
+      teacherId: matchedTeacher.teacherId,
       role: 'teacher',
       assignedClass: matchedTeacher.assignedClass,
-      division: matchedTeacher.division
+      division: matchedTeacher.division,
+      subject: matchedTeacher.subject
     };
 
     localStorage.setItem('token', `teacher-${Date.now()}`);
     localStorage.setItem('user', JSON.stringify(userData));
     window.location.href = '/';
+  };
+
+  const openVisitorPage = () => {
+    window.location.href = '/visitor';
   };
 
   return (
@@ -114,17 +116,17 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Teacher ID</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-indigo-400" />
                 <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
+                  type="text"
+                  name="teacherId"
+                  value={formData.teacherId}
                   onChange={handleChange}
                   required
                   className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-0 focus:border-indigo-500 bg-gray-50/50 hover:border-gray-300 text-gray-800 font-medium placeholder:text-gray-400 transition-colors"
-                  placeholder="Enter your email"
+                  placeholder="Enter your teacher ID"
                 />
               </div>
             </div>
@@ -153,11 +155,11 @@ const Login = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Role</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Teacher Name</label>
               <input
                 type="text"
                 name="role"
-                value="Teacher"
+                value={teacherName || 'Teacher'}
                 disabled
                 className="w-full p-3 border-2 border-gray-200 rounded-xl bg-indigo-50/50 text-indigo-700 font-semibold"
               />
@@ -207,6 +209,15 @@ const Login = () => {
                 ) : 'Sign In'}
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={openVisitorPage}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:-translate-y-0.5 hover:bg-sky-100"
+            >
+              <Globe className="h-4 w-4" />
+              Visitor Page
+            </button>
           </form>
         </div>
         

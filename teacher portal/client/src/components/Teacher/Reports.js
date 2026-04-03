@@ -4,6 +4,8 @@ import { Download, FileText, Users, BookOpen, Calendar, Filter, Printer, Eye, Sh
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
+import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const Reports = ({ currentUser }) => {
   const [reports, setReports] = useState([]);
@@ -11,24 +13,14 @@ const Reports = ({ currentUser }) => {
   const [selectedReport, setSelectedReport] = useState('');
   const [previewReport, setPreviewReport] = useState(null);
 
-  const initialClassId = currentUser?.assignedClass ? 'teacher-class' : '';
-
   const [reportParams, setReportParams] = useState({
-    classId: initialClassId,
+    classId: '',
     subjectId: '',
     studentId: ''
   });
 
+  const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
-
-  // Mock data for classes and subjects - Filtered by teacher's assigned class
-  const classes = currentUser?.assignedClass
-    ? [{ _id: 'teacher-class', className: currentUser.assignedClass, section: currentUser.division }]
-    : [
-      { _id: '1', className: 'Class 1', section: 'A' },
-      { _id: '2', className: 'Class 2', section: 'B' },
-      { _id: '3', className: 'Class 3', section: 'C' }
-    ];
 
   const [subjects] = useState([
     { _id: '1', subjectName: 'Mathematics' },
@@ -40,6 +32,23 @@ const Reports = ({ currentUser }) => {
   ]);
 
   useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const loadedClasses = await loadTeacherClasses(currentUser);
+        setClasses(loadedClasses);
+        setReportParams((prev) => ({
+          ...prev,
+          classId: prev.classId || loadedClasses[0]?._id || '',
+        }));
+      } catch (error) {
+        console.error('Error fetching report classes:', error);
+      }
+    };
+
+    fetchClasses();
+  }, [currentUser?.email]);
+
+  useEffect(() => {
     if (reportParams.classId) {
       fetchStudents(reportParams.classId);
     } else {
@@ -48,26 +57,8 @@ const Reports = ({ currentUser }) => {
   }, [reportParams.classId]);
 
   const fetchStudents = async (classId) => {
-    // MOCK 45 Indian Students
-    const indianNames = [
-      "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-      "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-      "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-      "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-      "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-      "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-      "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-      "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen",
-      "Mira Nair", "Anika Menon", "Zara Sethi", "Nisha Thakur", "Pooja Bhardwaj"
-    ];
-
-    const mockStudentsData = indianNames.map((name, index) => ({
-      _id: `MOCK_STU_${index + 1}`,
-      studentId: `STU${String(index + 1).padStart(3, '0')}`,
-      name: name
-    }));
-
-    setStudents(mockStudentsData);
+    const loadedStudents = await loadClassStudents(classId, currentUser, classes);
+    setStudents(loadedStudents);
   };
 
   const reportTypes = [
@@ -78,31 +69,33 @@ const Reports = ({ currentUser }) => {
 
   // Build full student profile data (details, health, marks, assignments, attendance)
   const getStudentFullProfile = (student) => {
-    const className = currentUser?.assignedClass || '8';
-    const section = currentUser?.division || 'B';
+    const className = currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser);
+    const section = currentUser?.division || getAssignedTeacherSection(currentUser);
     const idx = students.findIndex(s => s._id === student._id);
     const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-    const age = 14 + (idx % 4);
+    const age = student.age || 14 + (idx % 4);
 
     // Personal Details
     const personal = {
       name: student.name,
       studentId: student.studentId,
-      class: `${className} - ${section}`,
-      gender: idx % 2 === 0 ? 'Male' : 'Female',
+      class: `${student.className || className} - ${student.section || section}`,
+      gender: student.gender || (idx % 2 === 0 ? 'Male' : 'Female'),
       age,
-      dateOfBirth: new Date(2026 - age, idx % 12, (idx % 28) + 1).toLocaleDateString('en-IN'),
-      fatherName: `Mr. ${student.name.split(' ')[1] || 'Parent'}`,
-      motherName: `Mrs. ${student.name.split(' ')[1] || 'Parent'}`,
-      phone: `98${String(10000000 + idx).padStart(8, '0')}`,
-      address: `Street ${idx + 1}, City`
+      dateOfBirth: student.dateOfBirth
+        ? new Date(student.dateOfBirth).toLocaleDateString('en-IN')
+        : new Date(2026 - age, idx % 12, (idx % 28) + 1).toLocaleDateString('en-IN'),
+      fatherName: student.fatherName || student.parentName || `Mr. ${student.name.split(' ')[1] || 'Parent'}`,
+      motherName: student.motherName || '-',
+      phone: student.parentPhone || student.phone || '',
+      address: student.address || `Street ${idx + 1}, City`
     };
 
     // Health Record
     const health = {
-      bloodGroup: bloodGroups[idx % bloodGroups.length],
-      healthStatus: 'Fit',
-      allergies: idx % 5 === 0 ? 'Dust allergy' : 'None',
+      bloodGroup: student.bloodGroup || bloodGroups[idx % bloodGroups.length],
+      healthStatus: student.healthInfo || 'Fit',
+      allergies: student.allergies || 'None',
       weight: `${35 + (idx % 20)} kg`
     };
 
@@ -388,7 +381,7 @@ const Reports = ({ currentUser }) => {
         studentName: selectedStudent?.name || null,
         studentId: selectedStudent?.studentId || null,
         studentDbId: selectedStudent?._id || null,
-        className: `${currentUser?.assignedClass || '8'} - ${currentUser?.division || 'B'}`,
+        className: `${currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser)} - ${currentUser?.division || getAssignedTeacherSection(currentUser)}`,
         subjectName: subjects.find(s => s._id === reportParams.subjectId)?.subjectName || 'All Subjects',
         fileName: `${selectedReport}${studentSuffix}_report_${new Date().toISOString().split('T')[0]}.pdf`
       };

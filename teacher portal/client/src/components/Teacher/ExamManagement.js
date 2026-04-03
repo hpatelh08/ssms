@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, Calendar, Clock, User, Edit, Trash2, Eye, Download, CheckCircle, BookOpen, Award } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { apiUrl } from '../../config/api';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection, matchesAssignedTeacherClass } from '../../config/teacherClasses';
+import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const ExamManagement = ({ currentUser }) => {
   const [exams, setExams] = useState([]);
@@ -40,7 +43,7 @@ const ExamManagement = ({ currentUser }) => {
   useEffect(() => {
     if (currentUser && currentUser.assignedClass) {
       // Find the class ID that matches the user's assigned class
-      const classToSelect = classes.find(cls => cls.className === currentUser.assignedClass);
+      const classToSelect = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
       if (classToSelect) {
         setFormData(prev => ({
           ...prev,
@@ -76,7 +79,7 @@ const ExamManagement = ({ currentUser }) => {
       const fetchMarksExams = async () => {
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.get(`http://localhost:5000/api/teacher/exams?class=${marksSelectedClass}`, {
+          const response = await axios.get(apiUrl(`/api/teacher/exams?class=${marksSelectedClass}`), {
             headers: { 'Authorization': `Bearer ${token}` },
             timeout: 1000
           });
@@ -94,24 +97,14 @@ const ExamManagement = ({ currentUser }) => {
         }
       };
       fetchMarksExams();
-      // Fetch students for marks
-      const indianNames = [
-        "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-        "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-        "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-        "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-        "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-        "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-        "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-        "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen"
-      ];
-      setMarksStudents(indianNames.map((name, index) => ({
-        _id: `MOCK_STU_${index + 1}`,
-        studentId: `STU${String(index + 1).padStart(3, '0')}`,
-        name
-      })));
+      loadClassStudents(marksSelectedClass, currentUser, classes)
+        .then((loadedStudents) => setMarksStudents(loadedStudents))
+        .catch((error) => {
+          console.error('Error fetching marks students:', error);
+          setMarksStudents([]);
+        });
     }
-  }, [marksSelectedClass]);
+  }, [marksSelectedClass, classes, currentUser]);
 
   useEffect(() => {
     if (marksSelectedClass && marksSelectedExam && marksStudents.length > 0) {
@@ -191,60 +184,17 @@ const ExamManagement = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      const mockFallbackClass = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: [
-          { _id: 'sub_1', subjectName: 'Math', teacher: { name: 'Hetvi' } },
-          { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Mrs. Gupta' } },
-          { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Mr. Patel' } },
-          { _id: 'sub_4', subjectName: 'Gujarati', teacher: { name: 'Mrs. Joshi' } },
-          { _id: 'sub_5', subjectName: 'Hindi', teacher: { name: 'Mr. Singh' } },
-          { _id: 'sub_6', subjectName: 'Sanskrit', teacher: { name: 'Mr. Sharma' } }
-        ]
-      };
-
-      // Filter for classes 8, 9, 10
-      let filteredClasses = response.data.data.filter(cls =>
-        ['8', '9', '10'].includes(cls.className)
-      );
-
-      if (!filteredClasses || filteredClasses.length === 0) {
-        filteredClasses = [mockFallbackClass];
-      }
-
-      setClasses(filteredClasses);
+      const loadedClasses = await loadTeacherClasses(currentUser);
+      setClasses(loadedClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
-      const mockFallbackClass = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: [
-          { _id: 'sub_1', subjectName: 'Math', teacher: { name: 'Hetvi' } },
-          { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Mrs. Gupta' } },
-          { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Mr. Patel' } },
-          { _id: 'sub_4', subjectName: 'Gujarati', teacher: { name: 'Mrs. Joshi' } },
-          { _id: 'sub_5', subjectName: 'Hindi', teacher: { name: 'Mr. Singh' } },
-          { _id: 'sub_6', subjectName: 'Sanskrit', teacher: { name: 'Mr. Sharma' } }
-        ]
-      };
-      setClasses([mockFallbackClass]);
     }
   };
 
   const fetchExams = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/exams', {
+      const response = await axios.get(apiUrl('/api/teacher/exams'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -259,7 +209,7 @@ const ExamManagement = ({ currentUser }) => {
         examName: 'Mid Term Math',
         examType: 'mid_term',
         subject: { subjectName: 'Math' },
-        class: { className: '8', section: 'B' },
+        class: { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
         date: new Date(Date.now() + 86400000 * 5).toISOString(), // 5 days from now
         startTime: '09:00',
         endTime: '12:00',
@@ -274,7 +224,7 @@ const ExamManagement = ({ currentUser }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/teacher/exams/${examId}/results`, {
+      const response = await axios.get(apiUrl(`/api/teacher/exams/${examId}/results`), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -290,19 +240,6 @@ const ExamManagement = ({ currentUser }) => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching exam results:', error);
-      // Fallback: 45 mock Indian students results
-      const indianNames = [
-        "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-        "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-        "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-        "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-        "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-        "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-        "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-        "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen",
-        "Mira Nair", "Anika Menon", "Zara Sethi", "Nisha Thakur", "Pooja Bhardwaj"
-      ];
-
       const selectedExamDetails = exams.find(e => e._id === examId) || { totalMarks: 100, passingMarks: 35 };
       const baseTotalMarks = selectedExamDetails.totalMarks;
 
@@ -312,14 +249,17 @@ const ExamManagement = ({ currentUser }) => {
       let savedGradedMap = {};
       if (savedGraded) { try { savedGradedMap = JSON.parse(savedGraded); } catch { /* ignore */ } }
 
-      const mockResults = indianNames.map((name, index) => {
+      const fallbackClassId = selectedExamDetails.class?._id || classes[0]?._id || marksSelectedClass || '';
+      const fallbackStudents = await loadClassStudents(fallbackClassId, currentUser, classes);
+
+      const mockResults = fallbackStudents.map((student, index) => {
         // Use saved marks if available, otherwise leave empty
-        const savedMarks = savedGradedMap[name]?.[selectedSubject];
+        const savedMarks = savedGradedMap[student.name]?.[selectedSubject];
         return {
           _id: `MOCK_RES_${index + 1}`,
           student: {
-            name: name,
-            studentId: `STU${String(index + 1).padStart(3, '0')}`
+            name: student.name,
+            studentId: student.studentId
           },
           marksObtained: savedMarks !== undefined ? savedMarks : '',
           totalMarks: baseTotalMarks,
@@ -354,7 +294,7 @@ const ExamManagement = ({ currentUser }) => {
 
       if (formData._id) {
         // Update existing exam
-        await axios.put(`http://localhost:5000/api/teacher/exams/${formData._id}`, formData, {
+        await axios.put(apiUrl(`/api/teacher/exams/${formData._id}`), formData, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -362,7 +302,7 @@ const ExamManagement = ({ currentUser }) => {
         });
       } else {
         // Create new exam
-        await axios.post('http://localhost:5000/api/teacher/exams', formData, {
+        await axios.post(apiUrl('/api/teacher/exams'), formData, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -428,7 +368,7 @@ const ExamManagement = ({ currentUser }) => {
     if (window.confirm('Are you sure you want to delete this exam?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:5000/api/teacher/exams/${id}`, {
+        await axios.delete(apiUrl(`/api/teacher/exams/${id}`), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -482,7 +422,7 @@ const ExamManagement = ({ currentUser }) => {
       // Save to localStorage for Marks tab
       saveGradingToMarks(resultId);
 
-      await axios.put(`http://localhost:5000/api/teacher/exam-results/${resultId}/grade`, {
+      await axios.put(apiUrl(`/api/teacher/exam-results/${resultId}/grade`), {
         marks: gradingData[resultId].marks,
         remarks: gradingData[resultId].remarks
       }, {
@@ -508,7 +448,7 @@ const ExamManagement = ({ currentUser }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      await axios.post(`http://localhost:5000/api/teacher/exams/${examId}/publish-results`, {}, {
+      await axios.post(apiUrl(`/api/teacher/exams/${examId}/publish-results`), {}, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -1,0 +1,452 @@
+/* ═══════════════════════════════════════════════════════════
+   PASTEL THEME — Global Design System v4 (Premium Depth Edition)
+   ═══════════════════════════════════════════════════════════
+   Brighter palette · Depth layering · Soft motion · No black borders
+   Sidebar: pastel-indigo text · Nunito typography
+   Parallax depth system · Hover lift · Floating animations
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Core Pastel Palette (brighter) ── */
+  --pastel-blue: #d9f6fb;
+  --pastel-blue-soft: #f2fdff;
+  --pastel-blue-deep: #a7e7f5;
+  --pastel-purple: #e7efff;
+  --pastel-purple-soft: #eff8ff;
+  --pastel-purple-deep: #7dc9dd;
+  --pastel-pink: #ffe7ef;
+  --pastel-pink-soft: #fff2f6;
+  --pastel-pink-deep: #f3adc2;
+  --pastel-green: #dcf8ef;
+  --pastel-green-soft: #effcf7;
+  --pastel-green-deep: #a7dfcf;
+  --pastel-yellow: #fff5d7;
+  --pastel-yellow-soft: #fffbed;
+  --pastel-yellow-deep: #f4dfa1;
+  --pastel-peach: #ffe9dc;
+  --pastel-peach-soft: #fff3ec;
+  --pastel-peach-deep: #f4c8ae;
+  --pastel-mint: #d5f7f0;
+  --pastel-lavender: #dde8ff;
+
+  /* ── Text Colors (soft pastel blue-purple — NEVER pure black) ── */
+  --text-primary: #1f6f7e;
+  --text-secondary: #3d8794;
+  --text-soft: #5f9fa9;
+  --text-muted: #7c98a3;
+  --text-accent-purple: #5c8fc8;
+  --text-accent-pink: #d782a0;
+  --text-accent-blue: #2f92ab;
+  --text-accent-green: #3da48f;
+  --text-accent-orange: #d19364;
+
+  /* ── Sidebar text (unified indigo — NEVER black) ── */
+  --sidebar-text: #2c7288;
+  --sidebar-text-hover: #24667a;
+  --sidebar-text-active: #1d5970;
+  --sidebar-text-muted: #75a0ab;
+  --sidebar-hover-bg: rgba(223, 248, 252, 0.86);
+
+  /* ── Shadows (PREMIUM depth — soft, never black) ── */
+  --shadow-card: 0 8px 24px rgba(91, 162, 176, 0.12), 0 1px 3px rgba(91, 162, 176, 0.06);
+  --shadow-card-hover: 0 18px 42px rgba(91, 162, 176, 0.17), 0 4px 12px rgba(91, 162, 176, 0.09);
+  --shadow-soft: 0 12px 30px rgba(91, 162, 176, 0.12);
+  --shadow-float: 0 12px 28px rgba(91, 162, 176, 0.13);
+  --shadow-depth: 0 26px 56px rgba(91, 162, 176, 0.15);
+  --shadow-glow-purple: 0 8px 28px rgba(117, 186, 202, 0.2);
+  --shadow-glow-pink: 0 8px 26px rgba(243, 173, 194, 0.18);
+  --shadow-glow-blue: 0 8px 28px rgba(96, 199, 219, 0.2);
+  --shadow-glow-green: 0 8px 28px rgba(128, 213, 191, 0.2);
+
+  /* ── Border Colors (translucent pastels, never black) ── */
+  --border-soft: rgba(144, 205, 218, 0.34);
+  --border-card: rgba(255, 255, 255, 0.68);
+  --border-accent: rgba(114, 197, 214, 0.22);
+
+  /* ── Gradients ── */
+  --gradient-sidebar: linear-gradient(180deg, rgba(239, 252, 255, 0.96) 0%, rgba(223, 247, 250, 0.98) 45%, rgba(232, 250, 245, 0.98) 100%);
+  --gradient-topbar: linear-gradient(135deg, rgba(247, 254, 255, 0.88) 0%, rgba(231, 249, 252, 0.86) 48%, rgba(244, 251, 248, 0.88) 100%);
+  --gradient-hero: linear-gradient(135deg, #e4fbff 0%, #fff6dd 58%, #ecfbf5 100%);
+  --gradient-sky: linear-gradient(to top, #dff8ff, #ffffff);
+  --gradient-ground: linear-gradient(to top, #d4f2eb, #effdf9);
+
+  /* ── Eye/Detail color ── */
+  --color-eye: #4a5568;
+  --color-bark: #8b6914;
+
+  /* ── Sidebar width ── */
+  --sidebar-width: 240px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BODY BACKGROUND
+   ═══════════════════════════════════════════════════════ */
+
+body {
+  background: linear-gradient(135deg, #f2fdff, #f7fffd) !important;
+  font-family: "Nunito", "Quicksand", "Poppins", sans-serif;
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL ICON CLEANUP — No black borders anywhere
+   ═══════════════════════════════════════════════════════ */
+
+.icon,
+.nav-icon,
+.action-icon,
+.sidebar-icon,
+[class*="icon"] {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+svg.icon,
+.icon svg,
+svg[class*="icon"] {
+  stroke: currentColor;
+  fill: currentColor;
+}
+
+/* Global outline/border removal for interactive elements */
+button, a, [role="button"] {
+  outline: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SIDEBAR TYPOGRAPHY — Pastel Indigo
+   ═══════════════════════════════════════════════════════ */
+
+.sidebar-title {
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--sidebar-text);
+  letter-spacing: -0.02em;
+}
+
+.nav-item {
+  font-family: "Nunito", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sidebar-text);
+  letter-spacing: 0.3px;
+  border-radius: 18px;
+  padding: 14px 18px;
+  transition: all 0.25s ease;
+}
+
+.nav-item:hover {
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-text-hover);
+  transform: translateX(4px);
+}
+
+.nav-item.active {
+  color: var(--sidebar-text-active);
+  font-weight: 800;
+  background: linear-gradient(135deg, #e8ecff, #f1e9ff);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PASTEL COMPONENT UTILITIES
+   ═══════════════════════════════════════════════════════ */
+
+.soft-button {
+  padding: 14px 28px;
+  border-radius: 30px;
+  background: var(--pastel-green);
+  border: none;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: var(--shadow-soft);
+}
+.soft-button:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+  filter: brightness(1.03);
+}
+.soft-button:active {
+  transform: translateY(0);
+}
+
+/* ═══════════════════════════════════════════════════════
+   HERO CARD — Premium Depth
+   ═══════════════════════════════════════════════════════ */
+
+.hero-card {
+  background: var(--gradient-hero);
+  border-radius: 40px;
+  padding: 50px;
+  box-shadow: var(--shadow-depth);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-title {
+  font-family: "Nunito", sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Floating decorative shapes inside hero */
+.hero-shape {
+  position: absolute;
+  opacity: 0.15;
+  pointer-events: none;
+  animation: floaty 6s ease-in-out infinite;
+}
+.hero-shape:nth-child(2) { animation-delay: -2s; }
+.hero-shape:nth-child(3) { animation-delay: -4s; }
+
+/* ═══════════════════════════════════════════════════════
+   ACTION CARDS — Toy-like interactive feel
+   ═══════════════════════════════════════════════════════ */
+
+.action-card {
+  border-radius: 28px;
+  padding: 30px;
+  background: linear-gradient(145deg, #ffffff, #f7f9ff);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border: 1px solid var(--border-card);
+}
+.action-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card-hover);
+}
+.action-card:active {
+  transform: scale(0.97);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROGRESS BAR
+   ═══════════════════════════════════════════════════════ */
+
+.progress-fill {
+  background: linear-gradient(90deg, var(--pastel-blue), var(--pastel-purple));
+  border-radius: 20px;
+  transition: width 1s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: progressShimmer 2s ease-in-out infinite;
+}
+@keyframes progressShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ADVANCED MOTION SYSTEM — Soft & Child-Friendly
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Hover Lift (cards, buttons) ── */
+.hover-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+}
+
+/* ── Float animation (decorative elements) ── */
+@keyframes floaty {
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+.float {
+  animation: floaty 4s ease-in-out infinite;
+}
+.float-slow { animation: floaty 6s ease-in-out infinite; }
+.float-fast { animation: floaty 2.5s ease-in-out infinite; }
+.float-delay-1 { animation-delay: -1s; }
+.float-delay-2 { animation-delay: -2s; }
+.float-delay-3 { animation-delay: -3s; }
+
+/* ═══════════════════════════════════════════════════════
+   DEPTH LAYERING SYSTEM — Parallax + 3D Premium
+   ═══════════════════════════════════════════════════════ */
+
+/* Apply to main content wrapper for perspective */
+.depth-perspective {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+/* Background layer — slight parallax push-back */
+.layer-back {
+  transform: translateZ(-2px) scale(1.04);
+  pointer-events: none;
+}
+
+/* Mid content layer */
+.layer-mid {
+  transform: translateZ(0);
+  position: relative;
+}
+
+/* Foreground cards — lifted */
+.layer-front {
+  transform: translateZ(1px);
+  position: relative;
+}
+
+/* 3D card effect */
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+.card-3d:hover {
+  transform: translateY(-6px) rotateX(2deg) rotateY(-1deg);
+  box-shadow: var(--shadow-depth);
+}
+
+/* ═══════════════════════════════════════════════════════
+   GARDEN + GAME VISUAL DEPTH
+   ═══════════════════════════════════════════════════════ */
+
+.tree-depth {
+  filter: drop-shadow(0 20px 30px rgba(0,0,0,0.1));
+}
+
+.fruit-glow {
+  filter: drop-shadow(0 4px 8px rgba(255,180,50,0.3));
+}
+
+.sun-radial-glow {
+  filter: drop-shadow(0 0 40px rgba(251,191,36,0.4));
+}
+
+.xp-scale-up {
+  animation: xpScaleUp 0.4s ease-out;
+}
+@keyframes xpScaleUp {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   REALM HEADER — Elevated, Premium
+   ═══════════════════════════════════════════════════════ */
+
+.realm-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 20px 40px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.6);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENGAGEMENT ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+
+@keyframes treeScaleIn {
+  0%   { transform: scale(0) translateX(-50%); opacity: 0; }
+  60%  { transform: scale(1.05) translateX(-50%); opacity: 1; }
+  100% { transform: scale(1) translateX(-50%); opacity: 1; }
+}
+
+@keyframes fruitGrow {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fruitPopIn {
+  0%   { transform: scale(0) rotate(-10deg); opacity: 0; }
+  50%  { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes sunPulse {
+  0%, 100% { filter: drop-shadow(0 0 20px rgba(251,191,36,0.4)); transform: scale(1); }
+  50%      { filter: drop-shadow(0 0 32px rgba(251,191,36,0.6)); transform: scale(1.04); }
+}
+
+@keyframes birdFloat {
+  0%   { transform: translateX(-60px); }
+  100% { transform: translateX(calc(100vw + 60px)); }
+}
+
+@keyframes mascotWave {
+  0%, 100% { transform: rotate(0deg); }
+  15%      { transform: rotate(14deg); }
+  30%      { transform: rotate(-8deg); }
+  45%      { transform: rotate(14deg); }
+  60%      { transform: rotate(-4deg); }
+  75%      { transform: rotate(10deg); }
+}
+
+@keyframes heroBtnBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+@keyframes gentleBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@keyframes confettiBurst {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translateY(-80px) rotate(360deg) scale(0); opacity: 0; }
+}
+
+/* ── Pulse glow (for interactive elements) ── */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.15); }
+  50%      { box-shadow: 0 0 20px 4px rgba(108, 92, 231, 0.1); }
+}
+
+.pulse-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* ── Shimmer effect ── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-surface {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.2) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════
+   REDUCED MOTION — Accessibility
+   ═══════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .float, .float-slow, .float-fast,
+  .hover-lift, .card-3d,
+  .hero-shape, .pulse-glow, .shimmer-surface {
+    animation: none !important;
+    transition: none !important;
+  }
+}

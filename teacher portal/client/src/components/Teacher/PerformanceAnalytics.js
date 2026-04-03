@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Line, RadialBarChart, RadialBar } from 'recharts';
 import { TrendingUp, AlertTriangle, Users, MessageCircle, BarChart2, Award, CheckCircle2 } from 'lucide-react';
+import { apiUrl } from '../../config/api';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
+import { loadTeacherClasses, loadTeacherStudents } from '../../services/teacherBackendData';
 
 const PerformanceAnalytics = ({ currentUser }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -10,6 +13,7 @@ const PerformanceAnalytics = ({ currentUser }) => {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [hoveredSubject, setHoveredSubject] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [classroomStudents, setClassroomStudents] = useState([]);
   const chartRef = React.useRef(null);
 
   const handleSegmentHover = (e, sub) => {
@@ -24,10 +28,25 @@ const PerformanceAnalytics = ({ currentUser }) => {
     fetchAnalyticsData();
   }, []);
 
+  useEffect(() => {
+    const fetchClassroomStudents = async () => {
+      try {
+        const classes = await loadTeacherClasses(currentUser);
+        const students = await loadTeacherStudents(currentUser, classes);
+        setClassroomStudents(students);
+      } catch (fetchError) {
+        console.error('Error fetching classroom students for analytics:', fetchError);
+        setClassroomStudents([]);
+      }
+    };
+
+    fetchClassroomStudents();
+  }, [currentUser?.email, currentUser?.assignedClass, currentUser?.division]);
+
   const fetchAnalyticsData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/analytics', {
+      const response = await axios.get(apiUrl('/api/teacher/analytics'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -91,7 +110,7 @@ const PerformanceAnalytics = ({ currentUser }) => {
   };
 
   const overallStats = {
-    totalStudents: (effectiveData.weakStudents?.length || 0) + (effectiveData.topPerformers?.length || 0) + 50,
+    totalStudents: classroomStudents.length || (effectiveData.weakStudents?.length || 0) + (effectiveData.topPerformers?.length || 0) + 50,
     averageClassPerformance: effectiveData.classPerformance.reduce((acc, cls) => acc + (cls.averagePercentage || 0), 0) / effectiveData.classPerformance.length,
     overallAttendance: effectiveData.attendanceOverview.reduce((acc, cls) => acc + (cls.averageAttendance || 0), 0) / effectiveData.attendanceOverview.length,
     strongestSubject: effectiveData.subjectPerformance.sort((a, b) => b.averagePercentage - a.averagePercentage)[0]?.subjectName || 'N/A',
@@ -101,20 +120,33 @@ const PerformanceAnalytics = ({ currentUser }) => {
 
   // Read actual syllabus progress from ClassManagement localStorage
   const getLiveSyllabusStatus = () => {
-    const className = currentUser?.assignedClass || '8';
-    const section = currentUser?.division || 'B';
+    const className = currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser);
+    const section = currentUser?.division || getAssignedTeacherSection(currentUser);
     const classKey = `${className}-${section}`;
     const saved = localStorage.getItem(`syllabus-data-${classKey}`);
     if (!saved) return null;
     try {
       const syllabusMap = JSON.parse(saved);
-      return Object.entries(syllabusMap).map(([key, chapters]) => {
-        const subjectName = key.replace(/-\d+$/, '');
+      const subjectSummary = new Map();
+      Object.entries(syllabusMap).forEach(([key, chapters]) => {
+        const subjectName = key.replace(/-\d+$/, '').trim();
         const totalTopics = chapters.reduce((s, ch) => s + ch.subTopics.length, 0);
         const completedTopics = chapters.reduce((s, ch) => s + ch.subTopics.filter(t => t.completed).length, 0);
         const completionPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
-        return { subjectName, completionPercentage };
+        
+        const normalizedName = subjectName.toLowerCase();
+        if (subjectSummary.has(normalizedName)) {
+           const existing = subjectSummary.get(normalizedName);
+           existing.totalTopics += totalTopics;
+           existing.completedTopics += completedTopics;
+        } else {
+           subjectSummary.set(normalizedName, { subjectName, totalTopics, completedTopics });
+        }
       });
+      return Array.from(subjectSummary.values()).map(stats => ({
+        subjectName: stats.subjectName,
+        completionPercentage: stats.totalTopics > 0 ? Math.round((stats.completedTopics / stats.totalTopics) * 100) : 0
+      }));
     } catch { return null; }
   };
 
@@ -123,8 +155,8 @@ const PerformanceAnalytics = ({ currentUser }) => {
 
   // Dynamically compute failed students from localStorage marks data
   const getFailedStudents = () => {
-    const className = currentUser?.assignedClass || '8';
-    const section = currentUser?.division || 'B';
+    const className = currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser);
+    const section = currentUser?.division || getAssignedTeacherSection(currentUser);
     const passingMarks = 35;
     const studentMarks = {}; // { studentName: [marks...] }
 
@@ -148,19 +180,9 @@ const PerformanceAnalytics = ({ currentUser }) => {
       if (key && key.startsWith('marks-data-')) {
         try {
           const data = JSON.parse(localStorage.getItem(key));
-          const indianNames = [
-            "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-            "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-            "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-            "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-            "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-            "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-            "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-            "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen"
-          ];
           Object.entries(data).forEach(([stuId, subjects]) => {
-            const idx = parseInt(stuId.replace('MOCK_STU_', '')) - 1;
-            const name = indianNames[idx] || stuId;
+            const actualStudent = classroomStudents.find((student) => student._id === stuId);
+            const name = actualStudent?.name || stuId;
             if (!studentMarks[name]) studentMarks[name] = [];
             Object.values(subjects).forEach(m => {
               if (!studentMarks[name].includes(Number(m))) studentMarks[name].push(Number(m) || 0);

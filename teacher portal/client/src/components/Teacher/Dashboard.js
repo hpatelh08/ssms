@@ -25,81 +25,21 @@ import {
   User,
   Plus
 } from 'lucide-react';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
+import { fetchTeacherTeachingTimetable } from '../../services/timetable';
+import { loadTeacherNotifications } from '../../services/teacherBackendData';
+import { findTeacherByIdentity } from '../../data/teachers';
 
 const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
-  // Mock data for the dashboard features
   const LECTURE_DURATION_MINUTES = 40;
-
-  const todaysClasses = [
-    { id: 1, subject: 'Mathematics', class: '10th A', startTime: '09:00 AM' },
-    { id: 2, subject: 'Physics', class: '9th B', startTime: '10:00 AM' },
-    { id: 3, subject: 'Mathematics', class: '10th B', startTime: '11:15 AM' },
-    { id: 4, subject: 'Science Lab', class: '9th A', startTime: '01:00 PM' }
-  ];
-
-  const weeklyTimetable = [
-    {
-      day: 'Monday',
-      lectures: [
-        { id: 'mon-1', subject: 'Mathematics', class: '10th A', startTime: '09:00 AM' },
-        { id: 'mon-2', subject: 'Physics', class: '9th B', startTime: '10:00 AM' },
-        { id: 'mon-3', subject: 'Mathematics', class: '10th B', startTime: '11:15 AM' },
-        { id: 'mon-4', subject: 'Science Lab', class: '9th A', startTime: '01:00 PM' }
-      ]
-    },
-    {
-      day: 'Tuesday',
-      lectures: [
-        { id: 'tue-1', subject: 'Physics', class: '9th A', startTime: '09:00 AM' },
-        { id: 'tue-2', subject: 'Mathematics', class: '10th A', startTime: '10:00 AM' },
-        { id: 'tue-3', subject: 'Science Lab', class: '9th B', startTime: '11:15 AM' },
-        { id: 'tue-4', subject: 'Mathematics', class: '10th B', startTime: '01:00 PM' }
-      ]
-    },
-    {
-      day: 'Wednesday',
-      lectures: [
-        { id: 'wed-1', subject: 'Mathematics', class: '10th B', startTime: '09:00 AM' },
-        { id: 'wed-2', subject: 'Physics', class: '9th B', startTime: '10:00 AM' },
-        { id: 'wed-3', subject: 'Science Lab', class: '9th A', startTime: '11:15 AM' },
-        { id: 'wed-4', subject: 'Mathematics', class: '10th A', startTime: '01:00 PM' }
-      ]
-    },
-    {
-      day: 'Thursday',
-      lectures: [
-        { id: 'thu-1', subject: 'Mathematics', class: '10th A', startTime: '09:00 AM' },
-        { id: 'thu-2', subject: 'Physics', class: '9th B', startTime: '10:00 AM' },
-        { id: 'thu-3', subject: 'Mathematics', class: '10th B', startTime: '11:15 AM' },
-        { id: 'thu-4', subject: 'Science Lab', class: '9th A', startTime: '01:00 PM' }
-      ]
-    },
-    {
-      day: 'Friday',
-      lectures: [
-        { id: 'fri-1', subject: 'Physics', class: '9th A', startTime: '09:00 AM' },
-        { id: 'fri-2', subject: 'Mathematics', class: '10th A', startTime: '10:00 AM' },
-        { id: 'fri-3', subject: 'Science Lab', class: '9th B', startTime: '11:15 AM' },
-        { id: 'fri-4', subject: 'Mathematics', class: '10th B', startTime: '01:00 PM' }
-      ]
-    },
-    {
-      day: 'Saturday',
-      lectures: [
-        { id: 'sat-1', subject: 'Mathematics', class: '10th A', startTime: '09:00 AM' },
-        { id: 'sat-2', subject: 'Physics', class: '9th B', startTime: '10:00 AM' },
-        { id: 'sat-3', subject: 'Science Lab', class: '9th A', startTime: '11:15 AM' }
-      ]
-    },
-    {
-      day: 'Sunday',
-      lectures: []
-    }
-  ];
+  const assignedClassNumber = getAssignedTeacherClassNumber(currentUser);
+  const assignedSection = getAssignedTeacherSection(currentUser);
+  const assignedClassLabel = `${assignedClassNumber}-${assignedSection}`;
+  const timetableDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const defaultPendingTasks = [
-    { id: 1, title: 'Grade Mid-Term Papers (10th A)', due: 'Today, 5:00 PM', priority: 'high' },
-    { id: 2, title: 'Upload Physics Assignment', due: 'Tomorrow, 10:00 AM', priority: 'medium' },
+    { id: 1, title: `Review Classwork (${assignedClassLabel})`, due: 'Today, 5:00 PM', priority: 'high' },
+    { id: 2, title: 'Upload Study Material', due: 'Tomorrow, 10:00 AM', priority: 'medium' },
     { id: 3, title: 'Review Leave Requests', due: 'Tomorrow, 2:00 PM', priority: 'low' }
   ];
 
@@ -109,12 +49,12 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   ];
 
   const upcomingExams = [
-    { id: 1, subject: 'Mathematics (Unit Test 2)', class: '10th A', date: 'Oct 28', time: '09:00 AM' },
-    { id: 2, subject: 'Physics (Practical)', class: '9th B', date: 'Oct 30', time: '11:00 AM' }
+    { id: 1, subject: 'Class Test', class: assignedClassLabel, date: 'This Week', time: '09:00 AM' },
+    { id: 2, subject: 'Subject Revision', class: assignedClassLabel, date: 'Next Week', time: '11:00 AM' }
   ];
 
   const alerts = [
-    { id: 1, type: 'birthday', message: 'Rahul Sharma (10th A) birthday today!', icon: <Gift className="w-5 h-5 text-pink-500" /> },
+    { id: 1, type: 'birthday', message: `Class ${assignedClassLabel} reminders available today.`, icon: <Gift className="w-5 h-5 text-pink-500" /> },
     { id: 2, type: 'event', message: 'Annual Sports Day planning at 4 PM', icon: <Calendar className="w-5 h-5 text-blue-500" /> }
   ];
 
@@ -123,6 +63,9 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     Physics: 'Cover force and motion concepts with one real-life demo activity.',
     'Science Lab': 'Run acid-base indicator practical and record observations in lab notebook.'
   };
+
+  const matchedTeacher = findTeacherByIdentity(currentUser || {});
+  const teacherDisplayName = currentUser?.name || matchedTeacher?.name || currentUser?.teacherId || currentUser?.email || 'Teacher';
 
   const getPtmStorageKey = () => `teacher-ptm-meetings-${currentUser?.email || 'default'}`;
 
@@ -158,6 +101,14 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
 
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [ptmPendingTasks, setPtmPendingTasks] = useState([]);
+  const [weeklyTimetable, setWeeklyTimetable] = useState(() =>
+    timetableDays.map((day) => ({ day, lectures: [] }))
+  );
+  const [timetableNote, setTimetableNote] = useState('');
+  const [timetableError, setTimetableError] = useState('');
+  const [timetableLoading, setTimetableLoading] = useState(false);
+  const [teacherNotifications, setTeacherNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // Attendance summary from localStorage
   const [attendanceSummary, setAttendanceSummary] = useState({ present: 0, absent: 0, total: 0, uniformYes: 0, uniformNo: 0, idCardYes: 0, idCardNo: 0 });
@@ -204,15 +155,38 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     };
   }, []);
 
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!currentUser) return;
+
+      try {
+        setNotificationsLoading(true);
+        const notifications = await loadTeacherNotifications(currentUser, 5);
+        setTeacherNotifications(Array.isArray(notifications) ? notifications : []);
+      } catch (error) {
+        console.error('Error loading teacher notifications:', error);
+        setTeacherNotifications([]);
+      } finally {
+        setNotificationsLoading(false);
+      }
+    };
+
+    loadNotifications();
+    const intervalId = setInterval(loadNotifications, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [currentUser]);
+
   const parseTimeToMinutes = (timeText) => {
-    const match = timeText?.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    const match = timeText?.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
     if (!match) return null;
 
     const hours = Number(match[1]);
     const minutes = Number(match[2]);
-    const period = match[3].toUpperCase();
-
-    const normalizedHours = period === 'PM' && hours !== 12 ? hours + 12 : period === 'AM' && hours === 12 ? 0 : hours;
+    const period = match[3] ? match[3].toUpperCase() : '';
+    const normalizedHours = period
+      ? (period === 'PM' && hours !== 12 ? hours + 12 : period === 'AM' && hours === 12 ? 0 : hours)
+      : hours;
     return normalizedHours * 60 + minutes;
   };
 
@@ -229,6 +203,10 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   };
 
   const getLectureTimeRange = (startTime) => {
+    if (String(startTime || '').includes(' - ')) {
+      return startTime;
+    }
+
     const startMinutes = parseTimeToMinutes(startTime);
     if (startMinutes === null) return startTime;
 
@@ -258,6 +236,44 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   }, []);
 
   useEffect(() => {
+    const loadTeacherTimetable = async () => {
+      if (!currentUser) return;
+
+      try {
+        setTimetableLoading(true);
+        const timetableData = await fetchTeacherTeachingTimetable(currentUser);
+        const schedule = timetableData.schedule || {};
+        const mappedWeeklyTimetable = timetableDays.map((day) => ({
+          day,
+          lectures: (schedule[day] || [])
+            .filter((slot) => !slot?.isBreak && slot?.subject)
+            .map((slot) => ({
+              id: `${day}-${slot.num}`,
+              subject: slot.subject,
+              class: slot.classLabel || `${slot.std || assignedClassNumber}-${slot.section || assignedSection}`,
+              time: slot.time || '',
+              teacher: slot.teacher || '',
+              period: slot.num
+            }))
+        }));
+
+        setWeeklyTimetable(mappedWeeklyTimetable);
+        setTimetableNote(timetableData.note || '');
+        setTimetableError('');
+      } catch (error) {
+        console.error('Error loading dashboard timetable:', error);
+        setWeeklyTimetable(timetableDays.map((day) => ({ day, lectures: [] })));
+        setTimetableNote('');
+        setTimetableError('Unable to load your teaching timetable right now.');
+      } finally {
+        setTimetableLoading(false);
+      }
+    };
+
+    loadTeacherTimetable();
+  }, [currentUser, assignedClassNumber, assignedSection]);
+
+  useEffect(() => {
     const syncPtmPendingTasks = () => {
       setPtmPendingTasks(getPtmPendingTasks());
     };
@@ -279,8 +295,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     };
   }, [currentUser?.email]);
 
+  const todayName = currentTime.toLocaleDateString('en-US', { weekday: 'long' });
+  const todaysClasses = weeklyTimetable.find((daySchedule) => daySchedule.day === todayName)?.lectures || [];
+
   const todaysClassesWithStatus = todaysClasses.map((lecture) => {
-    const timeRange = getLectureTimeRange(lecture.startTime);
+    const timeRange = lecture.time || getLectureTimeRange(lecture.startTime);
 
     return {
       ...lecture,
@@ -344,14 +363,19 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     confirmPassword: ''
   });
   const [passwordFeedback, setPasswordFeedback] = useState({ type: '', message: '' });
+  const [showAlertsEvents, setShowAlertsEvents] = useState(false);
+  const [showRecentUpdates, setShowRecentUpdates] = useState(true);
 
   const profileInputRef = useRef(null);
+  const alertsEventsRef = useRef(null);
+  const recentAnnouncementsRef = useRef(null);
 
   useEffect(() => {
-    if (!currentUser?.email) return;
-    const savedImage = localStorage.getItem(`teacher-profile-image-${currentUser.email}`) || '';
+    const storageKey = currentUser?.teacherId || currentUser?.email;
+    if (!storageKey) return;
+    const savedImage = localStorage.getItem(`teacher-profile-image-${storageKey}`) || '';
     setProfileImage(savedImage);
-  }, [currentUser?.email]);
+  }, [currentUser?.teacherId, currentUser?.email]);
 
   useEffect(() => {
     if (!showProfileModal && !showTimetableModal) return undefined;
@@ -377,6 +401,14 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     onNavigate(targetPage);
   };
 
+  const openRecentAnnouncements = () => {
+    setShowRecentUpdates(true);
+    setShowAlertsEvents(true);
+    requestAnimationFrame(() => {
+      (recentAnnouncementsRef.current || alertsEventsRef.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const handleProfileImageChange = (event) => {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile || !selectedFile.type.startsWith('image/')) return;
@@ -387,8 +419,9 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
       if (typeof imageData !== 'string') return;
 
       setProfileImage(imageData);
-      if (currentUser?.email) {
-        localStorage.setItem(`teacher-profile-image-${currentUser.email}`, imageData);
+      const storageKey = currentUser?.teacherId || currentUser?.email;
+      if (storageKey) {
+        localStorage.setItem(`teacher-profile-image-${storageKey}`, imageData);
       }
       event.target.value = '';
     };
@@ -398,8 +431,9 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
 
   const handleProfileImageRemove = () => {
     setProfileImage('');
-    if (currentUser?.email) {
-      localStorage.removeItem(`teacher-profile-image-${currentUser.email}`);
+    const storageKey = currentUser?.teacherId || currentUser?.email;
+    if (storageKey) {
+      localStorage.removeItem(`teacher-profile-image-${storageKey}`);
     }
     if (profileInputRef.current) {
       profileInputRef.current.value = '';
@@ -467,7 +501,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
             )}
           </button>
           <div>
-            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-gray-800 to-indigo-700 bg-clip-text text-transparent">{greeting}, {currentUser.name}!</h1>
+            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-gray-800 to-indigo-700 bg-clip-text text-transparent">{greeting}, {teacherDisplayName}!</h1>
             <p className="text-sm text-gray-500 font-medium mt-0.5">Here's your overview for today</p>
           </div>
         </div>
@@ -569,38 +603,58 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                 View Timetable <ChevronRight className="w-4 h-4 ml-1" />
               </button>
             </div>
-            <div className="space-y-4">
-              {todaysClassesWithStatus.map((cls) => (
-                <div key={cls.id} className="flex items-center p-4 rounded-xl border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group shadow-sm hover:shadow">
-                  <div
-                    className={`w-1.5 h-12 rounded-full mr-4 ${cls.status === 'completed'
-                      ? 'bg-emerald-400'
-                      : cls.status === 'ongoing'
-                        ? 'bg-blue-500 animate-pulse'
-                        : 'bg-gray-300'
-                      }`}
-                  ></div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-gray-800">{cls.subject}</h4>
-                    <p className="text-gray-500 text-sm font-medium">{cls.class} - {cls.time}</p>
+            {timetableNote && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                {timetableNote}
+              </div>
+            )}
+            {timetableError && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {timetableError}
+              </div>
+            )}
+            {timetableLoading ? (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+                Loading timetable for Class {assignedClassLabel}...
+              </div>
+            ) : todaysClassesWithStatus.length > 0 ? (
+              <div className="space-y-4">
+                {todaysClassesWithStatus.map((cls) => (
+                  <div key={cls.id} className="flex items-center p-4 rounded-xl border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group shadow-sm hover:shadow">
+                    <div
+                      className={`w-1.5 h-12 rounded-full mr-4 ${cls.status === 'completed'
+                        ? 'bg-emerald-400'
+                        : cls.status === 'ongoing'
+                          ? 'bg-blue-500 animate-pulse'
+                          : 'bg-gray-300'
+                        }`}
+                    ></div>
+                    <div className="flex-1">
+                      <h4 className="text-lg font-bold text-gray-800">{cls.subject}</h4>
+                      <p className="text-gray-500 text-sm font-medium">{cls.class} - {cls.time}</p>
+                    </div>
+                    <div>
+                      {cls.status === 'completed' && <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">Completed</span>}
+                      {cls.status === 'ongoing' && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping"></span>
+                          Ongoing
+                        </span>
+                      )}
+                      {cls.status === 'upcoming' && (
+                        <button className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100 shadow-sm">
+                          Start Session
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    {cls.status === 'completed' && <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">Completed</span>}
-                    {cls.status === 'ongoing' && (
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping"></span>
-                        Ongoing
-                      </span>
-                    )}
-                    {cls.status === 'upcoming' && (
-                      <button className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100 shadow-sm">
-                        Start Session
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+                No lectures scheduled for today in Class {assignedClassLabel}.
+              </div>
+            )}
           </div>
 
           {/* Student Performance Summary */}
@@ -638,7 +692,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                       const data = JSON.parse(localStorage.getItem(key));
                       // data is { "SubjectName-0": [{ chapterName, subTopics: [{ name, completed }] }] }
                       Object.keys(data).forEach(subjectKey => {
-                        const subjectName = subjectKey.replace(/-\d+$/, '');
+                        const subjectName = subjectKey.replace(/-\d+$/, '').trim();
                         const chapters = data[subjectKey];
                         let totalSubTopics = 0;
                         let completedSubTopics = 0;
@@ -655,7 +709,32 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   }
                 }
 
-                if (syllabusResults.length === 0) {
+                const normalizeSubjectName = (value = '') =>
+                  String(value)
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '');
+
+                // Keep only one entry per subject by averaging duplicate percentages.
+                const subjectSummaryMap = new Map();
+                syllabusResults.forEach(({ subjectName, percent }) => {
+                  const normalizedName = normalizeSubjectName(subjectName);
+                  const existing = subjectSummaryMap.get(normalizedName);
+                  if (existing) {
+                    existing.total += percent;
+                    existing.count += 1;
+                  } else {
+                    subjectSummaryMap.set(normalizedName, { displayTitle: subjectName, total: percent, count: 1 });
+                  }
+                });
+
+                const uniqueSyllabusResults = Array.from(subjectSummaryMap.values())
+                  .map(stats => ({
+                    subjectName: stats.displayTitle,
+                    percent: Math.round(stats.total / stats.count)
+                  }))
+                  .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+
+                if (uniqueSyllabusResults.length === 0) {
                   // Fallback if no syllabus data
                   return (
                     <div className="text-center py-8 text-gray-400">
@@ -666,7 +745,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   );
                 }
 
-                return syllabusResults.map((item, idx) => (
+                return uniqueSyllabusResults.map((item, idx) => (
                   <div key={idx} className="group">
                     <div className="flex justify-between text-sm mb-2 text-gray-700 font-bold">
                       <span>{item.subjectName}</span>
@@ -685,40 +764,107 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
           </div>
 
           {/* Birthday/Event Alerts */}
-          <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl shadow-sm border border-pink-100 p-5 hover:shadow-md transition-shadow">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-pink-500 animate-bounce" /> Alerts & Events
-            </h3>
-            <div className="space-y-3">
-              {alerts.map((alert) => (
-                <div key={alert.id} className="flex items-start gap-4 bg-white/70 backdrop-blur-sm p-3.5 rounded-xl border border-pink-200/50 shadow-sm transition-transform hover:-translate-y-0.5">
-                  <div className="mt-0.5 bg-white p-1.5 rounded-lg shadow-sm">{alert.icon}</div>
-                  <p className="text-sm font-semibold text-gray-800 leading-snug">{alert.message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Announcements */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-            <h3 className="text-lg font-bold text-gray-800 mb-5">Recent Announcements</h3>
-            <div className="space-y-5 px-2">
-              {announcements.map((ann, idx) => (
-                <div key={ann.id} className="relative flex items-start gap-4">
-                  {idx !== announcements.length - 1 && (
-                    <div className="absolute top-5 left-1.5 w-0.5 h-[calc(100%+0.5rem)] bg-gray-200 -z-10" />
-                  )}
-                  <div className={`mt-1 flex-shrink-0 w-3.5 h-3.5 rounded-full border-[3px] shadow-sm box-content bg-white ${ann.type === 'urgent' ? 'border-red-500' : 'border-blue-500'}`} />
-                  <div className="flex-1 pb-1">
-                    <p className={`text-sm font-bold ${ann.type === 'urgent' ? 'text-red-600' : 'text-gray-800'} leading-snug`}>
-                      {ann.title}
-                    </p>
-                    <p className="text-xs font-semibold text-gray-500 mt-1.5 bg-gray-50 w-max px-2 py-0.5 rounded-md">{ann.date}</p>
+          {showAlertsEvents && (
+            <div ref={alertsEventsRef} className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl shadow-sm border border-pink-100 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-pink-500 animate-bounce" /> Alerts & Events
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAlertsEvents(false)}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-pink-200 bg-white text-pink-600 hover:bg-pink-50 hover:text-pink-700 transition-colors shadow-sm"
+                  aria-label="Close alerts and events"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {alerts.map((alert) => (
+                  <div key={alert.id} className="flex items-start gap-4 bg-white/70 backdrop-blur-sm p-3.5 rounded-xl border border-pink-200/50 shadow-sm transition-transform hover:-translate-y-0.5">
+                    <div className="mt-0.5 bg-white p-1.5 rounded-lg shadow-sm">{alert.icon}</div>
+                    <p className="text-sm font-semibold text-gray-800 leading-snug">{alert.message}</p>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Announcement */}
+          {showRecentUpdates && (
+            <div ref={recentAnnouncementsRef} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <h3 className="text-lg font-bold text-gray-800">Announcement</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowRecentUpdates(false)}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors shadow-sm"
+                  aria-label="Close recent updates"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <p className="text-sm font-bold text-gray-700">New Student Notifications</p>
+                  <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">
+                    {teacherNotifications.length} items
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {notificationsLoading && (
+                    <div className="text-sm text-gray-500 font-medium">Loading notifications...</div>
+                  )}
+                  {!notificationsLoading && teacherNotifications.length === 0 && (
+                    <div className="text-sm text-gray-500 font-medium">
+                      No new student notifications right now.
+                    </div>
+                  )}
+                  {teacherNotifications.map((notification) => (
+                    <div
+                      key={`recent-${notification.id}`}
+                      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 ${notification.type === 'student_added' ? 'border-emerald-100 bg-emerald-50/70' : 'border-gray-100 bg-gray-50/70'}`}
+                    >
+                      <div className="mt-0.5 w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center text-indigo-600 font-bold text-xs shadow-sm">
+                        {notification.type === 'student_added' ? 'NEW' : 'INFO'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-gray-800">{notification.title}</p>
+                        <p className="text-sm text-gray-600">{notification.body}</p>
+                      </div>
+                      <div className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">
+                        {notification.createdAt ? new Date(notification.createdAt).toLocaleString() : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-gray-100">
+                <p className="text-sm font-bold text-gray-700 mb-3">Recent Announcements</p>
+                <div className="space-y-5 px-2">
+                  {announcements.map((ann, idx) => (
+                    <div key={ann.id} className="relative flex items-start gap-4">
+                      {idx !== announcements.length - 1 && (
+                        <div className="absolute top-5 left-1.5 w-0.5 h-[calc(100%+0.5rem)] bg-gray-200 -z-10" />
+                      )}
+                      <div className={`mt-1 flex-shrink-0 w-3.5 h-3.5 rounded-full border-[3px] shadow-sm box-content bg-white ${ann.type === 'urgent' ? 'border-red-500' : 'border-blue-500'}`} />
+                      <div className="flex-1 pb-1">
+                        <p className={`text-sm font-bold ${ann.type === 'urgent' ? 'text-red-600' : 'text-gray-800'} leading-snug`}>
+                          {ann.title}
+                        </p>
+                        <p className="text-xs font-semibold text-gray-500 mt-1.5 bg-gray-50 w-max px-2 py-0.5 rounded-md">{ann.date}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column (Narrower) */}
@@ -795,11 +941,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
               </button>
               <button
                 type="button"
-                onClick={() => setShowProfileModal(true)}
+                onClick={openRecentAnnouncements}
                 className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gray-50 hover:bg-purple-50 hover:border-purple-100 transition-all border border-gray-100 group shadow-sm hover:shadow"
               >
-                <UserCircle className="w-6 h-6 text-purple-600 group-hover:scale-110 transition-transform" />
-                <span className="text-xs font-bold text-gray-700 group-hover:text-purple-700">My Profile</span>
+                <Bell className="w-6 h-6 text-purple-600 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold text-gray-700 group-hover:text-purple-700">Notification</span>
               </button>
               <button
                 type="button"
@@ -824,6 +970,14 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
               >
                 <BookOpen className="w-6 h-6 text-amber-600 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-gray-700 group-hover:text-amber-700">Upload Notes</span>
+              </button>
+              <button
+                type="button"
+                onClick={openRecentAnnouncements}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gray-50 hover:bg-pink-50 hover:border-pink-100 transition-all border border-gray-100 group shadow-sm hover:shadow"
+              >
+                <Bell className="w-6 h-6 text-pink-600 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold text-gray-700 group-hover:text-pink-700">Announcement</span>
               </button>
             </div>
           </div>
@@ -858,7 +1012,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
             <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-100 px-5 sm:px-7 py-4 flex items-center justify-between">
               <div>
                 <h3 className="text-xl sm:text-2xl font-bold text-gray-800">Weekly Timetable</h3>
-                <p className="text-sm text-indigo-600 font-semibold mt-1">Each lecture duration: {LECTURE_DURATION_MINUTES} minutes</p>
+                <p className="text-sm text-indigo-600 font-semibold mt-1">Class {assignedClassLabel} timetable from Admin Portal</p>
               </div>
               <button
                 onClick={() => setShowTimetableModal(false)}
@@ -868,6 +1022,17 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
               </button>
             </div>
 
+            {timetableNote && (
+              <div className="mx-5 mt-5 sm:mx-7 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                {timetableNote}
+              </div>
+            )}
+            {timetableError && (
+              <div className="mx-5 mt-5 sm:mx-7 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {timetableError}
+              </div>
+            )}
+
             <div className="p-5 sm:p-7 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {weeklyTimetable.map((daySchedule) => (
                 <div key={daySchedule.day} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
@@ -876,7 +1041,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   </div>
 
                   <div className="p-4 space-y-3">
-                    {daySchedule.lectures.length === 0 && (
+                    {timetableLoading && (
+                      <p className="text-sm font-medium text-gray-500">Loading timetable...</p>
+                    )}
+
+                    {!timetableLoading && daySchedule.lectures.length === 0 && (
                       <p className="text-sm font-medium text-gray-500">No lectures scheduled</p>
                     )}
 
@@ -884,7 +1053,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                       <div key={lecture.id} className="rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2.5">
                         <p className="text-sm font-bold text-gray-800">{lecture.subject}</p>
                         <p className="text-xs text-gray-600 mt-1">
-                          Class {lecture.class} - {getLectureTimeRange(lecture.startTime)}
+                          Class {lecture.class} - {lecture.time || getLectureTimeRange(lecture.startTime)}
                         </p>
                       </div>
                     ))}
@@ -924,8 +1093,23 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                     </div>
 
                     <div className="flex-1 text-center sm:text-left">
-                      <p className="text-lg font-bold text-gray-800">{currentUser.name}</p>
-                      <p className="text-sm text-gray-600 capitalize mb-3">{currentUser.role || 'teacher'}</p>
+                      <p className="text-lg font-bold text-gray-800">{teacherDisplayName}</p>
+                      <p className="text-sm text-gray-600 capitalize mb-2">{currentUser?.role || 'teacher'}</p>
+
+                      <div className="flex flex-wrap justify-center sm:justify-start gap-2 mb-3">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">
+                          <User className="w-4 h-4" />
+                          {teacherDisplayName}
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                          <BookOpen className="w-4 h-4" />
+                          Class {assignedClassNumber}
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                          <Users className="w-4 h-4" />
+                          Division {assignedSection}
+                        </span>
+                      </div>
 
                       <input
                         ref={profileInputRef}
@@ -958,7 +1142,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   <div className="mt-5 space-y-3 text-sm">
                     <p className="bg-white/90 border border-indigo-100 rounded-lg px-3 py-2 flex items-center gap-2 text-gray-700">
                       <Mail className="w-4 h-4 text-indigo-500" />
-                      {currentUser.email}
+                      {currentUser.teacherId || currentUser.email}
                     </p>
                     <p className="bg-white/90 border border-indigo-100 rounded-lg px-3 py-2 text-gray-700">
                       <span className="font-semibold">Total Today's Lectures:</span> {todaysLecturePlan.length}

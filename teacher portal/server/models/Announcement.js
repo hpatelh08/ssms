@@ -14,6 +14,14 @@ const announcementSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  senderName: {
+    type: String,
+    default: 'Teacher'
+  },
+  createdByName: {
+    type: String,
+    default: 'Teacher'
+  },
   recipients: {
     role: {
       type: String,
@@ -27,6 +35,15 @@ const announcementSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     }]
+  },
+  targetType: {
+    type: String,
+    enum: ['class', 'student', 'parent', 'all'],
+    default: 'all'
+  },
+  targetClassId: {
+    type: String,
+    default: ''
   },
   priority: {
     type: String,

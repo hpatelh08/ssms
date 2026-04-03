@@ -1,20 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { User, Heart, AlertTriangle, Calendar, FileText, Search, Eye, X } from 'lucide-react';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
+import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const StudentManagement = ({ currentUser }) => {
-  const attendanceMockNames = [
-    'Aarav Sharma', 'Vivaan Patel', 'Aditya Singh', 'Vihaan Kumar', 'Arjun Gupta',
-    'Sai Krishna', 'Reyansh Reddy', 'Ayaan Khan', 'Krishna Iyer', 'Ishaan Verma',
-    'Rudra Joshi', 'Dhruv Desai', 'Kabir Das', 'Atharv Yadav', 'Rishi Tiwari',
-    'Adwait Pandey', 'Aanya Sharma', 'Diya Patel', 'Ananya Singh', 'Myra Kumar',
-    'Kavya Gupta', 'Siya Reddy', 'Navya Khan', 'Aaradhya Iyer', 'Saanvi Verma',
-    'Nyra Joshi', 'Sneha Desai', 'Ira Das', 'Riya Yadav', 'Tara Tiwari',
-    'Kiara Pandey', 'Advik Nair', 'Pranav Menon', 'Rohan Sethi', 'Karthik Pillai',
-    'Siddharth Rao', 'Neel Thakur', 'Dev Bhardwaj', 'Rahul Chatterjee', 'Nikhil Sen',
-    'Mira Nair', 'Anika Menon', 'Zara Sethi', 'Nisha Thakur', 'Pooja Bhardwaj'
-  ];
-
   const [activeTab, setActiveTab] = useState('profiles');
   const [students, setStudents] = useState([]);
   const [profileStudents, setProfileStudents] = useState([]);
@@ -52,6 +41,12 @@ const StudentManagement = ({ currentUser }) => {
 
   useEffect(() => {
     fetchClasses();
+
+    const intervalId = setInterval(() => {
+      fetchClasses();
+    }, 30000);
+
+    return () => clearInterval(intervalId);
   }, [currentUser?.assignedClass, currentUser?.division]);
 
   useEffect(() => {
@@ -66,51 +61,30 @@ const StudentManagement = ({ currentUser }) => {
   }, [filterClass]);
 
   useEffect(() => {
-    const selectedClassInfo = classes.find((cls) => cls._id === filterClass);
-    const className = selectedClassInfo?.className || currentUser?.assignedClass || '10th';
-    const section = selectedClassInfo?.section || currentUser?.division || 'A';
-    const classId = selectedClassInfo?._id || filterClass || '';
-    const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-    const remarkLevels = ['Good', 'Average', 'Bad'];
-
-    const cardsData = attendanceMockNames.map((name, index) => {
-      const age = 14 + (index % 4);
-      const dateOfBirth = new Date(2026 - age, index % 12, (index % 28) + 1);
-      const safeName = name.toLowerCase().replace(/\s+/g, '.');
-      const averagePercentage = 65 + (index % 25);
-      const remark = remarkLevels[index % remarkLevels.length];
+    const normalizedStudents = (students || []).map(normalizeStudentData);
+    setProfileStudents(normalizedStudents.map((student) => {
+      const averagePercentage = Number(student.averagePercentage) || 0;
+      const attendanceRate = Number(student.attendanceRate) || 0;
+      const remark = student.remark || (averagePercentage >= 75 ? 'Good' : averagePercentage >= 50 ? 'Average' : 'Bad');
 
       return {
-        _id: `MOCK_STU_${index + 1}`,
-        rollNumber: `R${String(index + 1).padStart(3, '0')}`,
-        studentId: `STU${String(index + 1).padStart(3, '0')}`,
-        name,
-        classId,
-        className,
-        section,
-        gender: index % 2 === 0 ? 'Male' : 'Female',
-        age,
-        remark,
-        dateOfBirth,
-        bloodGroup: bloodGroups[index % bloodGroups.length],
-        email: `${safeName}@school.com`,
-        phone: `98${String(10000000 + index).padStart(8, '0')}`,
-        address: `Street ${index + 1}, City`,
-        fatherName: `Mr. ${name.split(' ')[1] || 'Parent'}`,
-        motherName: `Mrs. ${name.split(' ')[1] || 'Parent'}`,
-        parentPhone: `99${String(20000000 + index).padStart(8, '0')}`,
-        admissionDate: new Date(2021, index % 12, ((index + 10) % 28) + 1),
-        currentGPA: (2.5 + ((index % 10) * 0.15)).toFixed(2),
+        ...student,
+        className: student.className || currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser),
+        section: student.section || currentUser?.division || getAssignedTeacherSection(currentUser),
+        age: student.age || getAgeFromDateOfBirth(student.dateOfBirth) || '',
+        currentGPA: student.currentGPA || (Math.min(4, averagePercentage / 25)).toFixed(2),
         averagePercentage,
-        attendanceRate: 80 + (index % 20),
-        healthInfo: 'Fit',
-        allergies: index % 5 === 0 ? 'Dust allergy' : 'None',
-        behaviorRemarks: remark
+        attendanceRate,
+        remark,
+        behaviorRemarks: student.behaviorRemarks || remark,
+        healthInfo: student.healthInfo || '',
+        allergies: student.allergies || '',
+        fatherName: student.fatherName || student.parentName || '',
+        motherName: student.motherName || '',
+        parentPhone: student.parentPhone || student.phone || '',
       };
-    });
-
-    setProfileStudents(cardsData);
-  }, [classes, filterClass, currentUser?.assignedClass, currentUser?.division]);
+    }));
+  }, [students, currentUser?.assignedClass, currentUser?.division]);
 
   const getClassIdValue = (classId) => {
     if (!classId) return '';
@@ -362,17 +336,8 @@ const StudentManagement = ({ currentUser }) => {
   const fetchStudents = async (classId) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/student/all', {
-        params: {
-          classId
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      setStudents((response.data.data || []).map(normalizeStudentData));
+      const loadedStudents = await loadClassStudents(classId, currentUser, classes);
+      setStudents((loadedStudents || []).map(normalizeStudentData));
       setLoading(false);
     } catch (error) {
       console.error('Error fetching students:', error);
@@ -382,23 +347,7 @@ const StudentManagement = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      const assignedClasses = response.data.data || [];
-      const normalizedAssignedClass = String(currentUser?.assignedClass || '').trim().toLowerCase();
-      const normalizedAssignedSection = String(currentUser?.division || '').trim().toLowerCase();
-
-      const classTeacherClass = assignedClasses.find((cls) => (
-        String(cls.className || '').trim().toLowerCase() === normalizedAssignedClass &&
-        String(cls.section || '').trim().toLowerCase() === normalizedAssignedSection
-      ));
-
-      const visibleClasses = classTeacherClass ? [classTeacherClass] : assignedClasses;
+      const visibleClasses = await loadTeacherClasses(currentUser);
       setClasses(visibleClasses);
 
       if (visibleClasses.length > 0) {
@@ -517,32 +466,16 @@ const StudentManagement = ({ currentUser }) => {
         updatedFields.healthInfo = `Weight: ${weight} kg`;
       }
 
-      if (String(healthForm.studentId).startsWith('MOCK_STU_')) {
-        setProfileStudents((prev) =>
-          prev.map((student) => (
-            student._id === healthForm.studentId ? { ...student, ...updatedFields } : student
-          ))
-        );
-      } else {
-        const token = localStorage.getItem('token');
-        const response = await axios.put('http://localhost:5000/api/student/health-records', {
-          studentId: healthForm.studentId,
-          ...updatedFields
-        }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const updatedStudent = normalizeStudentData(response.data.data);
-        setStudents((prev) =>
-          prev.map((student) => (student._id === updatedStudent._id ? updatedStudent : student))
-        );
-        setProfileStudents((prev) =>
-          prev.map((student) => (student._id === updatedStudent._id ? { ...student, ...updatedStudent } : student))
-        );
-      }
+      setStudents((prev) =>
+        prev.map((student) => (
+          student._id === healthForm.studentId ? { ...student, ...updatedFields } : student
+        ))
+      );
+      setProfileStudents((prev) =>
+        prev.map((student) => (
+          student._id === healthForm.studentId ? { ...student, ...updatedFields } : student
+        ))
+      );
 
       setHealthEditStudentId('');
       alert('Health record updated successfully');
@@ -1409,4 +1342,3 @@ const StudentManagement = ({ currentUser }) => {
 };
 
 export default StudentManagement;
-

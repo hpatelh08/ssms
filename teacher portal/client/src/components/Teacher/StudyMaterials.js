@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, Upload, Download, Edit, Trash2, Eye, BookOpen } from 'lucide-react';
+import { apiUrl } from '../../config/api';
+import { buildMockTeacherClass, filterSupportedTeacherClasses, matchesAssignedTeacherClass } from '../../config/teacherClasses';
 
 const StudyMaterials = ({ currentUser }) => {
   const [materials, setMaterials] = useState([]);
@@ -26,7 +28,7 @@ const StudyMaterials = ({ currentUser }) => {
   useEffect(() => {
     if (currentUser && currentUser.assignedClass) {
       // Find the class ID that matches the user's assigned class
-      const classToSelect = classes.find(cls => cls.className === currentUser.assignedClass);
+      const classToSelect = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
       if (classToSelect) {
         setFormData(prev => ({
           ...prev,
@@ -62,38 +64,29 @@ const StudyMaterials = ({ currentUser }) => {
   const fetchClasses = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
+      const response = await axios.get(apiUrl('/api/teacher/classes'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
         timeout: 10000
       });
-      // Filter for classes 8, 9, 10
-      let filteredClasses = response.data.data;
-      if (filteredClasses) {
-        filteredClasses = filteredClasses.filter(cls =>
-          ['8', '9', '10'].includes(cls.className)
-        );
-      }
+      let filteredClasses = filterSupportedTeacherClasses(response.data.data || []);
+      const assignedClasses = filteredClasses.filter((cls) => matchesAssignedTeacherClass(cls, currentUser));
+      if (assignedClasses.length > 0) filteredClasses = assignedClasses;
       if (!filteredClasses || filteredClasses.length === 0) {
         throw new Error('No classes returned');
       }
       setClasses(filteredClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
-      const mockFallbackClass = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: [
-          { _id: 'sub_1', subjectName: 'Math', teacher: { name: 'Hetvi' } },
-          { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Mrs. Gupta' } },
-          { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Mr. Patel' } },
-          { _id: 'sub_4', subjectName: 'Hindi', teacher: { name: 'Mr. Singh' } },
-          { _id: 'sub_5', subjectName: 'Gujarati', teacher: { name: 'Mrs. Joshi' } },
-          { _id: 'sub_6', subjectName: 'Sanskrit', teacher: { name: 'Mr. Sharma' } }
-        ]
-      };
+      const mockFallbackClass = buildMockTeacherClass(currentUser, [
+        { _id: 'sub_1', subjectName: 'Math', teacher: { name: 'Teacher 1' } },
+        { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Teacher 2' } },
+        { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Teacher 3' } },
+        { _id: 'sub_4', subjectName: 'Hindi', teacher: { name: 'Teacher 4' } },
+        { _id: 'sub_5', subjectName: 'Gujarati', teacher: { name: 'Teacher 5' } },
+        { _id: 'sub_6', subjectName: 'Sanskrit', teacher: { name: 'Teacher 6' } }
+      ]);
       setClasses([mockFallbackClass]);
     }
   };
@@ -101,7 +94,7 @@ const StudyMaterials = ({ currentUser }) => {
   const fetchStudyMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/study-materials', {
+      const response = await axios.get(apiUrl('/api/teacher/study-materials'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -156,7 +149,7 @@ const StudyMaterials = ({ currentUser }) => {
         formDataToSend.append('file', formData.file);
       }
 
-      await axios.post('http://localhost:5000/api/teacher/study-materials', formDataToSend, {
+      await axios.post(apiUrl('/api/teacher/study-materials'), formDataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -232,7 +225,7 @@ const StudyMaterials = ({ currentUser }) => {
     if (window.confirm('Are you sure you want to delete this study material?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:5000/api/teacher/study-materials/${id}`, {
+        await axios.delete(apiUrl(`/api/teacher/study-materials/${id}`), {
           headers: {
             'Authorization': `Bearer ${token}`
           }

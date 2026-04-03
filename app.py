@@ -9,6 +9,7 @@ import socket
 import subprocess
 import re
 import secrets
+import random
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -22,18 +23,117 @@ def _log_404(err):
         pass
     return err
 
+
+@app.before_request
+def _handle_api_preflight():
+    if request.method != 'OPTIONS':
+        return None
+    if not (request.path.startswith('/api/') or request.path.startswith('/auth/')):
+        return None
+
+    response = app.make_default_options_response()
+    origin = request.headers.get('Origin', '')
+    if origin in ('http://127.0.0.1:3000', 'http://localhost:3000', 'http://127.0.0.1:5000', 'http://localhost:5000'):
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Vary'] = 'Origin'
+    return response
+
+
+@app.after_request
+def _add_api_cors_headers(response):
+    if request.path.startswith('/api/') or request.path.startswith('/auth/'):
+        origin = request.headers.get('Origin', '')
+        if origin in ('http://127.0.0.1:3000', 'http://localhost:3000', 'http://127.0.0.1:5000', 'http://localhost:5000'):
+            response.headers['Access-Control-Allow-Origin'] = origin
+        else:
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Vary'] = 'Origin'
+    return response
+
 # Admin Dashboard (React build) location
 ADMIN_DASHBOARD_DIST_DIR = os.path.join(
     os.path.dirname(__file__),
     'Admin Dashboard',
-    'Admin Dashboard',
     'frontend-react',
     'dist',
+)
+ADMIN_DASHBOARD_BACKEND_DB_PATH = os.path.join(
+    os.path.dirname(__file__),
+    'Admin Dashboard',
+    'backend',
+    'database.sqlite',
 )
 
 TEACHER_PORTAL_DIR = os.path.join(os.path.dirname(__file__), 'teacher portal')
 TEACHER_PORTAL_RUN_BAT = os.path.join(TEACHER_PORTAL_DIR, 'run.bat')
+TEACHER_PORTAL_SERVER_DIR = os.path.join(TEACHER_PORTAL_DIR, 'server')
+TEACHER_PORTAL_CLIENT_DIR = os.path.join(TEACHER_PORTAL_DIR, 'client')
+NPM_EXECUTABLE = 'npm.cmd' if os.name == 'nt' else 'npm'
+TEACHER_PORTAL_CLIENT_PORT = 3000
+TEACHER_PORTAL_SERVER_PORT = 5001
+TEACHER_DEMO_GRADES = list(range(1, 8))
+TEACHER_DEMO_SECTIONS = ['A', 'B', 'C']
+TEACHER_DEMO_NAME_FALLBACKS = {
+    '7A': 'Teacher 7A',
+    '7B': 'Teacher 7B',
+    '7C': 'Teacher 7C',
+}
 _teacher_portal_last_start_attempt = 0
+ADMIN_TIMETABLE_MIN_STANDARD = 1
+ADMIN_TIMETABLE_MAX_STANDARD = 6
+ADMIN_TIMETABLE_PRIMARY_MAX = 5
+ADMIN_TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+ADMIN_TIMETABLE_SLOTS_WEEKDAY = [
+    {'num': 1, 'time': '07:00 - 07:40'},
+    {'num': 2, 'time': '07:40 - 08:20'},
+    {'num': 3, 'time': '08:20 - 09:00'},
+    {'num': 4, 'time': '09:00 - 09:40'},
+    {'num': 'B', 'time': '09:40 - 10:00', 'isBreak': True},
+    {'num': 5, 'time': '10:00 - 10:40'},
+    {'num': 6, 'time': '10:40 - 11:20'},
+    {'num': 7, 'time': '11:20 - 12:00'},
+]
+ADMIN_TIMETABLE_SLOTS_SATURDAY = [
+    {'num': 1, 'time': '07:00 - 07:40'},
+    {'num': 2, 'time': '07:40 - 08:20'},
+    {'num': 3, 'time': '08:20 - 09:00'},
+    {'num': 'B', 'time': '09:00 - 09:20', 'isBreak': True},
+    {'num': 4, 'time': '09:20 - 10:00'},
+    {'num': 5, 'time': '10:00 - 10:40'},
+    {'num': 6, 'time': '10:40 - 11:20'},
+]
+ADMIN_TIMETABLE_SUBJECTS_BY_STD = {
+    'primary': ['English', 'Mathematics', 'EVS', 'Gujarati', 'Hindi', 'Drawing', 'PT', 'Moral Science', 'GK'],
+    'upper': ['Mathematics', 'Science', 'Social Science', 'English', 'Hindi', 'Gujarati', 'Sanskrit', 'Computer', 'PT', 'Drawing'],
+}
+ADMIN_TIMETABLE_SUBJECT_MAP = {
+    'Mathematics': 'Mathematics',
+    'Science': 'Science',
+    'Biology': 'Science',
+    'Chemistry': 'Science',
+    'Physics': 'Science',
+    'English': 'English',
+    'Hindi': 'Hindi',
+    'Sanskrit': 'Sanskrit',
+    'Computer': 'Computer',
+    'Art': 'Drawing',
+    'PE': 'PT',
+    'History': 'Social Science',
+    'Geography': 'Social Science',
+    'Civics': 'Social Science',
+    'Music': 'GK',
+    'Accountancy': 'EVS',
+    'Economics': 'EVS',
+    'Commerce': 'Moral Science',
+    'Business Studies': 'Moral Science',
+    'Psychology': 'GK',
+}
 
 STUDENT_DASHBOARD_DIST_DIR = os.path.join(
     os.path.dirname(__file__),
@@ -43,6 +143,121 @@ STUDENT_DASHBOARD_DIST_DIR = os.path.join(
 )
 
 STUDENT_PORTAL_ROOT_DIR = os.path.join(os.path.dirname(__file__), 'student portal')
+STUDENT_LOGIN_ACCOUNTS = {
+    'STU2024101': {'grade': 1, 'password': 'Sch@011'},
+    'STU2024201': {'grade': 2, 'password': 'Sch@021'},
+    'STU2024301': {'grade': 3, 'password': 'Sch@031'},
+    'STU2024401': {'grade': 4, 'password': 'Sch@041'},
+    'STU2024501': {'grade': 5, 'password': 'Sch@051'},
+    'STU2024601': {'grade': 6, 'password': 'Sch@061'},
+}
+
+STUDENT_LOGIN_THEMES = {
+    1: {
+        'name': 'Cartoon',
+        'badge': 'Std 1 Cartoon Theme',
+        'hero_title': 'Welcome back, bright learner',
+        'hero_copy': 'Step into a playful cartoon world filled with cheerful colors and friendly shapes.',
+        'accent': '#ff7a59',
+        'accent_soft': '#ffd9cf',
+        'accent_deep': '#cb4b2f',
+        'bg_start': '#fff8f3',
+        'bg_end': '#ffe8d9',
+        'panel_left_start': '#fff5ea',
+        'panel_left_end': '#ffe0c8',
+        'panel_right': '#ffffff',
+        'scene_title': 'Cartoon classroom',
+        'scene_copy': 'Clouds, stars, and stickers make Std 1 feel fun and friendly.',
+        'tags': ['Bright doodles', 'Happy clouds', 'Playful stickers'],
+    },
+    2: {
+        'name': 'Garden',
+        'badge': 'Std 2 Garden Theme',
+        'hero_title': 'Grow your learning garden',
+        'hero_copy': 'A fresh garden world with leaves, blooms, and soft green light welcomes Std 2.',
+        'accent': '#2f9e44',
+        'accent_soft': '#dff4e1',
+        'accent_deep': '#1f6b30',
+        'bg_start': '#f5fff7',
+        'bg_end': '#e4f8e7',
+        'panel_left_start': '#eefce9',
+        'panel_left_end': '#d8f5d5',
+        'panel_right': '#ffffff',
+        'scene_title': 'Garden grove',
+        'scene_copy': 'Fresh grass, flowers, and little birds bring a calm learning mood.',
+        'tags': ['Blooming flowers', 'Leaf trails', 'Tiny birds'],
+    },
+    3: {
+        'name': 'Space',
+        'badge': 'Std 3 Space Theme',
+        'hero_title': 'Launch into a space mission',
+        'hero_copy': 'Travel through a bright galaxy with stars, planets, and a glowing rocket trail.',
+        'accent': '#7c3aed',
+        'accent_soft': '#e8dcff',
+        'accent_deep': '#4c1d95',
+        'bg_start': '#f6f3ff',
+        'bg_end': '#e7ddff',
+        'panel_left_start': '#f1e9ff',
+        'panel_left_end': '#ded0ff',
+        'panel_right': '#ffffff',
+        'scene_title': 'Galaxy control',
+        'scene_copy': 'Stars and planets turn Std 3 into a friendly universe adventure.',
+        'tags': ['Star trails', 'Friendly planets', 'Rocket sparks'],
+    },
+    4: {
+        'name': 'Gold Mining',
+        'badge': 'Std 4 Gold Mining Theme',
+        'hero_title': 'Dig for golden ideas',
+        'hero_copy': 'Step into a gold mining world with warm lantern light and treasure-filled tunnels.',
+        'accent': '#d4a017',
+        'accent_soft': '#fff0bf',
+        'accent_deep': '#8a5b00',
+        'bg_start': '#fffdf4',
+        'bg_end': '#fff0cc',
+        'panel_left_start': '#fff5d6',
+        'panel_left_end': '#ffe29b',
+        'panel_right': '#ffffff',
+        'scene_title': 'Golden tunnel',
+        'scene_copy': 'Ore, lanterns, and polished gold give Std 4 a treasure-hunt mood.',
+        'tags': ['Lantern glow', 'Gold ore', 'Treasure tunnel'],
+    },
+    5: {
+        'name': 'Forest',
+        'badge': 'Std 5 Forest Theme',
+        'hero_title': 'Explore the forest path',
+        'hero_copy': 'A calm forest login with trees, moss, and layered greens keeps Std 5 warm and focused.',
+        'accent': '#2d6a4f',
+        'accent_soft': '#dcefe5',
+        'accent_deep': '#184a34',
+        'bg_start': '#f5fbf6',
+        'bg_end': '#dff2e1',
+        'panel_left_start': '#e8f6eb',
+        'panel_left_end': '#cfe8d5',
+        'panel_right': '#ffffff',
+        'scene_title': 'Forest trail',
+        'scene_copy': 'Trees, moss, and soft sunlight create a peaceful student login.',
+        'tags': ['Forest canopy', 'Moss path', 'Morning light'],
+    },
+    6: {
+        'name': 'Water',
+        'badge': 'Std 6 Water Theme',
+        'hero_title': 'Dive into the water world',
+        'hero_copy': 'Blue waves, bubbles, and coral light make Std 6 feel fresh and lively.',
+        'accent': '#0891b2',
+        'accent_soft': '#cffafe',
+        'accent_deep': '#0f5b78',
+        'bg_start': '#f2fbff',
+        'bg_end': '#d8f4ff',
+        'panel_left_start': '#e6fbff',
+        'panel_left_end': '#c6f3ff',
+        'panel_right': '#ffffff',
+        'scene_title': 'Ocean bay',
+        'scene_copy': 'Waves and bubbles give Std 6 a cool underwater classroom feel.',
+        'tags': ['Ocean waves', 'Bubble shine', 'Coral glow'],
+    },
+}
+
+STUDENT_LOGIN_PAGE_GRADES = {1, 2, 4}
 
 # Global variable to store current user (for testing)
 current_user = None
@@ -213,9 +428,9 @@ def create_sample_data():
             users_data.append(('admin_hod', generate_password_hash('admin123'), 'admin_hod', None, None))
             users_data.append(('admin_teacher', generate_password_hash('admin123'), 'admin_teacher', None, None))
             
-            # Create class teachers and students for grades 8, 9, 10
-            grades = [8, 9, 10]
-            sections = ['A', 'B', 'C']
+            # Create class teachers and students for grades 1 to 7
+            grades = TEACHER_DEMO_GRADES
+            sections = TEACHER_DEMO_SECTIONS
             
             for grade in grades:
                 for section in sections:
@@ -291,6 +506,44 @@ def create_sample_data():
                         )
 
             conn.commit()
+
+        # Keep teacher demo accounts restricted to Std 1-7 (Section A)
+        desired_teacher_accounts = []
+        for grade in TEACHER_DEMO_GRADES:
+            for section in TEACHER_DEMO_SECTIONS:
+                teacher_username = f'teach{grade}{section}'
+                teacher_password = f'teach{grade}{section}123'
+                desired_teacher_accounts.append(
+                    (
+                        teacher_username,
+                        generate_password_hash(teacher_password),
+                        'teacher',
+                        f'Class {grade}-{section}',
+                        None,
+                    )
+                )
+
+        desired_teacher_usernames = [account[0] for account in desired_teacher_accounts]
+        placeholders = ','.join('?' for _ in desired_teacher_usernames)
+        c.execute(
+            f"DELETE FROM users WHERE role='teacher' AND username NOT IN ({placeholders})",
+            desired_teacher_usernames,
+        )
+
+        for username, password_hash, role, class_assigned, student_id in desired_teacher_accounts:
+            c.execute("SELECT COUNT(*) FROM users WHERE username=? AND role='teacher'", (username,))
+            if (c.fetchone()[0] or 0) > 0:
+                c.execute(
+                    "UPDATE users SET password=?, class_assigned=?, student_id=? WHERE username=? AND role='teacher'",
+                    (password_hash, class_assigned, student_id, username),
+                )
+            else:
+                c.execute(
+                    "INSERT INTO users (username, password, role, class_assigned, student_id) VALUES (?, ?, ?, ?, ?)",
+                    (username, password_hash, role, class_assigned, student_id),
+                )
+
+        conn.commit()
         
         conn.close()
     except Exception as e:
@@ -298,7 +551,7 @@ def create_sample_data():
 
 @app.route('/')
 def index():
-    return render_template('login.html')
+    return redirect(url_for('visitor_page'))
 
 @app.route('/visitor')
 def visitor_page():
@@ -511,7 +764,7 @@ def update_booking_status():
 # Admin: View Inquiries
 @app.route('/admin/visitor-inquiries')
 def view_visitor_inquiries():
-    if 'username' not in session or session['role'] != 'admin_hod':
+    if 'username' not in session or session.get('role') not in ('admin', 'admin_hod', 'super_admin'):
         return redirect(url_for('index'))
     
     conn = sqlite3.connect('school.db')
@@ -550,10 +803,61 @@ def view_visitor_inquiries():
                           new_count=new_count,
                           responded_count=responded_count)
 
+# Admin: Visitor Inquiries API
+@app.route('/api/admin/visitor-inquiries', methods=['GET'])
+def api_view_visitor_inquiries():
+    if 'username' not in session or session.get('role') not in ('admin', 'admin_hod', 'super_admin'):
+        return {'success': False, 'message': 'Unauthorized'}, 401
+
+    try:
+        conn = sqlite3.connect('school.db')
+        c = conn.cursor()
+
+        c.execute("""
+            SELECT id, full_name, email, phone, inquiry_type, message, status, created_at, response, responded_at
+            FROM visitor_inquiries
+            ORDER BY created_at DESC
+        """)
+        rows = c.fetchall()
+
+        inquiries = [{
+            'id': row[0],
+            'full_name': row[1],
+            'email': row[2],
+            'phone': row[3],
+            'inquiry_type': row[4],
+            'message': row[5],
+            'status': row[6],
+            'created_at': row[7],
+            'response': row[8],
+            'responded_at': row[9]
+        } for row in rows]
+
+        c.execute("SELECT COUNT(*) FROM visitor_inquiries")
+        total_count = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM visitor_inquiries WHERE status='new'")
+        new_count = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM visitor_inquiries WHERE status='responded'")
+        responded_count = c.fetchone()[0]
+
+        conn.close()
+        return {
+            'success': True,
+            'data': {
+                'inquiries': inquiries,
+                'total_count': total_count,
+                'new_count': new_count,
+                'responded_count': responded_count
+            }
+        }, 200
+    except Exception as e:
+        print(f"Error fetching visitor inquiries: {e}")
+        return {'success': False, 'message': str(e)}, 500
+
 # Admin: Respond to Inquiry
 @app.route('/api/admin/inquiry/respond', methods=['POST'])
 def respond_to_inquiry():
-    if 'username' not in session or session['role'] != 'admin_hod':
+    if 'username' not in session or session.get('role') not in ('admin', 'admin_hod', 'super_admin'):
         return {'success': False, 'message': 'Unauthorized'}, 401
     
     try:
@@ -580,70 +884,365 @@ def respond_to_inquiry():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'GET':
-        return render_template('login.html')
+    return redirect(url_for('visitor_page'))
 
-    username = (request.form.get('username') or '').strip()
-    password = request.form.get('password') or ''
-    role = (request.form.get('role') or '').strip().lower()
 
-    if role in ['admin_hod', 'admin_teacher']:
-        role = 'admin'
+def _normalize_student_login_id(student_id: str) -> str:
+    return re.sub(r'\s+', '', str(student_id or '').strip()).upper()
 
-    if role not in ['admin', 'teacher', 'student']:
-        return render_template('login.html', error='Invalid portal selected')
+
+def _parse_student_grade(value: str | int | None, student_id: str = '') -> int | None:
+    raw_value = str(value or '').strip()
+    match = re.search(r'(\d{1,2})', raw_value)
+    if match:
+        try:
+            return int(match.group(1))
+        except Exception:
+            pass
+
+    student_match = re.search(r'(\d{1,2})', str(student_id or ''))
+    if student_match:
+        try:
+            return int(student_match.group(1))
+        except Exception:
+            pass
+
+    return None
+
+
+def _build_admin_student_profile(row) -> dict:
+    student_id = _normalize_student_login_id(row['student_id'] if isinstance(row, sqlite3.Row) else row[2] if len(row) > 2 else '')
+    student_name = str(row['name'] if isinstance(row, sqlite3.Row) else row[4] if len(row) > 4 else '').strip()
+    class_value = row['class'] if isinstance(row, sqlite3.Row) else row[6] if len(row) > 6 else ''
+    section = str(row['section'] if isinstance(row, sqlite3.Row) else row[7] if len(row) > 7 else '').strip().upper()
+    grade = _parse_student_grade(class_value, student_id)
+    class_name = f'Std {grade}' if grade else (f'Class {class_value}'.strip() if class_value else 'Student')
+
+    return {
+        'uid': student_id,
+        'email': student_id,
+        'name': student_name or student_id,
+        'student_id': student_id,
+        'class_name': class_name,
+        'class': class_name,
+        'student_class': class_name,
+        'grade': grade,
+        'division': section,
+        'admissionNumber': str(row['admission'] if isinstance(row, sqlite3.Row) else row[5] if len(row) > 5 else '').strip(),
+        'grNo': str(row['gr_number'] if isinstance(row, sqlite3.Row) else row[1] if len(row) > 1 else '').strip(),
+        'password': str(row['student_password'] if isinstance(row, sqlite3.Row) else row[3] if len(row) > 3 else ''),
+        'parentName': str(row['parent'] if isinstance(row, sqlite3.Row) else row[8] if len(row) > 8 else '').strip(),
+        'phone': str(row['phone'] if isinstance(row, sqlite3.Row) else row[9] if len(row) > 9 else '').strip(),
+        'dob': str(row['dob'] if isinstance(row, sqlite3.Row) else row[12] if len(row) > 12 else '').strip(),
+        'gender': str(row['gender'] if isinstance(row, sqlite3.Row) else row[13] if len(row) > 13 else 'Male').strip() or 'Male',
+        'bloodGroup': str(row['blood_group'] if isinstance(row, sqlite3.Row) else row[14] if len(row) > 14 else '').strip(),
+        'address': str(row['address'] if isinstance(row, sqlite3.Row) else row[15] if len(row) > 15 else '').strip(),
+        'status': str(row['status'] if isinstance(row, sqlite3.Row) else row[10] if len(row) > 10 else 'Active').strip() or 'Active',
+        'parentAccessKey': str(row['parent_access_key'] if isinstance(row, sqlite3.Row) else row[16] if len(row) > 16 else '').strip(),
+        'parentId': str(row['parent_id'] if isinstance(row, sqlite3.Row) else row[17] if len(row) > 17 else '').strip(),
+        'profile_photo_url': None,
+    }
+
+
+def _get_admin_student_account(student_id: str) -> dict | None:
+    normalized = _normalize_student_login_id(student_id)
+    if not normalized:
+        return None
+
+    if not os.path.isfile(ADMIN_DASHBOARD_BACKEND_DB_PATH):
+        return None
 
     try:
-        conn = sqlite3.connect('school.db')
+        conn = sqlite3.connect(ADMIN_DASHBOARD_BACKEND_DB_PATH, timeout=10)
+        conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND role=?", (username, role))
-        user = c.fetchone()
+        c.execute(
+            """
+            SELECT *
+            FROM students
+            WHERE LOWER(student_id) = LOWER(?)
+            """,
+            (normalized,),
+        )
+        row = c.fetchone()
         conn.close()
-    except Exception as e:
-        print('Login DB error', e)
-        return render_template('login.html', error='Login failed')
-
-    if not user or not check_password_hash(user[2], password):
-        return render_template('login.html', error='Invalid ID or password')
-
-    session['username'] = username
-    session['role'] = role
-
-    if role == 'admin':
-        return redirect(url_for('admin_portal_redirect'))
-    if role == 'teacher':
-        return redirect(url_for('teacher_portal_redirect'))
-
-    # Student: Std 1-7 -> Student Portal, Std 8+ -> Student Dashboard
-    student_grade = None
-    m = re.match(r'^stu(\d{2})', username.lower())
-    if m:
+        if not row:
+            return None
+        profile = _build_admin_student_profile(row)
+        if not profile.get('grade'):
+            profile['grade'] = _parse_student_grade(profile.get('class_name'), normalized)
+        return profile
+    except Exception:
         try:
-            student_grade = int(m.group(1))
+            conn.close()
         except Exception:
-            student_grade = None
+            pass
+        return None
 
-    # Fallback to stored student_id (e.g. "8A001")
-    if student_grade is None and user and len(user) >= 6 and user[5]:
-        m2 = re.match(r'^(\d{1,2})', str(user[5]))
-        if m2:
-            try:
-                student_grade = int(m2.group(1))
-            except Exception:
-                student_grade = None
 
-    if student_grade is None:
-        session['student_grade'] = 8
-        session['student_app'] = 'dashboard'
-        return redirect(url_for('student_dashboard_portal'))
+def _get_student_login_account(student_id: str) -> dict | None:
+    normalized = _normalize_student_login_id(student_id)
+    if not normalized:
+        return None
 
-    session['student_grade'] = student_grade
-    if 1 <= student_grade <= 7:
+    if normalized in STUDENT_LOGIN_ACCOUNTS:
+        meta = STUDENT_LOGIN_ACCOUNTS[normalized]
+        grade = int(meta.get('grade') or 0) or _parse_student_grade(None, normalized)
+        theme = STUDENT_LOGIN_THEMES.get(grade, STUDENT_LOGIN_THEMES[1])
+        return {
+            'student_id': normalized,
+            'grade': grade,
+            'password': str(meta.get('password') or '').strip(),
+            'name': normalized,
+            'class_name': f'Std {grade}' if grade else 'Student',
+            'division': '',
+            'admissionNumber': '',
+            'grNo': '',
+            'parentName': '',
+            'phone': '',
+            'dob': '',
+            'gender': 'Male',
+            'bloodGroup': '',
+            'address': '',
+            'status': 'Active',
+            'parentAccessKey': '',
+            'profile_photo_url': None,
+            'theme': theme,
+        }
+
+    admin_account = _get_admin_student_account(normalized)
+    if admin_account and admin_account.get('password'):
+        return admin_account
+
+    return None
+
+
+@app.route('/student-login', methods=['GET', 'POST'])
+def student_login():
+    student_login_cards = [
+        {'grade': grade, 'login_page': grade in STUDENT_LOGIN_PAGE_GRADES, **STUDENT_LOGIN_THEMES[grade]}
+        for grade in range(1, 7)
+    ]
+
+    if request.method == 'POST':
+        selected_grade = request.form.get('grade') or request.form.get('selected_grade') or ''
+        try:
+            grade = int(str(selected_grade).strip())
+        except (TypeError, ValueError):
+            grade = None
+
+        if grade is None or not (1 <= grade <= 6):
+            return render_template(
+                'student_login.html',
+                error='Please choose Std 1 to Std 6.',
+                student_grades=range(1, 7),
+                student_login_cards=student_login_cards,
+            )
+
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
+
+        demo_student_id = next(
+            (
+                sid
+                for sid, meta in STUDENT_LOGIN_ACCOUNTS.items()
+                if int(meta.get('grade') or 0) == grade
+            ),
+            f'STD{grade}',
+        )
+        theme = STUDENT_LOGIN_THEMES.get(grade, STUDENT_LOGIN_THEMES[1])
+        session.clear()
+        session['username'] = demo_student_id
+        session['role'] = 'student'
+        session['student_grade'] = grade
+        session['student_id'] = demo_student_id
         session['student_app'] = 'portal'
-        return redirect(url_for('student_portal', grade=student_grade))
+        session['student_theme'] = {
+            'grade': grade,
+            'name': theme['name'],
+            'badge': theme['badge'],
+            'accent': theme['accent'],
+            'accent_soft': theme['accent_soft'],
+            'accent_deep': theme['accent_deep'],
+            'bg_start': theme['bg_start'],
+            'bg_end': theme['bg_end'],
+        }
+        return redirect(url_for('student_portal', grade=grade))
 
-    session['student_app'] = 'dashboard'
-    return redirect(url_for('student_dashboard_portal'))
+    return render_template(
+        'student_login.html',
+        student_grades=range(1, 7),
+        student_login_cards=student_login_cards,
+    )
+
+
+@app.route('/student-login/<int:grade>', methods=['GET', 'POST'])
+def student_login_grade(grade: int):
+    if grade not in STUDENT_LOGIN_PAGE_GRADES:
+        return redirect(url_for('student_login'))
+
+    theme = STUDENT_LOGIN_THEMES.get(grade, STUDENT_LOGIN_THEMES[1])
+    demo_student_id = next(
+        (
+            sid
+            for sid, meta in STUDENT_LOGIN_ACCOUNTS.items()
+            if int(meta.get('grade') or 0) == grade
+        ),
+        f'STD{grade}',
+    )
+
+    if request.method == 'POST':
+        student_id = _normalize_student_login_id(request.form.get('student_id') or '')
+        password = str(request.form.get('password') or '')
+
+        account = _get_student_login_account(student_id)
+        if not account or int(account.get('grade') or 0) != grade:
+            return render_template(
+                'student_login_grade.html',
+                grade=grade,
+                theme=theme,
+                error=f'Use the Std {grade} Student ID and password assigned by the school.',
+                student_id=student_id or demo_student_id,
+            )
+
+        expected_password = str(account.get('password') or '').strip()
+        if not expected_password or password.strip() != expected_password:
+            return render_template(
+                'student_login_grade.html',
+                grade=grade,
+                theme=theme,
+                error='Invalid Student ID or Password.',
+                student_id=student_id or demo_student_id,
+            )
+
+        session.clear()
+        session['username'] = account['student_id']
+        session['role'] = 'student'
+        session['student_grade'] = grade
+        session['student_id'] = account['student_id']
+        session['student_app'] = 'portal'
+        session['student_theme'] = {
+            'grade': grade,
+            'name': theme['name'],
+            'badge': theme['badge'],
+            'accent': theme['accent'],
+            'accent_soft': theme['accent_soft'],
+            'accent_deep': theme['accent_deep'],
+            'bg_start': theme['bg_start'],
+            'bg_end': theme['bg_end'],
+        }
+        return redirect(url_for('student_portal', grade=grade))
+
+    return render_template(
+        'student_login_grade.html',
+        grade=grade,
+        theme=theme,
+        student_id=demo_student_id,
+    )
+
+
+@app.route('/api/students/login', methods=['POST'])
+def api_students_login():
+    data = request.get_json(silent=True) or {}
+    student_id = _normalize_student_login_id(data.get('student_id') or data.get('username') or '')
+    password = str(data.get('password') or '')
+    if not student_id or not password:
+        return {'error': 'Student ID and password are required.'}, 400
+
+    account = _get_student_login_account(student_id)
+    if not account:
+        return {'error': 'Invalid Student ID or Password.'}, 401
+
+    expected_password = str(account.get('password') or '').strip()
+    if not expected_password or password.strip() != expected_password:
+        return {'error': 'Invalid Student ID or Password.'}, 401
+
+    grade = account.get('grade') or _parse_student_grade(account.get('class_name'), student_id)
+    token, refresh_token, uid = _issue_api_tokens(student_id, 'student')
+    profile = {
+        'studentName': account.get('name') or student_id,
+        'className': account.get('class_name') or (f'Std {grade}' if grade else 'Student'),
+        'admissionNumber': account.get('admissionNumber') or '',
+        'grNo': account.get('grNo') or '',
+        'studentId': student_id,
+        'password': expected_password,
+        'parentName': account.get('parentName') or '',
+        'phone': account.get('phone') or '',
+        'dob': account.get('dob') or '',
+        'gender': account.get('gender') or 'Male',
+        'bloodGroup': account.get('bloodGroup') or '',
+        'address': account.get('address') or '',
+        'status': account.get('status') or 'Active',
+        'parentAccessKey': account.get('parentAccessKey') or '',
+        'grade': int(grade) if grade else 6,
+    }
+    return {
+        'success': True,
+        'token': token,
+        'refresh_token': refresh_token,
+        'uid': uid,
+        'user': {
+            'id': uid,
+            'role': 'student',
+            'name': profile['studentName'],
+            'student_id': student_id,
+            'class': profile['grade'],
+            'section': account.get('division') or '',
+        },
+        'student': profile,
+    }, 200
+
+
+@app.route('/api/students/access-key-login', methods=['POST'])
+def api_students_access_key_login():
+    data = request.get_json(silent=True) or {}
+    student_id = _normalize_student_login_id(data.get('student_id') or data.get('username') or '')
+    access_key = str(data.get('access_key') or '').strip()
+    if not student_id or not access_key:
+        return {'error': 'Student ID and Access Key are required.'}, 400
+
+    account = _get_student_login_account(student_id)
+    if not account:
+        return {'error': 'Invalid Student ID or Access Key.'}, 401
+
+    expected_access_key = str(account.get('parentAccessKey') or '').strip()
+    if not expected_access_key or access_key != expected_access_key:
+        return {'error': 'Invalid Student ID or Access Key.'}, 401
+
+    grade = account.get('grade') or _parse_student_grade(account.get('class_name'), student_id)
+    token, refresh_token, uid = _issue_api_tokens(student_id, 'parent')
+    profile = {
+        'studentName': account.get('name') or student_id,
+        'className': account.get('class_name') or (f'Std {grade}' if grade else 'Student'),
+        'admissionNumber': account.get('admissionNumber') or '',
+        'grNo': account.get('grNo') or '',
+        'studentId': student_id,
+        'password': account.get('password') or '',
+        'parentName': account.get('parentName') or '',
+        'phone': account.get('phone') or '',
+        'dob': account.get('dob') or '',
+        'gender': account.get('gender') or 'Male',
+        'bloodGroup': account.get('bloodGroup') or '',
+        'address': account.get('address') or '',
+        'status': account.get('status') or 'Active',
+        'parentAccessKey': expected_access_key,
+        'grade': int(grade) if grade else 6,
+    }
+    return {
+        'success': True,
+        'token': token,
+        'refresh_token': refresh_token,
+        'uid': uid,
+        'user': {
+            'id': uid,
+            'role': 'parent',
+            'name': profile['parentName'] or 'Parent',
+            'student_id': student_id,
+            'class': profile['grade'],
+            'section': account.get('division') or '',
+        },
+        'student': profile,
+    }, 200
 
 
 def _issue_api_tokens(username: str, role: str) -> tuple[str, str, str]:
@@ -689,6 +1288,54 @@ def _get_api_token_row(token: str) -> tuple[str, str, str] | None:
         return None
 
 
+def _is_port_open(host: str, port: int, timeout_s: float = 0.3) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except Exception:
+        return False
+
+
+def _spawn_teacher_portal_process(command, cwd, extra_env=None):
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+
+    popen_kwargs = {
+        'cwd': cwd,
+        'env': env,
+        'stdout': subprocess.DEVNULL,
+        'stderr': subprocess.DEVNULL,
+        'stdin': subprocess.DEVNULL,
+        'close_fds': True,
+    }
+
+    if os.name == 'nt':
+        popen_kwargs['creationflags'] = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+
+    subprocess.Popen(command, **popen_kwargs)
+
+
+def _start_teacher_portal_services():
+    if os.path.isdir(TEACHER_PORTAL_SERVER_DIR) and not _is_port_open('127.0.0.1', TEACHER_PORTAL_SERVER_PORT):
+        _spawn_teacher_portal_process(
+            [NPM_EXECUTABLE, 'start'],
+            TEACHER_PORTAL_SERVER_DIR,
+            {'PORT': str(TEACHER_PORTAL_SERVER_PORT)}
+        )
+
+    if os.path.isdir(TEACHER_PORTAL_CLIENT_DIR) and not _is_port_open('127.0.0.1', TEACHER_PORTAL_CLIENT_PORT):
+        _spawn_teacher_portal_process(
+            [NPM_EXECUTABLE, 'start'],
+            TEACHER_PORTAL_CLIENT_DIR,
+            {
+                'PORT': str(TEACHER_PORTAL_CLIENT_PORT),
+                'BROWSER': 'none',
+                'REACT_APP_API_BASE_URL': f'http://127.0.0.1:{TEACHER_PORTAL_SERVER_PORT}',
+            }
+        )
+
+
 def _is_session_user(uid: str, role: str) -> bool:
     try:
         return session.get('username') == uid and session.get('role') == role
@@ -696,7 +1343,301 @@ def _is_session_user(uid: str, role: str) -> bool:
         return False
 
 
+def _normalize_teacher_class_key(value: str | None) -> str:
+    text = re.sub(r'(?i)\bclass\b', '', str(value or ''))
+    return re.sub(r'[^0-9A-Za-z]', '', text).upper()
+
+
+def _lookup_admin_teacher_name(assigned_class: str, division: str = '') -> str | None:
+    if not os.path.isfile(ADMIN_DASHBOARD_BACKEND_DB_PATH):
+        return None
+
+    assigned_key = _normalize_teacher_class_key(assigned_class)
+    division_key = str(division or '').strip().upper()
+    exact_key = assigned_key or ''
+
+    if assigned_key and division_key and not assigned_key.endswith(division_key):
+        exact_key = f'{assigned_key}{division_key}'
+
+    grade_match = re.match(r'^(\d+)', exact_key or assigned_key)
+    grade_key = grade_match.group(1) if grade_match else ''
+
+    try:
+        conn = sqlite3.connect(ADMIN_DASHBOARD_BACKEND_DB_PATH, timeout=10)
+        c = conn.cursor()
+        c.execute("""
+            SELECT name, class, status, id
+            FROM teachers
+            WHERE status = 'Active'
+            ORDER BY
+              CASE WHEN class IS NULL OR TRIM(class) = '' THEN 1 ELSE 0 END,
+              id ASC
+        """)
+        rows = c.fetchall()
+        conn.close()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return None
+
+    normalized_rows = []
+    for row in rows:
+        teacher_name = str(row[0] or '').strip()
+        teacher_class = str(row[1] or '').strip()
+        normalized_rows.append((teacher_name, teacher_class, _normalize_teacher_class_key(teacher_class)))
+
+    if exact_key:
+        for teacher_name, _teacher_class, class_key in normalized_rows:
+            if class_key == exact_key:
+                return teacher_name or None
+
+    if grade_key:
+        for teacher_name, _teacher_class, class_key in normalized_rows:
+            if class_key == grade_key:
+                return teacher_name or None
+
+    return None
+
+
+def _build_teacher_identity(username: str) -> dict:
+    identity = {
+        'username': username,
+        'name': username,
+        'assigned_class': '',
+        'division': '',
+    }
+
+    try:
+        conn = sqlite3.connect('school.db', timeout=10)
+        c = conn.cursor()
+        c.execute("SELECT class_assigned FROM users WHERE username=? AND role='teacher'", (username,))
+        row = c.fetchone()
+        if row and row[0]:
+            identity['assigned_class'] = str(row[0]).strip()
+        conn.close()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if username.lower().startswith('teach') and len(username) >= 6:
+        identity['division'] = username[-1].upper()
+
+    teacher_name = _lookup_admin_teacher_name(identity['assigned_class'], identity['division'])
+    if not teacher_name:
+        class_key = _normalize_teacher_class_key(identity['assigned_class'])
+        teacher_name = TEACHER_DEMO_NAME_FALLBACKS.get(class_key)
+    if teacher_name:
+        identity['name'] = teacher_name
+
+    return identity
+
+
+def _teacher_timetable_response(payload: dict, status: int = 200):
+    response = Response(json.dumps(payload), status=status, mimetype='application/json')
+    origin = request.headers.get('Origin', '')
+    if origin in ('http://127.0.0.1:3000', 'http://localhost:3000'):
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Vary'] = 'Origin'
+    return response
+
+
+def _parse_teacher_timetable_request(std_raw, section_raw):
+    match = re.search(r'\d+', str(std_raw or ''))
+    std = int(match.group(0)) if match else None
+    section = str(section_raw or 'A').strip().upper()
+
+    if std is None or std < ADMIN_TIMETABLE_MIN_STANDARD or std > 7:
+        return {'error': 'Class/standard must be between 1 and 7.'}
+    if section not in TEACHER_DEMO_SECTIONS:
+        return {'error': 'Section must be A, B, or C.'}
+
+    return {'std': std, 'section': section}
+
+
+def _build_admin_teacher_subject_map():
+    subject_map = {}
+    if not os.path.isfile(ADMIN_DASHBOARD_BACKEND_DB_PATH):
+        return subject_map
+
+    conn = None
+    try:
+        conn = sqlite3.connect(ADMIN_DASHBOARD_BACKEND_DB_PATH, timeout=10)
+        c = conn.cursor()
+        c.execute("SELECT name, subject FROM teachers WHERE status = 'Active' ORDER BY name")
+        rows = c.fetchall()
+        conn.close()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return subject_map
+
+    for teacher_name, subject in rows:
+        normalized_subject = ADMIN_TIMETABLE_SUBJECT_MAP.get(str(subject or '').strip(), str(subject or '').strip())
+        if not normalized_subject:
+            continue
+        subject_map.setdefault(normalized_subject, [])
+        if teacher_name and teacher_name not in subject_map[normalized_subject]:
+            subject_map[normalized_subject].append(teacher_name)
+
+    return subject_map
+
+
+def _generate_admin_timetable(std: int, section: str, teachers_by_subject: dict):
+    subject_pool = (
+        ADMIN_TIMETABLE_SUBJECTS_BY_STD['primary']
+        if std <= ADMIN_TIMETABLE_PRIMARY_MAX
+        else ADMIN_TIMETABLE_SUBJECTS_BY_STD['upper']
+    )
+
+    rng = random.Random(std * 1000 + ord(section))
+    schedule = {}
+
+    def get_teacher(subject_name: str) -> str:
+        pool = teachers_by_subject.get(subject_name) or ['TBD']
+        return pool[(std + ord(section)) % len(pool)]
+
+    for day in ADMIN_TIMETABLE_DAYS:
+        slots = ADMIN_TIMETABLE_SLOTS_SATURDAY if day == 'Saturday' else ADMIN_TIMETABLE_SLOTS_WEEKDAY
+        shuffled_subjects = list(subject_pool)
+        rng.shuffle(shuffled_subjects)
+        subject_idx = 0
+        day_slots = []
+
+        for slot in slots:
+            slot_copy = dict(slot)
+            if slot_copy.get('isBreak'):
+                slot_copy['subject'] = None
+                slot_copy['teacher'] = None
+            else:
+                subject_name = shuffled_subjects[subject_idx % len(shuffled_subjects)]
+                subject_idx += 1
+                slot_copy['subject'] = subject_name
+                slot_copy['teacher'] = get_teacher(subject_name)
+            day_slots.append(slot_copy)
+
+        schedule[day] = day_slots
+
+    return schedule
+
+
+def _build_schedule_from_admin_rows(rows):
+    schedule = {}
+
+    for day in ADMIN_TIMETABLE_DAYS:
+        slots = ADMIN_TIMETABLE_SLOTS_SATURDAY if day == 'Saturday' else ADMIN_TIMETABLE_SLOTS_WEEKDAY
+        schedule[day] = [
+            {
+                **slot,
+                'subject': None,
+                'teacher': None,
+            }
+            for slot in slots
+        ]
+
+    for day, _lecture, lecture_num, subject, teacher in rows:
+        normalized_day = str(day or '').strip()
+        if normalized_day not in schedule or lecture_num is None:
+            continue
+
+        for slot in schedule[normalized_day]:
+            if slot.get('num') == lecture_num:
+                slot['subject'] = subject
+                slot['teacher'] = teacher
+                break
+
+    return schedule
+
+
+def _get_teacher_timetable_payload(std_raw, section_raw):
+    parsed = _parse_teacher_timetable_request(std_raw, section_raw)
+    if parsed.get('error'):
+        return parsed
+
+    std = parsed['std']
+    section = parsed['section']
+    teachers_by_subject = _build_admin_teacher_subject_map()
+
+    if std > ADMIN_TIMETABLE_MAX_STANDARD:
+        return {
+            'std': std,
+            'section': section,
+            'source': 'fallback',
+            'note': f'Admin timetable is available for classes {ADMIN_TIMETABLE_MIN_STANDARD} to {ADMIN_TIMETABLE_MAX_STANDARD} only. Showing generated fallback for class {std}-{section}.',
+            'schedule': _generate_admin_timetable(std, section, teachers_by_subject),
+            'days': ADMIN_TIMETABLE_DAYS,
+        }
+
+    conn = None
+    rows = []
+    try:
+        conn = sqlite3.connect(ADMIN_DASHBOARD_BACKEND_DB_PATH, timeout=10)
+        c = conn.cursor()
+        c.execute("""
+            SELECT day, lecture, lecture_num, subject, teacher
+            FROM timetable
+            WHERE class = ? AND section = ?
+            ORDER BY
+              CASE day
+                WHEN 'Monday' THEN 1
+                WHEN 'Tuesday' THEN 2
+                WHEN 'Wednesday' THEN 3
+                WHEN 'Thursday' THEN 4
+                WHEN 'Friday' THEN 5
+                WHEN 'Saturday' THEN 6
+                ELSE 99
+              END,
+              COALESCE(lecture_num, 999),
+              lecture
+        """, (std, section))
+        rows = c.fetchall()
+        conn.close()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return {'error': 'Unable to read admin timetable data.'}
+
+    return {
+        'std': std,
+        'section': section,
+        'source': 'uploaded' if rows else 'generated',
+        'schedule': _build_schedule_from_admin_rows(rows) if rows else _generate_admin_timetable(std, section, teachers_by_subject),
+        'days': ADMIN_TIMETABLE_DAYS,
+    }
+
+
 def _build_student_profile(uid: str) -> dict | None:
+    admin_profile = _get_admin_student_account(uid)
+    if admin_profile:
+        return {
+            'uid': admin_profile.get('uid') or uid,
+            'email': admin_profile.get('email') or uid,
+            'name': admin_profile.get('name') or uid,
+            'student_id': admin_profile.get('student_id') or uid,
+            'class_name': admin_profile.get('class_name') or '',
+            'class': admin_profile.get('class') or '',
+            'student_class': admin_profile.get('student_class') or '',
+            'grade': admin_profile.get('grade'),
+            'division': admin_profile.get('division') or '',
+            'reward_points': 0,
+            'achievement_stars': 0,
+            'games_played': 0,
+            'high_score': 0,
+            'current_level': 1,
+            'profile_photo_url': admin_profile.get('profile_photo_url'),
+        }
+
     try:
         conn = sqlite3.connect('school.db', timeout=10)
         c = conn.cursor()
@@ -776,6 +1717,12 @@ def auth_login():
 
     if not username or not password:
         return {'message': 'Invalid login credentials'}, 401
+
+    normalized_username = _normalize_student_login_id(username)
+    admin_student_account = _get_admin_student_account(normalized_username) if normalized_username.startswith('STU') else None
+    if admin_student_account and str(admin_student_account.get('password') or '').strip() == str(password).strip():
+        token, refresh_token, uid = _issue_api_tokens(normalized_username, 'student')
+        return {'token': token, 'refresh_token': refresh_token, 'uid': uid}, 200
 
     try:
         conn = sqlite3.connect('school.db', timeout=10)
@@ -1022,10 +1969,10 @@ def _find_student_portal_dist_dir(grade: int) -> str | None:
 @app.route('/student-portal')
 def student_portal_home():
     if session.get('role') != 'student':
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
     grade = session.get('student_grade')
     if not grade:
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
     return redirect(url_for('student_portal', grade=grade))
 
 
@@ -1033,25 +1980,58 @@ def student_portal_home():
 @app.route('/student-portal/<int:grade>/<path:path>')
 def student_portal(grade: int, path: str = ''):
     if session.get('role') != 'student':
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
 
     if not (1 <= grade <= 7):
         return redirect(url_for('student_dashboard_portal'))
 
     dist_dir = _find_student_portal_dist_dir(grade)
     if not dist_dir:
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
 
     session['student_app'] = 'portal'
     session['student_grade'] = grade
-    return send_from_directory(dist_dir, 'index.html')
+    theme = STUDENT_LOGIN_THEMES.get(grade, STUDENT_LOGIN_THEMES[1])
+    session['student_theme'] = {
+        'grade': grade,
+        'name': theme['name'],
+        'badge': theme['badge'],
+        'accent': theme['accent'],
+        'accent_soft': theme['accent_soft'],
+        'accent_deep': theme['accent_deep'],
+        'bg_start': theme['bg_start'],
+        'bg_end': theme['bg_end'],
+    }
+
+    index_path = os.path.join(dist_dir, 'index.html')
+    try:
+        with open(index_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+    except Exception:
+        return redirect(url_for('student_login'))
+
+    theme_bootstrap = (
+        "<script>(function(){try{"
+        f"window.__SSMS_STUDENT_THEME__={json.dumps(session['student_theme'])};"
+        f"localStorage.setItem('ssmsStudentTheme',{json.dumps(json.dumps(session['student_theme']))});"
+        f"localStorage.setItem('ssmsStudentGrade',{json.dumps(str(grade))});"
+        "}catch(e){}})();</script>"
+    )
+
+    marker = '<script type=\"module\"'
+    if marker in html:
+        html = html.replace(marker, theme_bootstrap + marker, 1)
+    elif '</head>' in html:
+        html = html.replace('</head>', theme_bootstrap + '</head>', 1)
+
+    return Response(html, mimetype='text/html')
 
 
 @app.route('/student-dashboard')
 @app.route('/student-dashboard/<path:path>')
 def student_dashboard_portal(path: str = ''):
     if session.get('role') != 'student':
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
 
     grade = session.get('student_grade') or 8
     if isinstance(grade, str) and grade.isdigit():
@@ -1070,7 +2050,7 @@ def student_dashboard_portal(path: str = ''):
         with open(index_path, 'r', encoding='utf-8') as f:
             html = f.read()
     except Exception:
-        return redirect(url_for('login'))
+        return redirect(url_for('student_login'))
 
     # SSO into the Std 8 dashboard (React app) so it doesn't show its own login screen
     username = session.get('username') or ''
@@ -1145,45 +2125,22 @@ def teacher_portal_redirect():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
 
-    def is_port_open(host: str, port: int, timeout_s: float = 0.3) -> bool:
-        try:
-            with socket.create_connection((host, port), timeout=timeout_s):
-                return True
-        except Exception:
-            return False
-
     teacher_username = session.get('username') or ''
-    assigned_class = ''
-    division = ''
-    try:
-        conn = sqlite3.connect('school.db')
-        c = conn.cursor()
-        c.execute("SELECT class_assigned FROM users WHERE username=? AND role='teacher'", (teacher_username,))
-        row = c.fetchone()
-        if row and row[0]:
-            assigned_class = row[0]
-        conn.close()
-    except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-    # Try to parse division from username like teach8A -> A
-    if teacher_username.lower().startswith('teach') and len(teacher_username) >= 6:
-        division = teacher_username[-1].upper()
+    teacher_identity = _build_teacher_identity(teacher_username)
 
     sso_params = {
         'ssms_sso': '1',
         'email': teacher_username,
-        'name': teacher_username,
-        'assignedClass': assigned_class,
-        'division': division,
+        'name': teacher_identity['name'],
+        'assignedClass': teacher_identity['assigned_class'],
+        'division': teacher_identity['division'],
     }
     from urllib.parse import urlencode
-    teacher_portal_url = f"http://localhost:3000/?{urlencode(sso_params)}"
+    teacher_portal_url = f"http://127.0.0.1:{TEACHER_PORTAL_CLIENT_PORT}/?{urlencode(sso_params)}"
+    client_ready = _is_port_open('127.0.0.1', TEACHER_PORTAL_CLIENT_PORT)
+    server_ready = _is_port_open('127.0.0.1', TEACHER_PORTAL_SERVER_PORT)
 
-    if is_port_open('127.0.0.1', 3000):
+    if client_ready and server_ready:
         return redirect(teacher_portal_url)
 
     global _teacher_portal_last_start_attempt
@@ -1191,15 +2148,8 @@ def teacher_portal_redirect():
     if now - _teacher_portal_last_start_attempt > 10:
         _teacher_portal_last_start_attempt = now
         try:
-            if request.remote_addr in ['127.0.0.1', '::1'] and os.path.isfile(TEACHER_PORTAL_RUN_BAT):
-                subprocess.Popen(
-                    ['cmd', '/c', 'start', '""', TEACHER_PORTAL_RUN_BAT],
-                    cwd=TEACHER_PORTAL_DIR,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    close_fds=True,
-                )
+            if request.remote_addr in ['127.0.0.1', '::1']:
+                _start_teacher_portal_services()
         except Exception as e:
             print('Teacher portal start error:', e)
 
@@ -1218,12 +2168,30 @@ def teacher_portal_redirect():
       <body>
         <h2>Starting Teacher Portal…</h2>
         <p>Wait 10–20 seconds. This page will auto-retry.</p>
+        <p>Teacher Portal UI: <strong>{'Ready' if client_ready else 'Starting'}</strong> on port <code>{TEACHER_PORTAL_CLIENT_PORT}</code></p>
+        <p>Teacher Portal API: <strong>{'Ready' if server_ready else 'Starting'}</strong> on port <code>{TEACHER_PORTAL_SERVER_PORT}</code></p>
         <p>If it doesn’t start, run: <code>{TEACHER_PORTAL_RUN_BAT}</code></p>
         <p>Then open: <a href="{teacher_portal_url}">{teacher_portal_url}</a></p>
       </body>
     </html>
     """
     return Response(html, mimetype='text/html')
+
+
+@app.route('/api/teacher-portal/timetable', methods=['GET', 'OPTIONS'])
+def teacher_portal_timetable_api():
+    if request.method == 'OPTIONS':
+        return _teacher_timetable_response({}, status=204)
+
+    payload = _get_teacher_timetable_payload(
+        request.args.get('std'),
+        request.args.get('section'),
+    )
+
+    if payload.get('error'):
+        return _teacher_timetable_response({'success': False, 'error': payload['error']}, status=400)
+
+    return _teacher_timetable_response({'success': True, 'data': payload})
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -1565,7 +2533,7 @@ def teacher_dashboard():
 def student_dashboard():
     if 'username' not in session or session.get('role') != 'student':
         print("Student Dashboard access denied - redirecting to login")
-        return redirect(url_for('index'))
+        return redirect(url_for('student_login'))
     print(f"Student Dashboard access granted for {session['username']}")
     return render_template('student_dashboard.html')
 
@@ -1641,8 +2609,9 @@ def teacher_profile():
     c.execute("SELECT * FROM users WHERE username=?", (session['username'],))
     teacher = c.fetchone()
     conn.close()
+    teacher_identity = _build_teacher_identity(session['username'])
     
-    return render_template('teacher_profile.html', teacher=teacher)
+    return render_template('teacher_profile.html', teacher=teacher, teacher_identity=teacher_identity)
 
 @app.route('/add_attendance', methods=['GET', 'POST'])
 def add_attendance():
@@ -2285,7 +3254,7 @@ def parent_activities():
 @app.route('/api/class-data')
 def get_class_data():
     """API endpoint to get class data with sample accounts for login page"""
-    classes = ['8-A', '8-B', '8-C', '9-A', '9-B', '9-C', '10-A', '10-B', '10-C']
+    classes = [f'{grade}-A' for grade in TEACHER_DEMO_GRADES]
     
     class_data = {}
     
@@ -2293,12 +3262,12 @@ def get_class_data():
         conn = sqlite3.connect('school.db')
         c = conn.cursor()
         
-        # Parse class format: "8-A" -> grade="8", section="A"
+        # Parse class format: "1-A" -> grade="1", section="A"
         grade, section = cls_format.split('-')
         
         # Build search patterns
-        teacher_pattern = f"teach{grade}{section}"  # e.g., "teach8A"
-        student_pattern = f"stu0{grade}{section}%"   # e.g., "stu08A%"
+        teacher_pattern = f"teach{grade}{section}"  # e.g., "teach1A"
+        student_pattern = f"stu{int(grade):02d}{section}%"
         
         # Get class teacher
         c.execute("SELECT username, password FROM users WHERE username=? AND role='teacher'", 

@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, BookOpen, Calendar, FileText, Upload, Eye, Edit, Trash2, Download, CheckCircle, Copy, MessageCircle, Mic, AlertTriangle, Save } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { apiUrl } from '../../config/api';
+import {
+  extractClassNumber,
+  getAssignedTeacherClassNumber,
+  getAssignedTeacherSection,
+  matchesAssignedTeacherClass,
+  normalizeSection,
+} from '../../config/teacherClasses';
+import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const AssignmentManagement = ({ currentUser }) => {
   const [assignments, setAssignments] = useState([]);
@@ -30,6 +39,57 @@ const AssignmentManagement = ({ currentUser }) => {
     file: null
   });
 
+  const getLoggedInTeacherClass = () => {
+    const assignedClass = String(currentUser?.assignedClass || '').trim();
+    const assignedDivision = String(currentUser?.division || '').trim().toUpperCase();
+
+    if (assignedClass || assignedDivision) {
+      return {
+        className: assignedClass || 'Class',
+        section: assignedDivision || 'A',
+      };
+    }
+
+    const fallbackClass = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
+    if (fallbackClass) {
+      return {
+        className: fallbackClass.className || 'Class',
+        section: fallbackClass.section || 'A',
+      };
+    }
+
+    return {
+      className: 'Class',
+      section: 'A',
+    };
+  };
+
+  const getAssignmentClassLabel = (assignment) => {
+    const className = assignment?.class?.className || getLoggedInTeacherClass().className;
+    const section = assignment?.class?.section || getLoggedInTeacherClass().section;
+    return `${className} - ${section}`;
+  };
+
+  const isAssignmentForLoggedInTeacher = (assignment) => {
+    const assignedClassNumber = getAssignedTeacherClassNumber(currentUser);
+    const assignedSection = getAssignedTeacherSection(currentUser);
+    const className = assignment?.class?.className || assignment?.className || assignment?.class || '';
+    const section = assignment?.class?.section || assignment?.section || '';
+    const normalizedClass = extractClassNumber(className);
+    const normalizedSection = normalizeSection(section);
+
+    if (!normalizedClass && !normalizedSection) {
+      return true;
+    }
+
+    return (
+      normalizedClass === assignedClassNumber &&
+      (!assignedSection || normalizedSection === assignedSection)
+    );
+  };
+
+  const filteredAssignments = assignments.filter(isAssignmentForLoggedInTeacher);
+
   useEffect(() => {
     fetchAssignments();
     fetchClasses();
@@ -38,7 +98,7 @@ const AssignmentManagement = ({ currentUser }) => {
   useEffect(() => {
     if (currentUser && currentUser.assignedClass) {
       // Find the class ID that matches the user's assigned class
-      const classToSelect = classes.find(cls => cls.className === currentUser.assignedClass);
+      const classToSelect = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
       if (classToSelect) {
         setFormData(prev => ({
           ...prev,
@@ -61,50 +121,10 @@ const AssignmentManagement = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      // Fallback for hetvi@gmail.com (8 - B)
-      const mockFallbackClass8B = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: [
-          { _id: 'sub_1', subjectName: 'Mathematics' },
-          { _id: 'sub_2', subjectName: 'Science' },
-          { _id: 'sub_3', subjectName: 'English' }
-        ]
-      };
-
-      // Filter for classes 8, 9, 10
-      let filteredClasses = response.data.data.filter(cls =>
-        ['8', '9', '10'].includes(cls.className)
-      );
-
-      // If user is hetvi@gmail.com or no classes found
-      const userEmail = currentUser?.email;
-      if ((!filteredClasses || filteredClasses.length === 0) || userEmail === 'hetvi@gmail.com') {
-        filteredClasses = [mockFallbackClass8B];
-      }
-
-      setClasses(filteredClasses);
+      const loadedClasses = await loadTeacherClasses(currentUser);
+      setClasses(loadedClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
-      const mockFallbackClass8B = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: [
-          { _id: 'sub_1', subjectName: 'Mathematics', teacher: { name: 'Mr. Sharma' } },
-          { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Mrs. Gupta' } },
-          { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Mr. Patel' } }
-        ]
-      };
-      setClasses([mockFallbackClass8B]);
     }
   };
 
@@ -140,7 +160,7 @@ const AssignmentManagement = ({ currentUser }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/assignments', {
+      const response = await axios.get(apiUrl('/api/teacher/assignments'), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -151,12 +171,13 @@ const AssignmentManagement = ({ currentUser }) => {
     } catch (error) {
       console.error('Error fetching assignments:', error);
       // Fallback dummy assignment
+      const teacherClass = getLoggedInTeacherClass();
       const fallback = [{
         _id: 'mock_assignment_1',
         title: 'Equations Practice',
         description: 'Complete all equations in chapter 4.',
         subject: { subjectName: 'Mathematics' },
-        class: { className: '8', section: 'B' },
+        class: teacherClass,
         dueDate: new Date(Date.now() + 86400000).toISOString(),
         status: 'active',
         totalMarks: 50,
@@ -169,27 +190,7 @@ const AssignmentManagement = ({ currentUser }) => {
 
   const fetchStudentsInClass = async (classId) => {
     try {
-      const token = localStorage.getItem('token');
-      // MOCK 45 Indian Students as requested
-      const indianNames = [
-        "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-        "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-        "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-        "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-        "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-        "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-        "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-        "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen",
-        "Mira Nair", "Anika Menon", "Zara Sethi", "Nisha Thakur", "Pooja Bhardwaj"
-      ];
-
-      const mockStudentsData = indianNames.map((name, index) => ({
-        _id: `MOCK_STU_${index + 1}`,
-        studentId: `STU${String(index + 1).padStart(3, '0')}`,
-        name: name
-      }));
-
-      return mockStudentsData;
+      return await loadClassStudents(classId, currentUser, classes);
     } catch (error) {
       console.error('Error fetching students:', error);
       return [];
@@ -212,7 +213,7 @@ const AssignmentManagement = ({ currentUser }) => {
       }
       setStudents(allStudents);
 
-      const response = await axios.get(`http://localhost:5000/api/teacher/assignments/${assignmentId}/submissions`, {
+      const response = await axios.get(apiUrl(`/api/teacher/assignments/${assignmentId}/submissions`), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -358,7 +359,7 @@ const AssignmentManagement = ({ currentUser }) => {
 
       if (formData._id) {
         // Update existing assignment
-        await axios.put(`http://localhost:5000/api/teacher/assignments/${formData._id}`, formDataToSend, {
+        await axios.put(apiUrl(`/api/teacher/assignments/${formData._id}`), formDataToSend, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
@@ -366,7 +367,7 @@ const AssignmentManagement = ({ currentUser }) => {
         });
       } else {
         // Create new assignment
-        await axios.post('http://localhost:5000/api/teacher/assignments', formDataToSend, {
+        await axios.post(apiUrl('/api/teacher/assignments'), formDataToSend, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
@@ -392,7 +393,7 @@ const AssignmentManagement = ({ currentUser }) => {
         title: formData.title,
         description: formData.description,
         subject: subjects.find(s => s._id === formData.subject) || { subjectName: formData.subject || 'Unknown Subject' },
-        class: classes.find(c => c._id === formData.class) || { className: '8', section: 'B' },
+        class: classes.find(c => c._id === formData.class) || getLoggedInTeacherClass(),
         dueDate: formData.dueDate,
         status: 'active',
         totalMarks: formData.totalMarks,
@@ -412,7 +413,7 @@ const AssignmentManagement = ({ currentUser }) => {
         title: formData.title,
         description: formData.description,
         subject: subjects.find(s => s._id === formData.subject) || { subjectName: formData.subject || 'Unknown Subject' },
-        class: classes.find(c => c._id === formData.class) || { className: '8', section: 'B' },
+        class: classes.find(c => c._id === formData.class) || getLoggedInTeacherClass(),
         dueDate: formData.dueDate,
         status: 'active',
         totalMarks: formData.totalMarks,
@@ -438,7 +439,7 @@ const AssignmentManagement = ({ currentUser }) => {
 
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:5000/api/teacher/assignments/${id}`, {
+        await axios.delete(apiUrl(`/api/teacher/assignments/${id}`), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -476,7 +477,7 @@ const AssignmentManagement = ({ currentUser }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      await axios.put(`http://localhost:5000/api/teacher/submissions/${submissionId}/grade`, {
+      await axios.put(apiUrl(`/api/teacher/submissions/${submissionId}/grade`), {
         marks: gradingData[submissionId].marks,
         remarks: gradingData[submissionId].remarks
       }, {
@@ -610,10 +611,10 @@ const AssignmentManagement = ({ currentUser }) => {
           </button>
           <button
             onClick={() => {
-              if (assignments.length > 0) {
-                setSelectedAssignment(assignments[0]);
-                if (assignments[0]) {
-                  fetchSubmissions(assignments[0]._id);
+              if (filteredAssignments.length > 0) {
+                setSelectedAssignment(filteredAssignments[0]);
+                if (filteredAssignments[0]) {
+                  fetchSubmissions(filteredAssignments[0]._id);
                 }
               }
               setActiveTab('submissions');
@@ -860,7 +861,7 @@ const AssignmentManagement = ({ currentUser }) => {
               <div className="bg-white rounded-xl shadow-md overflow-hidden">
                 <div className="p-6">
                   <h3 className="text-lg font-semibold mb-4">All Assignments</h3>
-                  {assignments.length > 0 ? (
+                  {filteredAssignments.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
@@ -874,14 +875,14 @@ const AssignmentManagement = ({ currentUser }) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {assignments.map(assignment => (
+                          {filteredAssignments.map(assignment => (
                             <tr key={assignment._id} className="border-b hover:bg-gray-50">
                               <td className="px-4 py-3">
                                 <div className="font-medium">{assignment.title}</div>
                                 <div className="text-sm text-gray-600 truncate max-w-xs">{assignment.description}</div>
                               </td>
                               <td className="px-4 py-3">
-                                {assignment.class?.className} - {assignment.class?.section}
+                                {getAssignmentClassLabel(assignment)}
                               </td>
                               <td className="px-4 py-3">
                                 {assignment.subject?.subjectName}
@@ -979,7 +980,7 @@ const AssignmentManagement = ({ currentUser }) => {
                   className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-white focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none shadow-sm"
                 >
                   <option value="">All Subjects</option>
-                  {[...new Set(assignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
+                  {[...new Set(filteredAssignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
                     <option key={subj} value={subj}>{subj}</option>
                   ))}
                 </select>
@@ -991,7 +992,7 @@ const AssignmentManagement = ({ currentUser }) => {
               {/* Assignment list for selected subject when no assignment picked */}
               {!selectedAssignment && (
                 <div className="space-y-3 mb-5">
-                  {(subjectFilter ? assignments.filter(a => a.subject?.subjectName === subjectFilter) : assignments).map(asgn => (
+                  {(subjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === subjectFilter) : filteredAssignments).map(asgn => (
                     <div key={asgn._id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
                       <div>
                         <p className="font-semibold text-gray-800">{asgn.title}</p>
@@ -1003,7 +1004,7 @@ const AssignmentManagement = ({ currentUser }) => {
                       >View Submissions</button>
                     </div>
                   ))}
-                  {(subjectFilter ? assignments.filter(a => a.subject?.subjectName === subjectFilter) : assignments).length === 0 && (
+                  {(subjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === subjectFilter) : filteredAssignments).length === 0 && (
                     <p className="text-center text-gray-400 py-8">No assignments found for this subject.</p>
                   )}
                 </div>
@@ -1127,7 +1128,7 @@ const AssignmentManagement = ({ currentUser }) => {
                   className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-white focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none shadow-sm"
                 >
                   <option value="">All Subjects</option>
-                  {[...new Set(assignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
+                  {[...new Set(filteredAssignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
                     <option key={subj} value={subj}>{subj}</option>
                   ))}
                 </select>
@@ -1139,7 +1140,7 @@ const AssignmentManagement = ({ currentUser }) => {
               {/* Assignment picker when none selected */}
               {!selectedAssignment && (
                 <div className="space-y-3 mb-5">
-                  {(gradingSubjectFilter ? assignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : assignments).map(asgn => (
+                  {(gradingSubjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : filteredAssignments).map(asgn => (
                     <div key={asgn._id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
                       <div>
                         <p className="font-semibold text-gray-800">{asgn.title}</p>
@@ -1151,7 +1152,7 @@ const AssignmentManagement = ({ currentUser }) => {
                       >Grade</button>
                     </div>
                   ))}
-                  {(gradingSubjectFilter ? assignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : assignments).length === 0 && (
+                  {(gradingSubjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : filteredAssignments).length === 0 && (
                     <p className="text-center text-gray-400 py-8">No assignments found for this subject.</p>
                   )}
                 </div>
@@ -1293,7 +1294,7 @@ const AssignmentManagement = ({ currentUser }) => {
           {/* Analytics Tab */}
           {activeTab === 'analytics' && (() => {
             // Build analytics from localStorage for all assignments
-            const analyticsRows = assignments.map(asgn => {
+            const analyticsRows = filteredAssignments.map(asgn => {
               const savedSubs = (() => { try { return JSON.parse(localStorage.getItem(`submissions-data-${asgn._id}`)) || []; } catch { return []; } })();
               const savedGrading = (() => { try { return JSON.parse(localStorage.getItem(`grading-data-${asgn._id}`)) || {}; } catch { return {}; } })();
               const total = savedSubs.length || 45;

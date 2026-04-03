@@ -10,6 +10,62 @@ import Announcement from '../models/Announcement.js';
 import LeaveApplication from '../models/LeaveApplication.js';
 import Subject from '../models/Subject.js';
 import { isTeacher } from '../middleware/auth.js';
+import path from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
+const adminDbPath = path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'database.sqlite');
+const BetterSqlite3 = require(path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'node_modules', 'better-sqlite3'));
+let adminDb = null;
+
+function getAdminDb() {
+  if (!adminDb) {
+    adminDb = new BetterSqlite3(adminDbPath, { readonly: false, fileMustExist: true });
+  }
+  return adminDb;
+}
+
+function mapAttendanceStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'present' || normalized === 'p') return 'P';
+  if (normalized === 'absent' || normalized === 'a') return 'A';
+  if (normalized === 'leave' || normalized === 'l') return 'L';
+  return 'P';
+}
+
+function syncAttendanceToAdminDb({ classData, date, attendanceData, teacherId }) {
+  const db = getAdminDb();
+  const upsert = db.prepare(`
+    INSERT INTO attendance (person_id, person_type, date, status, class, section, subject)
+    VALUES (?, 'student', ?, ?, ?, ?, ?)
+    ON CONFLICT(person_id, person_type, date) DO UPDATE SET
+      status = excluded.status,
+      class = excluded.class,
+      section = excluded.section,
+      subject = excluded.subject
+  `);
+
+  const classLabel = String(classData?.className || '').trim();
+  const section = String(classData?.section || '').trim().toUpperCase();
+
+  db.transaction((records) => {
+    for (const record of records) {
+      const studentPersonId = String(record.studentId || '').trim();
+      if (!studentPersonId) continue;
+      upsert.run(
+        studentPersonId,
+        date,
+        mapAttendanceStatus(record.status),
+        classLabel,
+        section,
+        null
+      );
+    }
+  })(Array.isArray(attendanceData) ? attendanceData : []);
+}
 
 const fallbackStudyMaterials = [];
 
@@ -64,7 +120,12 @@ export const getDashboard = async (req, res) => {
 
     // Get recent announcements
     const recentAnnouncements = await Announcement.find({
-      'recipients.specificUsers': { $in: [teacherId] },
+      $or: [
+        { createdBy: teacherId },
+        { 'recipients.specificUsers': { $in: [teacherId] } },
+        { 'recipients.role': 'teacher' },
+        { 'recipients.role': 'all' },
+      ],
       createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
     }).sort({ createdAt: -1 }).limit(5);
 
@@ -73,7 +134,7 @@ export const getDashboard = async (req, res) => {
       title: announcement.title,
       content: announcement.content,
       date: new Date(announcement.createdAt).toLocaleDateString(),
-      author: announcement.sender?.name || 'Admin'
+      author: announcement.senderName || announcement.createdByName || announcement.sender?.name || 'Admin'
     }));
 
     // Get student performance summary
@@ -531,6 +592,17 @@ export const markAttendance = async (req, res) => {
         status: attendance.status,
         date: attendance.date
       });
+    }
+
+    try {
+      syncAttendanceToAdminDb({
+        classData,
+        date,
+        attendanceData,
+        teacherId
+      });
+    } catch (syncError) {
+      console.warn('Failed to sync attendance to admin DB:', syncError.message);
     }
 
     res.json({

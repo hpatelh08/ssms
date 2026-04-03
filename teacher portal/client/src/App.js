@@ -12,55 +12,58 @@ import Reports from './components/Teacher/Reports';
 import MarksManagement from './components/Teacher/MarksManagement';
 import ClassManagement from './components/Teacher/ClassManagement';
 import StudentManagement from './components/Teacher/StudentManagement';
+import VisitorPage from './components/Visitor/VisitorPage';
+import { findTeacherByIdentity } from './data/teachers';
 
-function SsoRequired() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20 text-center">
-        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/30">
-          <span className="text-3xl">🏫</span>
-        </div>
-        <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">Teacher Portal</h1>
-        <p className="text-gray-600 mt-2 text-sm font-medium">
-          Please login from the main Smart School login page.
-        </p>
-        <div className="mt-6 flex flex-col gap-3">
-          <a
-            href="http://127.0.0.1:5000/login"
-            className="w-full py-3.5 px-4 rounded-xl font-bold text-white text-base shadow-lg transition-all duration-300 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-          >
-            Go to Login
-          </a>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="w-full py-3.5 px-4 rounded-xl font-bold text-indigo-700 text-base border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function normalizeTeacherSession(user) {
+  if (!user) return null;
+
+  const currentName = String(user.name || '').trim();
+  const shouldReplaceName = !currentName || currentName.toLowerCase() === 'teacher';
+  const matchedTeacher = findTeacherByIdentity(user);
+
+  return {
+    ...user,
+    name: shouldReplaceName ? (matchedTeacher?.name || currentName || 'Teacher') : currentName,
+    assignedClass: user.assignedClass || matchedTeacher?.assignedClass || '',
+    division: user.division || matchedTeacher?.division || '',
+    teacherId: user.teacherId || matchedTeacher?.teacherId || user.email || '',
+    email: user.email || matchedTeacher?.email || user.teacherId || ''
+  };
 }
 
 function App() {
+  const isVisitorRoute = window.location.pathname === '/visitor'
+    || window.location.pathname === '/visitor/';
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  const goToMainLogin = () => {
+    const host = window.location.hostname || '127.0.0.1';
+    // The main Smart School login UI is served by the admin React app on port 5173.
+    window.location.replace(`${window.location.protocol}//${host}:5173/login`);
+  };
 
   useEffect(() => {
+    if (window.location.pathname === '/student-login' || window.location.pathname === '/student-login/') {
+      goToMainLogin();
+      return;
+    }
+
     // SSO from main Smart School login page
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('ssms_sso') === '1') {
-        const userData = {
-          name: params.get('name') || 'Teacher',
+        const userData = normalizeTeacherSession({
+          name: params.get('name') || '',
           email: params.get('email') || '',
+          teacherId: params.get('teacherId') || '',
           role: 'teacher',
           assignedClass: params.get('assignedClass') || '',
           division: params.get('division') || ''
-        };
+        });
         localStorage.setItem('token', `teacher-${Date.now()}`);
         localStorage.setItem('user', JSON.stringify(userData));
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -76,8 +79,10 @@ function App() {
     // Get user data if available
     const userData = localStorage.getItem('user');
     if (userData) {
-      setCurrentUser(JSON.parse(userData));
+      setCurrentUser(normalizeTeacherSession(JSON.parse(userData)));
     }
+
+    setAuthReady(true);
   }, []);
 
   const renderPage = () => {
@@ -115,11 +120,20 @@ function App() {
     setIsLoggedIn(false);
     setCurrentUser(null);
     setCurrentPage('dashboard');
+    goToMainLogin();
   };
 
-  if (!isLoggedIn) {
-    return <SsoRequired />;
+  useEffect(() => {
+    if (authReady && !isLoggedIn && !isVisitorRoute) {
+      goToMainLogin();
+    }
+  }, [authReady, isLoggedIn, isVisitorRoute]);
+
+  if (isVisitorRoute) {
+    return <VisitorPage />;
   }
+
+  if (!authReady || !isLoggedIn) return null;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-[#f0f2f8] via-[#e8ecf4] to-[#f0f2f8]">
@@ -132,3 +146,4 @@ function App() {
 }
 
 export default App;
+

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Send, Users, Mail, MessageCircle, Bell, UserPlus, Hash, AtSign, Search, ChevronDown } from 'lucide-react';
+import { apiUrl } from '../../config/api';
+import { matchesAssignedTeacherClass } from '../../config/teacherClasses';
+import { loadTeacherClasses, loadTeacherStudents } from '../../services/teacherBackendData';
 
 const Communication = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState('compose'); // compose, announcements
@@ -24,10 +27,13 @@ const Communication = ({ currentUser }) => {
 
   useEffect(() => {
     fetchClasses();
-    fetchStudents();
     fetchAnnouncements();
     fetchConversations();
-  }, []);
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [classes, currentUser?.email]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -42,7 +48,7 @@ const Communication = ({ currentUser }) => {
   useEffect(() => {
     if (currentUser && currentUser.assignedClass) {
       // Find the class ID that matches the user's assigned class
-      const classToSelect = classes.find(cls => cls.className === currentUser.assignedClass);
+      const classToSelect = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
       if (classToSelect) {
         setMessageData(prev => ({
           ...prev,
@@ -54,67 +60,19 @@ const Communication = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      // Filter for classes 8, 9, 10
-      let filteredClasses = response.data.data.filter(cls =>
-        ['8', '9', '10'].includes(cls.className)
-      );
-      if (!filteredClasses || filteredClasses.length === 0) {
-        filteredClasses = [{ _id: 'mock_class_8b', className: '8', section: 'B' }];
-      }
-      setClasses(filteredClasses);
+      const loadedClasses = await loadTeacherClasses(currentUser);
+      setClasses(loadedClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
-      setClasses([{ _id: 'mock_class_8b', className: '8', section: 'B' }]);
     }
   };
 
   const fetchStudents = async () => {
-    const mockNames = [
-      'Aarav Sharma', 'Vivaan Patel', 'Aditya Singh', 'Vihaan Kumar', 'Arjun Gupta',
-      'Sai Krishna', 'Reyansh Reddy', 'Ayaan Khan', 'Krishna Iyer', 'Ishaan Verma',
-      'Rudra Joshi', 'Dhruv Desai', 'Kabir Das', 'Atharv Yadav', 'Rishi Tiwari',
-      'Adwait Pandey', 'Aanya Sharma', 'Diya Patel', 'Ananya Singh', 'Myra Kumar',
-      'Kavya Gupta', 'Siya Reddy', 'Navya Khan', 'Aaradhya Iyer', 'Saanvi Verma',
-      'Nyra Joshi', 'Sneha Desai', 'Ira Das', 'Riya Yadav', 'Tara Tiwari',
-      'Kiara Pandey', 'Advik Nair', 'Pranav Menon', 'Rohan Sethi', 'Karthik Pillai',
-      'Siddharth Rao', 'Neel Thakur', 'Dev Bhardwaj', 'Rahul Chatterjee', 'Nikhil Sen'
-    ];
-
-    const generateMockStudents = () => mockNames.map((name, index) => ({
-      _id: `MOCK_STU_${index + 1}`,
-      rollNumber: `R${String(index + 1).padStart(3, '0')}`,
-      name,
-      className: '8',
-      section: 'B',
-      fatherName: `Mr. ${name.split(' ')[1] || 'Parent'}`,
-      motherName: `Mrs. ${name.split(' ')[1] || 'Parent'}`,
-    }));
-
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/student/all', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      let fetchedStudents = response.data.data || [];
-
-      if (fetchedStudents.length === 0) {
-        fetchedStudents = generateMockStudents();
-      }
-
+      const fetchedStudents = await loadTeacherStudents(currentUser, classes);
       setStudents(fetchedStudents);
     } catch (error) {
       console.error('Error fetching students:', error);
-      setStudents(generateMockStudents());
     }
   };
 
@@ -132,27 +90,20 @@ const Communication = ({ currentUser }) => {
 
   const fetchAnnouncements = async () => {
     try {
-      // Mock data for announcements
-      setAnnouncements([
-        {
-          id: 1,
-          title: 'School Assembly Tomorrow',
-          content: 'There will be a school assembly tomorrow at 9 AM in the main hall.',
-          date: '2024-01-15',
-          author: 'Principal',
-          priority: 'high'
+      const response = await axios.get(apiUrl('/api/communication/announcements'), {
+        params: {
+          createdBy: currentUser?._id || '',
+          role: 'all',
+          limit: 20,
         },
-        {
-          id: 2,
-          title: 'Math Test Postponed',
-          content: 'The math test scheduled for Friday has been postponed to Monday.',
-          date: '2024-01-14',
-          author: 'Math Department',
-          priority: 'medium'
-        }
-      ]);
+        timeout: 3000,
+      });
+
+      const loadedAnnouncements = response?.data?.data || [];
+      setAnnouncements(Array.isArray(loadedAnnouncements) ? loadedAnnouncements : []);
     } catch (error) {
       console.error('Error fetching announcements:', error);
+      setAnnouncements([]);
     }
   };
 
@@ -203,24 +154,35 @@ const Communication = ({ currentUser }) => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const response = await axios.post(apiUrl('/api/communication/announcement'), {
+        title: messageData.subject,
+        content: messageData.message,
+        priority: messageData.priority,
+        recipientType: messageData.recipientType,
+        recipientId: messageData.recipientId,
+        targetClassId: resolveTargetClassId(),
+        createdBy: currentUser?._id || '',
+        authorName: currentUser?.name || 'Teacher',
+      }, {
+        timeout: 3000,
+      });
 
-      // Mock API call
-      setTimeout(() => {
-        setSuccess('Announcement sent successfully!');
-        setMessageData({
-          recipientType: 'class',
-          recipientId: '',
-          subject: '',
-          message: '',
-          priority: 'medium'
-        });
-        setLoading(false);
-        setTimeout(() => setSuccess(''), 3000);
-      }, 1000);
+      const savedAnnouncement = response?.data?.data;
+      setAnnouncements(prev => (savedAnnouncement ? [savedAnnouncement, ...prev] : prev));
+      setSuccess('Announcement sent successfully!');
+      setMessageData({
+        recipientType: 'class',
+        recipientId: '',
+        subject: '',
+        message: '',
+        priority: 'medium'
+      });
+      setLoading(false);
+      setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Error sending announcement:', error);
       setLoading(false);
+      alert(error?.response?.data?.error || 'Failed to send announcement');
     }
   };
 
@@ -232,24 +194,35 @@ const Communication = ({ currentUser }) => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const response = await axios.post(apiUrl('/api/communication/announcement'), {
+        title: messageData.subject,
+        content: messageData.message,
+        priority: messageData.priority,
+        recipientType: messageData.recipientType,
+        recipientId: messageData.recipientId,
+        targetClassId: resolveTargetClassId(),
+        createdBy: currentUser?._id || '',
+        authorName: currentUser?.name || 'Teacher',
+      }, {
+        timeout: 3000,
+      });
 
-      // Mock API call
-      setTimeout(() => {
-        setSuccess('Message sent successfully!');
-        setMessageData({
-          recipientType: 'class',
-          recipientId: '',
-          subject: '',
-          message: '',
-          priority: 'medium'
-        });
-        setLoading(false);
-        setTimeout(() => setSuccess(''), 3000);
-      }, 1000);
+      const savedMessage = response?.data?.data;
+      setAnnouncements(prev => (savedMessage ? [savedMessage, ...prev] : prev));
+      setSuccess('Message sent successfully!');
+      setMessageData({
+        recipientType: 'class',
+        recipientId: '',
+        subject: '',
+        message: '',
+        priority: 'medium'
+      });
+      setLoading(false);
+      setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Error sending message:', error);
       setLoading(false);
+      alert(error?.response?.data?.error || 'Failed to send message');
     }
   };
 
@@ -276,6 +249,49 @@ const Communication = ({ currentUser }) => {
       (student.rollNumber && student.rollNumber.toLowerCase().includes(studentSearchTerm.toLowerCase()))
     );
   });
+
+  const extractClassNumber = (value) => {
+    const match = String(value || '').match(/\d+/);
+    return match ? String(parseInt(match[0], 10)) : '';
+  };
+
+  const normalizeSection = (value) => String(value || '').trim().toUpperCase() || 'A';
+
+  const buildAdminClassId = (className, section) => {
+    const classNumber = extractClassNumber(className);
+    const normalizedSection = normalizeSection(section);
+    return classNumber ? `admin-class-${classNumber}-${normalizedSection}` : '';
+  };
+
+  const resolveFallbackTeacherClassId = () => {
+    return buildAdminClassId(
+      currentUser?.assignedClass || currentUser?.className || currentUser?.class || currentUser?.std || getAssignedTeacherClassNumber(currentUser),
+      currentUser?.division || currentUser?.section || getAssignedTeacherSection(currentUser)
+    );
+  };
+
+  const resolveStudentClassId = (student) => {
+    if (!student) return '';
+    return buildAdminClassId(
+      student.className || student.class || student.grade || currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser),
+      student.section || student.division || currentUser?.division || getAssignedTeacherSection(currentUser)
+    );
+  };
+
+  const resolveTargetClassId = () => {
+    if (messageData.recipientType === 'class') {
+      const selectedClass = classes.find(c => String(c._id) === String(messageData.recipientId));
+      return (
+        buildAdminClassId(
+          selectedClass?.className || selectedClass?.class || selectedClass?.std || currentUser?.assignedClass || messageData.recipientId,
+          selectedClass?.section || selectedClass?.division || currentUser?.division || 'A'
+        ) || resolveFallbackTeacherClassId()
+      );
+    }
+
+    const selectedStudent = students.find(student => String(student._id) === String(messageData.recipientId));
+    return resolveStudentClassId(selectedStudent) || resolveFallbackTeacherClassId();
+  };
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { apiUrl } from '../../config/api';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
+import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const MarksManagement = ({ currentUser }) => {
   const [classes, setClasses] = useState([]);
@@ -41,47 +44,22 @@ const MarksManagement = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 1000
-      });
-      let filteredClasses = response.data.data.filter(cls => ['8', '9', '10'].includes(cls.className));
-
-      const mockClass = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: subjectList
-      };
-
-      if (!filteredClasses || filteredClasses.length === 0) {
-        filteredClasses = [mockClass];
-      }
-      setClasses(filteredClasses);
+      const loadedClasses = await loadTeacherClasses(currentUser);
+      setClasses(loadedClasses);
       setSubjects(subjectList);
 
-      // Auto-select Class 8 - B for this user
-      if (filteredClasses.length > 0) {
-        setSelectedClass(filteredClasses[0]._id);
+      if (loadedClasses.length > 0) {
+        setSelectedClass(loadedClasses[0]._id);
       }
     } catch (error) {
-      const mockClass = {
-        _id: 'mock_class_8b',
-        className: '8',
-        section: 'B',
-        subjects: subjectList
-      };
-      setClasses([mockClass]);
       setSubjects(subjectList);
-      setSelectedClass(mockClass._id);
     }
   };
 
   const fetchExams = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/teacher/exams?class=${selectedClass}`, {
+      const response = await axios.get(apiUrl(`/api/teacher/exams?class=${selectedClass}`), {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 1000
       });
@@ -92,7 +70,7 @@ const MarksManagement = ({ currentUser }) => {
         _id: 'mock_exam_1',
         examName: 'Mid Term Exam',
         examType: 'mid_term',
-        class: { className: '8', section: 'B' },
+        class: { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
         date: new Date().toISOString()
       }]);
       setSelectedExam('mock_exam_1');
@@ -100,23 +78,8 @@ const MarksManagement = ({ currentUser }) => {
   };
 
   const fetchStudentsInClass = async (classId) => {
-    const indianNames = [
-      "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-      "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-      "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-      "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-      "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-      "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-      "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-      "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen"
-    ];
-
-    const mockStudents = indianNames.map((name, index) => ({
-      _id: `MOCK_STU_${index + 1}`,
-      studentId: `STU${String(index + 1).padStart(3, '0')}`,
-      name: name
-    }));
-    setStudents(mockStudents);
+    const loadedStudents = await loadClassStudents(classId, currentUser, classes);
+    setStudents(loadedStudents);
   };
 
   const fetchMarks = async () => {
