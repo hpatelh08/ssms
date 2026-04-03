@@ -149,9 +149,12 @@ export default function StudentLoginPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(20,184,166,0.12),_transparent_22%),linear-gradient(180deg,_#f8fbff_0%,_#eef4ff_100%)] px-4 py-8 text-slate-900">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_24px_80px_rgba(37,99,235,0.12)] lg:grid-cols-[0.95fr_1.05fr]">
-        <aside className="flex flex-col justify-between bg-[linear-gradient(160deg,#0f172a_0%,#1d4ed8_55%,#2563eb_100%)] px-8 py-10 text-white sm:px-10 sm:py-12">
-          <div>
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_24px_80px_rgba(37,99,235,0.12)] lg:grid-cols-[1.02fr_0.98fr]">
+        <aside className="relative flex flex-col gap-8 overflow-hidden bg-[linear-gradient(160deg,#0f172a_0%,#1d4ed8_55%,#2563eb_100%)] px-8 py-10 text-white sm:px-10 sm:py-12">
+          <div className="pointer-events-none absolute -top-24 right-[-6rem] h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-5rem] left-[-4rem] h-56 w-56 rounded-full bg-cyan-300/15 blur-3xl" />
+
+          <div className="relative z-10">
             <div className="mb-6 inline-flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
               <span className="text-2xl">🎓</span>
               <div>
@@ -182,7 +185,7 @@ export default function StudentLoginPage() {
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+          <div className="relative z-10 mt-auto rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
             <p className="text-sm font-semibold text-white/90">Demo credentials</p>
             <div className="mt-4 space-y-2">
               {demoStudents.map((student) => (
@@ -203,7 +206,7 @@ export default function StudentLoginPage() {
           </div>
         </aside>
 
-        <section className="flex items-center justify-center px-5 py-10 sm:px-10">
+        <section className="flex items-start justify-center px-5 py-10 sm:px-10 lg:py-12">
           <div className="w-full max-w-xl">
             <div className="mb-8 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm">
