@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Send, Users, Mail, MessageCircle, Bell, UserPlus, Hash, AtSign, Search, ChevronDown } from 'lucide-react';
 import { apiUrl } from '../../config/api';
-import { matchesAssignedTeacherClass } from '../../config/teacherClasses';
-import { loadTeacherClasses, loadTeacherStudents } from '../../services/teacherBackendData';
+import { matchesAssignedTeacherClass } from '../../teacherIdentity';
+import { loadTeacherClasses, loadTeacherStudents } from '../../teacherAdminData';
 
 const Communication = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState('compose'); // compose, announcements

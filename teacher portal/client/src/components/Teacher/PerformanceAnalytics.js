@@ -3,8 +3,9 @@ import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Line, RadialBarChart, RadialBar } from 'recharts';
 import { TrendingUp, AlertTriangle, Users, MessageCircle, BarChart2, Award, CheckCircle2 } from 'lucide-react';
 import { apiUrl } from '../../config/api';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
-import { loadTeacherClasses, loadTeacherStudents } from '../../services/teacherBackendData';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
+import { loadTeacherClasses, loadTeacherStudents } from '../../teacherAdminData';
+import { readSyllabusAnalyticsForClass } from '../../utils/syllabusAnalytics';
 
 const PerformanceAnalytics = ({ currentUser }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -14,6 +15,7 @@ const PerformanceAnalytics = ({ currentUser }) => {
   const [hoveredSubject, setHoveredSubject] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [classroomStudents, setClassroomStudents] = useState([]);
+  const [syllabusSyncTick, setSyllabusSyncTick] = useState(0);
   const chartRef = React.useRef(null);
 
   const handleSegmentHover = (e, sub) => {
@@ -26,6 +28,25 @@ const PerformanceAnalytics = ({ currentUser }) => {
 
   useEffect(() => {
     fetchAnalyticsData();
+  }, []);
+
+  useEffect(() => {
+    const refreshSyllabusAnalytics = () => {
+      setSyllabusSyncTick((tick) => tick + 1);
+    };
+
+    const handleStorageChange = (event) => {
+      if (event?.key && !String(event.key).startsWith('syllabus-data-')) return;
+      refreshSyllabusAnalytics();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('syllabus-data-updated', refreshSyllabusAnalytics);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('syllabus-data-updated', refreshSyllabusAnalytics);
+    };
   }, []);
 
   useEffect(() => {
@@ -59,99 +80,38 @@ const PerformanceAnalytics = ({ currentUser }) => {
       setLoading(false);
     }
   };
-
-  // Fallback to mock data if actual data is unavailable or has errors
+  // Use actual analytics data only; otherwise keep empty state.
   const effectiveData = analyticsData || {
-    classPerformance: [
-      { className: '8', section: 'B', averagePercentage: 78, highestScore: 95, lowestScore: 45 }
-    ],
-    subjectPerformance: [
-      { subjectName: 'Math', averagePercentage: 85, highestScore: 100, lowestScore: 60 },
-      { subjectName: 'Science', averagePercentage: 72, highestScore: 94, lowestScore: 35 },
-      { subjectName: 'English', averagePercentage: 90, highestScore: 98, lowestScore: 75 },
-      { subjectName: 'Hindi', averagePercentage: 88, highestScore: 96, lowestScore: 70 },
-      { subjectName: 'Gujarati', averagePercentage: 92, highestScore: 99, lowestScore: 80 },
-      { subjectName: 'Sanskrit', averagePercentage: 84, highestScore: 97, lowestScore: 65 }
-    ],
-    attendanceOverview: [
-      { className: '8', section: 'B', averageAttendance: 94 }
-    ],
-    gradeDistribution: [
-      { grade: 'A+', count: 4 },
-      { grade: 'A', count: 12 },
-      { grade: 'B', count: 15 },
-      { grade: 'C', count: 5 },
-      { grade: 'D', count: 2 },
-      { grade: 'F', count: 1 }
-    ],
-    weakStudents: [
-      { studentName: 'Aditya Dave', className: '8', section: 'B', averagePercentage: 38 }
-    ],
-    topPerformers: [
-      { studentName: 'Hetvi Patel', className: '8', section: 'B', averagePercentage: 96 },
-      { studentName: 'Vihan Mehta', className: '8', section: 'B', averagePercentage: 92 }
-    ],
-    weeklyAttendanceTrend: [
-      { date: '2026-02-23', percentage: 95, uniform: 90, icard: 94 }, // Monday
-      { date: '2026-02-24', percentage: 94, uniform: 91, icard: 95 }, // Tuesday
-      { date: '2026-02-25', percentage: 91, uniform: 88, icard: 92 }, // Wednesday
-      { date: '2026-02-26', percentage: 96, uniform: 94, icard: 96 }, // Thursday
-      { date: '2026-02-27', percentage: 94, uniform: 92, icard: 95 }, // Friday
-      { date: '2026-02-28', percentage: 93, uniform: 95, icard: 97 }  // Saturday
-    ],
-    syllabusStatus: [
-      { subjectName: 'Math', completionPercentage: 75 },
-      { subjectName: 'Science', completionPercentage: 60 },
-      { subjectName: 'English', completionPercentage: 85 },
-      { subjectName: 'Hindi', completionPercentage: 80 },
-      { subjectName: 'Gujarati', completionPercentage: 90 },
-      { subjectName: 'Sanskrit', completionPercentage: 70 }
-    ]
+    classPerformance: [],
+    subjectPerformance: [],
+    attendanceOverview: [],
+    gradeDistribution: [],
+    weakStudents: [],
+    topPerformers: [],
+    weeklyAttendanceTrend: [],
+    syllabusStatus: []
   };
 
   const overallStats = {
-    totalStudents: classroomStudents.length || (effectiveData.weakStudents?.length || 0) + (effectiveData.topPerformers?.length || 0) + 50,
-    averageClassPerformance: effectiveData.classPerformance.reduce((acc, cls) => acc + (cls.averagePercentage || 0), 0) / effectiveData.classPerformance.length,
-    overallAttendance: effectiveData.attendanceOverview.reduce((acc, cls) => acc + (cls.averageAttendance || 0), 0) / effectiveData.attendanceOverview.length,
+    totalStudents: classroomStudents.length,
+    averageClassPerformance: effectiveData.classPerformance.length
+      ? effectiveData.classPerformance.reduce((acc, cls) => acc + (cls.averagePercentage || 0), 0) / effectiveData.classPerformance.length
+      : 0,
+    overallAttendance: effectiveData.attendanceOverview.length
+      ? effectiveData.attendanceOverview.reduce((acc, cls) => acc + (cls.averageAttendance || 0), 0) / effectiveData.attendanceOverview.length
+      : 0,
     strongestSubject: effectiveData.subjectPerformance.sort((a, b) => b.averagePercentage - a.averagePercentage)[0]?.subjectName || 'N/A',
   };
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
 
-  // Read actual syllabus progress from ClassManagement localStorage
-  const getLiveSyllabusStatus = () => {
-    const className = currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser);
-    const section = currentUser?.division || getAssignedTeacherSection(currentUser);
-    const classKey = `${className}-${section}`;
-    const saved = localStorage.getItem(`syllabus-data-${classKey}`);
-    if (!saved) return null;
-    try {
-      const syllabusMap = JSON.parse(saved);
-      const subjectSummary = new Map();
-      Object.entries(syllabusMap).forEach(([key, chapters]) => {
-        const subjectName = key.replace(/-\d+$/, '').trim();
-        const totalTopics = chapters.reduce((s, ch) => s + ch.subTopics.length, 0);
-        const completedTopics = chapters.reduce((s, ch) => s + ch.subTopics.filter(t => t.completed).length, 0);
-        const completionPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
-        
-        const normalizedName = subjectName.toLowerCase();
-        if (subjectSummary.has(normalizedName)) {
-           const existing = subjectSummary.get(normalizedName);
-           existing.totalTopics += totalTopics;
-           existing.completedTopics += completedTopics;
-        } else {
-           subjectSummary.set(normalizedName, { subjectName, totalTopics, completedTopics });
-        }
-      });
-      return Array.from(subjectSummary.values()).map(stats => ({
-        subjectName: stats.subjectName,
-        completionPercentage: stats.totalTopics > 0 ? Math.round((stats.completedTopics / stats.totalTopics) * 100) : 0
-      }));
-    } catch { return null; }
-  };
-
-  const liveSyllabus = getLiveSyllabusStatus();
-  const syllabusData = liveSyllabus || effectiveData.syllabusStatus;
+  const className = currentUser?.assignedClass || getAssignedTeacherClassNumber(currentUser);
+  const section = currentUser?.division || getAssignedTeacherSection(currentUser);
+  const liveSyllabus = readSyllabusAnalyticsForClass(className, section).map((item) => ({
+    subjectName: item.subjectName,
+    completionPercentage: item.percent
+  }));
+  const syllabusData = liveSyllabus.length > 0 ? liveSyllabus : effectiveData.syllabusStatus;
 
   // Dynamically compute failed students from localStorage marks data
   const getFailedStudents = () => {
@@ -221,7 +181,7 @@ const PerformanceAnalytics = ({ currentUser }) => {
         </div>
         {!analyticsData && (
           <span className="px-4 py-1.5 bg-blue-50 text-blue-600 text-sm font-semibold rounded-full border border-blue-100 flex items-center gap-2">
-            <TrendingUp size={16} /> Data Mode: Simulated
+            <TrendingUp size={16} /> No live analytics available
           </span>
         )}
       </div>

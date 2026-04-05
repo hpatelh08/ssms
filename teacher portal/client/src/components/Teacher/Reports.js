@@ -4,8 +4,8 @@ import { Download, FileText, Users, BookOpen, Calendar, Filter, Printer, Eye, Sh
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
-import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
+import { loadClassStudents, loadTeacherClasses } from '../../teacherAdminData';
 
 const Reports = ({ currentUser }) => {
   const [reports, setReports] = useState([]);
@@ -73,7 +73,7 @@ const Reports = ({ currentUser }) => {
     const section = currentUser?.division || getAssignedTeacherSection(currentUser);
     const idx = students.findIndex(s => s._id === student._id);
     const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-    const age = student.age || 14 + (idx % 4);
+    const age = student.age || '';
 
     // Personal Details
     const personal = {
@@ -84,11 +84,11 @@ const Reports = ({ currentUser }) => {
       age,
       dateOfBirth: student.dateOfBirth
         ? new Date(student.dateOfBirth).toLocaleDateString('en-IN')
-        : new Date(2026 - age, idx % 12, (idx % 28) + 1).toLocaleDateString('en-IN'),
-      fatherName: student.fatherName || student.parentName || `Mr. ${student.name.split(' ')[1] || 'Parent'}`,
+        : '',
+      fatherName: student.fatherName || student.parentName || '',
       motherName: student.motherName || '-',
       phone: student.parentPhone || student.phone || '',
-      address: student.address || `Street ${idx + 1}, City`
+      address: student.address || ''
     };
 
     // Health Record
@@ -100,7 +100,6 @@ const Reports = ({ currentUser }) => {
     };
 
     // All Subject Marks from localStorage
-    const subjectNames = ['Mathematics', 'Science', 'English', 'Hindi', 'Gujarati', 'Sanskrit'];
     const marksData = [];
     // Check all graded-marks keys
     for (let i = 0; i < localStorage.length; i++) {
@@ -117,14 +116,7 @@ const Reports = ({ currentUser }) => {
         } catch { /* skip */ }
       }
     }
-    // If no localStorage marks, generate mock marks
-    if (marksData.length === 0) {
-      subjectNames.forEach(sub => {
-        marksData.push({ examId: 'Mid Term', subject: sub, marks: 60 + Math.floor(Math.random() * 35) });
-      });
-    }
 
-    // Assignment Submissions from localStorage
     const assignmentData = [];
     const teacherEmail = currentUser?.email || '';
     try {
@@ -145,22 +137,6 @@ const Reports = ({ currentUser }) => {
         });
       });
     } catch { /* skip */ }
-    // If no localStorage assignments, generate mock
-    if (assignmentData.length === 0) {
-      subjectNames.slice(0, 4).forEach(sub => {
-        const submitted = Math.random() > 0.2;
-        assignmentData.push({
-          title: `${sub} Assignment`,
-          subject: sub,
-          dueDate: new Date(2026, 2, Math.floor(Math.random() * 28) + 1).toLocaleDateString('en-IN'),
-          status: submitted ? 'Submitted' : 'Not Submitted',
-          marks: submitted ? `${65 + Math.floor(Math.random() * 30)}` : '-',
-          remarks: submitted ? 'Good' : '-'
-        });
-      });
-    }
-
-    // Attendance from localStorage
     let totalDays = 0, presentDays = 0, absentDays = 0, uniformYes = 0, idCardYes = 0;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -176,14 +152,6 @@ const Reports = ({ currentUser }) => {
           }
         } catch { /* skip */ }
       }
-    }
-    // If no localStorage attendance, generate mock
-    if (totalDays === 0) {
-      totalDays = 220;
-      presentDays = 180 + (idx % 35);
-      absentDays = totalDays - presentDays;
-      uniformYes = presentDays - (idx % 5);
-      idCardYes = presentDays - (idx % 3);
     }
 
     const attendance = {
@@ -393,20 +361,17 @@ const Reports = ({ currentUser }) => {
   };
 
   const getReportData = (report) => {
-    // Shared mock students for the report content
-    const reportStudents = report.isIndividual
-      ? [{ id: '1', rollNo: report.studentId || '101', name: report.studentName, attendance: '95%', marks: '88', status: 'Completed', grade: 'A' }]
-      : students.slice(0, 15).map((s, idx) => ({
+    return report.isIndividual
+      ? [{ id: '1', rollNo: report.studentId || '', name: report.studentName || '', attendance: '', marks: '', status: '', grade: '' }]
+      : students.map((s, idx) => ({
         id: idx + 1,
-        rollNo: s.studentId,
-        name: s.name,
-        attendance: `${85 + Math.floor(Math.random() * 15)}%`,
-        marks: `${70 + Math.floor(Math.random() * 30)}`,
-        status: Math.random() > 0.2 ? 'Completed' : 'Pending',
-        grade: ['A+', 'A', 'B+', 'B'][Math.floor(Math.random() * 4)]
+        rollNo: s.studentId || '',
+        name: s.name || '',
+        attendance: '',
+        marks: '',
+        status: '',
+        grade: ''
       }));
-
-    return reportStudents;
   };
 
   const handleDownload = (report) => {

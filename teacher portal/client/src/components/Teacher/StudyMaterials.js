@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, Upload, Download, Edit, Trash2, Eye, BookOpen } from 'lucide-react';
 import { apiUrl } from '../../config/api';
-import { buildMockTeacherClass, filterSupportedTeacherClasses, matchesAssignedTeacherClass } from '../../config/teacherClasses';
+import { matchesAssignedTeacherClass } from '../../teacherIdentity';
+import { loadTeacherClasses } from '../../services/teacherBackendData';
 
 const StudyMaterials = ({ currentUser }) => {
   const [materials, setMaterials] = useState([]);
@@ -19,6 +20,31 @@ const StudyMaterials = ({ currentUser }) => {
     file: null,
     externalLink: ''
   });
+
+  const getLocalMaterialsKey = () => {
+    const teacherKey = String(currentUser?.teacherId || currentUser?.email || currentUser?.name || 'default').trim();
+    return `study-materials-local-${teacherKey || 'default'}`;
+  };
+
+  const saveLocalMaterials = (items) => {
+    localStorage.setItem(getLocalMaterialsKey(), JSON.stringify(items));
+  };
+
+  const loadLocalMaterials = () => {
+    try {
+      const saved = localStorage.getItem(getLocalMaterialsKey());
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const isAuthFailure = (error) => {
+    const status = error?.response?.status;
+    const message = String(error?.response?.data?.error || error?.message || '').toLowerCase();
+    return status === 401 || status === 403 || message.includes('invalid token') || message.includes('access denied');
+  };
 
   useEffect(() => {
     fetchStudyMaterials();
@@ -39,14 +65,51 @@ const StudyMaterials = ({ currentUser }) => {
   }, [classes, currentUser]);
 
   useEffect(() => {
-    if (formData.class) {
-      const selectedClass = classes.find(c => c._id === formData.class);
-      if (selectedClass) {
-        setSubjects(selectedClass.subjects || []);
+    const loadSubjectsForClass = async () => {
+      if (!formData.class) {
+        setSubjects([]);
+        return;
       }
-    } else {
-      setSubjects([]);
-    }
+
+      const selectedClass = classes.find(c => c._id === formData.class);
+      if (!selectedClass) {
+        setSubjects([]);
+        return;
+      }
+
+      try {
+        const std = String(selectedClass.className || '').match(/\d+/)?.[0] || '';
+        const section = String(selectedClass.section || '').trim().toUpperCase();
+        if (std && section) {
+          const response = await axios.get(apiUrl('/api/class/timetable'), {
+            params: { std, section },
+            timeout: 4000
+          });
+          const schedule = response?.data?.data?.schedule || {};
+          const subjectSet = new Set();
+          Object.values(schedule).forEach((slots) => {
+            (slots || []).forEach((slot) => {
+              if (slot?.isBreak || !slot?.subject) return;
+              subjectSet.add(String(slot.subject).trim());
+            });
+          });
+          const subjectList = Array.from(subjectSet)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+            .map((name) => ({ _id: name, subjectName: name }));
+          if (subjectList.length) {
+            setSubjects(subjectList);
+            return;
+          }
+        }
+      } catch {
+        // Fall back to stored class subjects.
+      }
+
+      setSubjects(selectedClass.subjects || []);
+    };
+
+    loadSubjectsForClass();
   }, [formData.class, classes]);
 
   const [subjects, setSubjects] = useState([]);
@@ -63,31 +126,16 @@ const StudyMaterials = ({ currentUser }) => {
 
   const fetchClasses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(apiUrl('/api/teacher/classes'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 10000
-      });
-      let filteredClasses = filterSupportedTeacherClasses(response.data.data || []);
-      const assignedClasses = filteredClasses.filter((cls) => matchesAssignedTeacherClass(cls, currentUser));
-      if (assignedClasses.length > 0) filteredClasses = assignedClasses;
-      if (!filteredClasses || filteredClasses.length === 0) {
-        throw new Error('No classes returned');
+      const loadedClasses = await loadTeacherClasses(currentUser);
+      const assignedClasses = loadedClasses.filter((cls) => matchesAssignedTeacherClass(cls, currentUser));
+      if (assignedClasses.length > 0) {
+        setClasses(assignedClasses);
+      } else {
+        setClasses(loadedClasses);
       }
-      setClasses(filteredClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
-      const mockFallbackClass = buildMockTeacherClass(currentUser, [
-        { _id: 'sub_1', subjectName: 'Math', teacher: { name: 'Teacher 1' } },
-        { _id: 'sub_2', subjectName: 'Science', teacher: { name: 'Teacher 2' } },
-        { _id: 'sub_3', subjectName: 'English', teacher: { name: 'Teacher 3' } },
-        { _id: 'sub_4', subjectName: 'Hindi', teacher: { name: 'Teacher 4' } },
-        { _id: 'sub_5', subjectName: 'Gujarati', teacher: { name: 'Teacher 5' } },
-        { _id: 'sub_6', subjectName: 'Sanskrit', teacher: { name: 'Teacher 6' } }
-      ]);
-      setClasses([mockFallbackClass]);
+      setClasses([]);
     }
   };
 
@@ -100,9 +148,15 @@ const StudyMaterials = ({ currentUser }) => {
         },
         timeout: 10000
       });
-      setMaterials(response.data.data);
+      const serverMaterials = Array.isArray(response.data.data) ? response.data.data : [];
+      const localMaterials = loadLocalMaterials();
+      setMaterials([...localMaterials, ...serverMaterials]);
     } catch (error) {
       console.error('Error fetching study materials:', error);
+      if (isAuthFailure(error)) {
+        localStorage.removeItem('token');
+      }
+      setMaterials(loadLocalMaterials());
     }
   };
 
@@ -172,20 +226,26 @@ const StudyMaterials = ({ currentUser }) => {
       setUploading(false);
     } catch (error) {
       console.error('Error uploading study material:', error);
-      if (!error?.response) {
-        const selectedClass = classes.find((cls) => cls._id === formData.class);
-        const selectedSubject = subjects.find((subject) => subject._id === formData.subject);
+      const selectedClass = classes.find((cls) => cls._id === formData.class);
+      const selectedSubject = subjects.find((subject) => subject._id === formData.subject);
+      const canUseLocalFallback = !error?.response || error?.response?.status >= 500 || isAuthFailure(error);
 
+      if (canUseLocalFallback) {
+        if (isAuthFailure(error)) {
+          localStorage.removeItem('token');
+        }
         const localMaterial = {
           _id: `LOCAL_MATERIAL_${Date.now()}`,
           title: formData.title,
           description: formData.description,
           materialType: formData.materialType,
           class: {
+            _id: selectedClass?._id || formData.class || '',
             className: selectedClass?.className || 'N/A',
             section: selectedClass?.section || 'N/A'
           },
           subject: {
+            _id: selectedSubject?._id || formData.subject || '',
             subjectName: selectedSubject?.subjectName || 'N/A'
           },
           file: formData.file
@@ -200,6 +260,8 @@ const StudyMaterials = ({ currentUser }) => {
           isLocalFallback: true
         };
 
+        const updatedLocalMaterials = [localMaterial, ...loadLocalMaterials()];
+        saveLocalMaterials(updatedLocalMaterials);
         setMaterials((prev) => [localMaterial, ...prev]);
         setFormData({
           title: '',
@@ -212,9 +274,9 @@ const StudyMaterials = ({ currentUser }) => {
         });
         setShowForm(false);
         setUploading(false);
-        alert('Server unavailable. Material added locally. Start backend + MongoDB for permanent upload.');
         return;
       }
+
       const message = error?.response?.data?.error || 'Failed to upload study material';
       alert(message);
       setUploading(false);
@@ -233,6 +295,12 @@ const StudyMaterials = ({ currentUser }) => {
         fetchStudyMaterials();
       } catch (error) {
         console.error('Error deleting study material:', error);
+        if (isAuthFailure(error)) {
+          localStorage.removeItem('token');
+        }
+        const localMaterials = loadLocalMaterials().filter((item) => item._id !== id);
+        saveLocalMaterials(localMaterials);
+        setMaterials((prev) => prev.filter((item) => item._id !== id));
       }
     }
   };

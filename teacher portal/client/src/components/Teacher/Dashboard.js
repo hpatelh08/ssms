@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import {
   BookOpen,
   Users,
@@ -25,15 +26,75 @@ import {
   User,
   Plus
 } from 'lucide-react';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
-import { fetchTeacherTeachingTimetable } from '../../services/timetable';
-import { loadTeacherNotifications } from '../../services/teacherBackendData';
-import { findTeacherByIdentity } from '../../data/teachers';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
+import { fetchTeacherTeachingTimetable } from '../../teacherTimetable';
+import { loadTeacherNotifications } from '../../teacherAdminData';
+import { apiUrl } from '../../config/api';
+import {
+  normalizeSubjectKey,
+  readSyllabusAnalyticsForClass
+} from '../../utils/syllabusAnalytics';
+
+function getAdminBackendBaseUrl() {
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:5000';
+  }
+  const host = window.location.hostname || '127.0.0.1';
+  return `${window.location.protocol}//${host}:5000`;
+}
+
+function normalizeLookup(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function shouldResolveTeacherProfile(user) {
+  const teacherId = String(user?.teacherId || '').trim();
+  const email = String(user?.email || '').trim();
+  if (!teacherId && !email) return false;
+
+  const name = String(user?.name || '').trim();
+  if (!name) return true;
+  if (name.toLowerCase() === 'teacher') return true;
+  if (teacherId) return name === teacherId;
+  return name === email;
+}
+
+function parseTeacherClassFromAdmin(rawClass, rawDivision) {
+  const classText = String(rawClass || '').trim();
+  const divisionText = String(rawDivision || '').trim().toUpperCase();
+  const match = classText.match(/(\d+)\s*[- ]?\s*([A-Za-z])?$/);
+
+  if (!match) {
+    return {
+      assignedClass: classText,
+      division: divisionText
+    };
+  }
+
+  return {
+    assignedClass: match[1],
+    division: divisionText || String(match[2] || '').trim().toUpperCase()
+  };
+}
+
+function findTeacherRecord(teachers = [], user = {}) {
+  const teacherIdKey = normalizeLookup(user?.teacherId);
+  const emailKey = normalizeLookup(user?.email);
+
+  return teachers.find((teacher) => {
+    const idKey = normalizeLookup(teacher?.teacher_id || teacher?.teacherId || teacher?.emp || teacher?.id);
+    const email = normalizeLookup(teacher?.email);
+    return (teacherIdKey && idKey && teacherIdKey === idKey) || (emailKey && emailKey === email);
+  });
+}
 
 const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const LECTURE_DURATION_MINUTES = 40;
-  const assignedClassNumber = getAssignedTeacherClassNumber(currentUser);
-  const assignedSection = getAssignedTeacherSection(currentUser);
+  const [resolvedTeacher, setResolvedTeacher] = useState(null);
+
+  const activeTeacher = resolvedTeacher || currentUser;
+  const assignedClassNumber = getAssignedTeacherClassNumber(activeTeacher);
+  const assignedSection = getAssignedTeacherSection(activeTeacher);
   const assignedClassLabel = `${assignedClassNumber}-${assignedSection}`;
   const timetableDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -64,10 +125,13 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     'Science Lab': 'Run acid-base indicator practical and record observations in lab notebook.'
   };
 
-  const matchedTeacher = findTeacherByIdentity(currentUser || {});
-  const teacherDisplayName = currentUser?.name || matchedTeacher?.name || currentUser?.teacherId || currentUser?.email || 'Teacher';
+  const teacherDisplayName = activeTeacher?.name || 'Teacher';
+  const teacherIdentifier = activeTeacher?.teacherId || activeTeacher?.email || '';
+  const teacherAssignedClass = activeTeacher?.assignedClass || '';
+  const teacherDivision = activeTeacher?.division || '';
+  const teacherSubject = activeTeacher?.subject || '';
 
-  const getPtmStorageKey = () => `teacher-ptm-meetings-${currentUser?.email || 'default'}`;
+  const getPtmStorageKey = () => `teacher-ptm-meetings-${teacherIdentifier || 'default'}`;
 
   const getTodayIsoLocal = () => {
     const today = new Date();
@@ -107,11 +171,80 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const [timetableNote, setTimetableNote] = useState('');
   const [timetableError, setTimetableError] = useState('');
   const [timetableLoading, setTimetableLoading] = useState(false);
+  const [classSubjectSet, setClassSubjectSet] = useState(null);
   const [teacherNotifications, setTeacherNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [syllabusSyncTick, setSyllabusSyncTick] = useState(0);
 
   // Attendance summary from localStorage
   const [attendanceSummary, setAttendanceSummary] = useState({ present: 0, absent: 0, total: 0, uniformYes: 0, uniformNo: 0, idCardYes: 0, idCardNo: 0 });
+
+  useEffect(() => {
+    if (!currentUser || !shouldResolveTeacherProfile(currentUser)) return;
+
+    let cancelled = false;
+    let retryTimer = null;
+    const resolveTeacherProfile = async () => {
+      try {
+        const response = await axios.get(apiUrl('/api/auth/teacher-lookup'), {
+          params: { teacherId: currentUser.teacherId || currentUser.email || '' },
+          timeout: 4000
+        });
+        const match = response?.data?.user;
+        if (!match || cancelled) return;
+
+        const parsedClass = parseTeacherClassFromAdmin(match.class, match.division);
+        const updatedTeacher = {
+          ...currentUser,
+          name: String(match.name || currentUser.name || '').trim() || currentUser.name,
+          email: String(match.email || currentUser.email || '').trim(),
+          teacherId: String(currentUser.teacherId || match.teacher_id || match.emp || match.email || '').trim(),
+          assignedClass: String(currentUser.assignedClass || parsedClass.assignedClass || '').trim(),
+          division: String(currentUser.division || parsedClass.division || '').trim().toUpperCase(),
+          subject: String(currentUser.subject || match.subject || '').trim()
+        };
+
+        if (!cancelled) {
+          setResolvedTeacher(updatedTeacher);
+          localStorage.setItem('user', JSON.stringify(updatedTeacher));
+        }
+      } catch {
+        try {
+          const response = await axios.get(`${getAdminBackendBaseUrl()}/api/master/teacher-data`, { timeout: 4000 });
+          const payload = response?.data?.data || response?.data || {};
+          const teachers = Array.isArray(payload) ? payload : Array.isArray(payload?.teachers) ? payload.teachers : [];
+          const match = findTeacherRecord(teachers, currentUser);
+          if (!match || cancelled) return;
+
+          const parsedClass = parseTeacherClassFromAdmin(match.class, match.division);
+          const updatedTeacher = {
+            ...currentUser,
+            name: String(match.name || currentUser.name || '').trim() || currentUser.name,
+            email: String(match.email || currentUser.email || '').trim(),
+            teacherId: String(currentUser.teacherId || match.teacher_id || match.emp || match.email || '').trim(),
+            assignedClass: String(currentUser.assignedClass || parsedClass.assignedClass || '').trim(),
+            division: String(currentUser.division || parsedClass.division || '').trim().toUpperCase(),
+            subject: String(currentUser.subject || match.subject || '').trim()
+          };
+
+          if (!cancelled) {
+            setResolvedTeacher(updatedTeacher);
+            localStorage.setItem('user', JSON.stringify(updatedTeacher));
+          }
+        } catch {
+          if (!cancelled) {
+            retryTimer = setTimeout(resolveTeacherProfile, 5000);
+          }
+        }
+      }
+    };
+
+    resolveTeacherProfile();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     const loadAttendanceSummary = () => {
@@ -156,12 +289,31 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   }, []);
 
   useEffect(() => {
+    const refreshSyllabusSummary = () => {
+      setSyllabusSyncTick((tick) => tick + 1);
+    };
+
+    const handleStorageChange = (event) => {
+      if (event?.key && !String(event.key).startsWith('syllabus-data-')) return;
+      refreshSyllabusSummary();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('syllabus-data-updated', refreshSyllabusSummary);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('syllabus-data-updated', refreshSyllabusSummary);
+    };
+  }, []);
+
+  useEffect(() => {
     const loadNotifications = async () => {
-      if (!currentUser) return;
+      if (!activeTeacher) return;
 
       try {
         setNotificationsLoading(true);
-        const notifications = await loadTeacherNotifications(currentUser, 5);
+        const notifications = await loadTeacherNotifications(activeTeacher, 5);
         setTeacherNotifications(Array.isArray(notifications) ? notifications : []);
       } catch (error) {
         console.error('Error loading teacher notifications:', error);
@@ -175,7 +327,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     const intervalId = setInterval(loadNotifications, 30000);
 
     return () => clearInterval(intervalId);
-  }, [currentUser]);
+  }, [activeTeacher, teacherIdentifier]);
 
   const parseTimeToMinutes = (timeText) => {
     const match = timeText?.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
@@ -237,11 +389,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
 
   useEffect(() => {
     const loadTeacherTimetable = async () => {
-      if (!currentUser) return;
+      if (!activeTeacher) return;
 
       try {
         setTimetableLoading(true);
-        const timetableData = await fetchTeacherTeachingTimetable(currentUser);
+        const timetableData = await fetchTeacherTeachingTimetable(activeTeacher);
         const schedule = timetableData.schedule || {};
         const mappedWeeklyTimetable = timetableDays.map((day) => ({
           day,
@@ -271,7 +423,32 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     };
 
     loadTeacherTimetable();
-  }, [currentUser, assignedClassNumber, assignedSection]);
+  }, [activeTeacher, assignedClassNumber, assignedSection]);
+
+  useEffect(() => {
+    const loadClassSubjects = async () => {
+      if (!assignedClassNumber || !assignedSection) return;
+      try {
+        const response = await axios.get(apiUrl('/api/class/timetable'), {
+          params: { std: assignedClassNumber, section: assignedSection },
+          timeout: 4000
+        });
+        const schedule = response?.data?.data?.schedule || {};
+        const subjectSet = new Set();
+        Object.values(schedule).forEach((slots) => {
+          (slots || []).forEach((slot) => {
+            if (slot?.isBreak || !slot?.subject) return;
+            subjectSet.add(normalizeSubjectKey(slot.subject));
+          });
+        });
+        setClassSubjectSet(subjectSet);
+      } catch {
+        setClassSubjectSet(null);
+      }
+    };
+
+    loadClassSubjects();
+  }, [assignedClassNumber, assignedSection]);
 
   useEffect(() => {
     const syncPtmPendingTasks = () => {
@@ -293,7 +470,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
       clearInterval(intervalId);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [currentUser?.email]);
+  }, [teacherIdentifier]);
 
   const todayName = currentTime.toLocaleDateString('en-US', { weekday: 'long' });
   const todaysClasses = weeklyTimetable.find((daySchedule) => daySchedule.day === todayName)?.lectures || [];
@@ -318,11 +495,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const pendingTasks = [...defaultPendingTasks, ...ptmPendingTasks];
   const highPriorityTaskCount = pendingTasks.filter((task) => task.priority === 'high').length;
 
-  const getTasksStorageKey = () => `teacher-todo-tasks-${currentUser?.email || 'default'}`;
+  const getTasksStorageKey = () => `teacher-todo-tasks-${teacherIdentifier || 'default'}`;
 
   const [todoTasks, setTodoTasks] = useState(() => {
     try {
-      const stored = localStorage.getItem(`teacher-todo-tasks-${currentUser?.email || 'default'}`);
+      const stored = localStorage.getItem(`teacher-todo-tasks-${teacherIdentifier || 'default'}`);
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -332,7 +509,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
 
   useEffect(() => {
     localStorage.setItem(getTasksStorageKey(), JSON.stringify(todoTasks));
-  }, [todoTasks, currentUser?.email]);
+  }, [todoTasks, teacherIdentifier]);
 
   const handleAddTask = () => {
     const trimmed = newTaskTitle.trim();
@@ -371,11 +548,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const recentAnnouncementsRef = useRef(null);
 
   useEffect(() => {
-    const storageKey = currentUser?.teacherId || currentUser?.email;
+    const storageKey = teacherIdentifier || 'default';
     if (!storageKey) return;
     const savedImage = localStorage.getItem(`teacher-profile-image-${storageKey}`) || '';
     setProfileImage(savedImage);
-  }, [currentUser?.teacherId, currentUser?.email]);
+  }, [teacherIdentifier]);
 
   useEffect(() => {
     if (!showProfileModal && !showTimetableModal) return undefined;
@@ -419,7 +596,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
       if (typeof imageData !== 'string') return;
 
       setProfileImage(imageData);
-      const storageKey = currentUser?.teacherId || currentUser?.email;
+      const storageKey = teacherIdentifier || 'default';
       if (storageKey) {
         localStorage.setItem(`teacher-profile-image-${storageKey}`, imageData);
       }
@@ -431,7 +608,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
 
   const handleProfileImageRemove = () => {
     setProfileImage('');
-    const storageKey = currentUser?.teacherId || currentUser?.email;
+    const storageKey = teacherIdentifier || 'default';
     if (storageKey) {
       localStorage.removeItem(`teacher-profile-image-${storageKey}`);
     }
@@ -683,58 +860,18 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   'group-hover:from-cyan-300 group-hover:to-teal-400',
                 ];
 
-                // Read all syllabus data from localStorage
-                const syllabusResults = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  if (key && key.startsWith('syllabus-data-')) {
-                    try {
-                      const data = JSON.parse(localStorage.getItem(key));
-                      // data is { "SubjectName-0": [{ chapterName, subTopics: [{ name, completed }] }] }
-                      Object.keys(data).forEach(subjectKey => {
-                        const subjectName = subjectKey.replace(/-\d+$/, '').trim();
-                        const chapters = data[subjectKey];
-                        let totalSubTopics = 0;
-                        let completedSubTopics = 0;
-                        chapters.forEach(ch => {
-                          ch.subTopics.forEach(st => {
-                            totalSubTopics++;
-                            if (st.completed) completedSubTopics++;
-                          });
-                        });
-                        const percent = totalSubTopics > 0 ? Math.round((completedSubTopics / totalSubTopics) * 100) : 0;
-                        syllabusResults.push({ subjectName, percent });
-                      });
-                    } catch { /* ignore */ }
-                  }
-                }
-
-                const normalizeSubjectName = (value = '') =>
-                  String(value)
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '');
-
-                // Keep only one entry per subject by averaging duplicate percentages.
-                const subjectSummaryMap = new Map();
-                syllabusResults.forEach(({ subjectName, percent }) => {
-                  const normalizedName = normalizeSubjectName(subjectName);
-                  const existing = subjectSummaryMap.get(normalizedName);
-                  if (existing) {
-                    existing.total += percent;
-                    existing.count += 1;
-                  } else {
-                    subjectSummaryMap.set(normalizedName, { displayTitle: subjectName, total: percent, count: 1 });
-                  }
-                });
-
-                const uniqueSyllabusResults = Array.from(subjectSummaryMap.values())
-                  .map(stats => ({
-                    subjectName: stats.displayTitle,
-                    percent: Math.round(stats.total / stats.count)
+                const uniqueSyllabusResults = readSyllabusAnalyticsForClass(assignedClassNumber, assignedSection)
+                  .map((item) => ({
+                    subjectName: item.subjectName,
+                    percent: item.percent
                   }))
                   .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 
-                if (uniqueSyllabusResults.length === 0) {
+                const filteredResults = classSubjectSet && classSubjectSet.size > 0
+                  ? uniqueSyllabusResults.filter((item) => classSubjectSet.has(normalizeSubjectKey(item.subjectName)))
+                  : uniqueSyllabusResults;
+
+                if (filteredResults.length === 0) {
                   // Fallback if no syllabus data
                   return (
                     <div className="text-center py-8 text-gray-400">
@@ -745,7 +882,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   );
                 }
 
-                return uniqueSyllabusResults.map((item, idx) => (
+                return filteredResults.map((item, idx) => (
                   <div key={idx} className="group">
                     <div className="flex justify-between text-sm mb-2 text-gray-700 font-bold">
                       <span>{item.subjectName}</span>
@@ -1103,11 +1240,15 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                         </span>
                         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
                           <BookOpen className="w-4 h-4" />
-                          Class {assignedClassNumber}
+                          Class {teacherAssignedClass || assignedClassNumber}
                         </span>
                         <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
                           <Users className="w-4 h-4" />
-                          Division {assignedSection}
+                          Division {teacherDivision || assignedSection}
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
+                          <Award className="w-4 h-4" />
+                          {teacherSubject || 'Teacher'}
                         </span>
                       </div>
 
@@ -1142,7 +1283,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                   <div className="mt-5 space-y-3 text-sm">
                     <p className="bg-white/90 border border-indigo-100 rounded-lg px-3 py-2 flex items-center gap-2 text-gray-700">
                       <Mail className="w-4 h-4 text-indigo-500" />
-                      {currentUser.teacherId || currentUser.email}
+                      {teacherIdentifier}
                     </p>
                     <p className="bg-white/90 border border-indigo-100 rounded-lg px-3 py-2 text-gray-700">
                       <span className="font-semibold">Total Today's Lectures:</span> {todaysLecturePlan.length}
@@ -1162,15 +1303,20 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                   <h4 className="text-base font-bold text-gray-800 mb-4">Today's Lecture Class and Time</h4>
                   <div className="space-y-3">
+                    {todaysLecturePlan.length === 0 && (
+                      <p className="text-sm text-gray-500">
+                        No lectures scheduled for {todayName}.
+                      </p>
+                    )}
                     {todaysLecturePlan.map((lecture) => (
-                      <div key={`lecture-${lecture.id}`} className="p-3 rounded-lg border border-gray-100 bg-gray-50/70">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-bold text-gray-800">{lecture.subject}</p>
-                            <p className="text-xs text-gray-600">Class {lecture.class} - {lecture.time}</p>
-                          </div>
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${getLectureStatusStyle(lecture.status)}`}>
-                            {lecture.status}
+                        <div key={`lecture-${lecture.id}`} className="p-3 rounded-lg border border-gray-100 bg-gray-50/70">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-bold text-gray-800">{lecture.subject}</p>
+                              <p className="text-xs text-gray-600">Class {lecture.class} - {lecture.time}</p>
+                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${getLectureStatusStyle(lecture.status)}`}>
+                              {lecture.status}
                           </span>
                         </div>
                       </div>
@@ -1183,6 +1329,11 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                   <h4 className="text-base font-bold text-gray-800 mb-4">What to Teach in Today's Classes</h4>
                   <div className="space-y-3">
+                    {todaysLecturePlan.length === 0 && (
+                      <p className="text-sm text-gray-500">
+                        No lectures scheduled for {todayName}.
+                      </p>
+                    )}
                     {todaysLecturePlan.map((lecture) => (
                       <div key={`plan-${lecture.id}`} className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3.5">
                         <p className="text-sm font-bold text-indigo-700 mb-1">

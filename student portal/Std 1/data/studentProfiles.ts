@@ -22,10 +22,10 @@ const STUDENT_PROFILES: StudentProfile[] = [
   {
     studentName: 'Student Name',
     className: 'Std 1',
-    admissionNumber: 'ADM-2024-101',
+    admissionNumber: 'ADM-2024-001',
     grNo: 'GR-1001',
-    studentId: 'STU2024101',
-    password: 'Sch@011',
+    studentId: 'STU20240001',
+    password: 'Stu@001',
     parentName: 'Parent Name',
     phone: '+91 98765 43210',
     dob: '2019-08-12',
@@ -35,7 +35,7 @@ const STUDENT_PROFILES: StudentProfile[] = [
     division: 'A',
     fatherName: 'Parent Name',
     status: 'Active',
-    parentAccessKey: '0011',
+    parentAccessKey: '0001',
     grade: 1,
   },
 ];

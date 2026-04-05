@@ -22,6 +22,9 @@ import { authenticate, isTeacher } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { verifyToken } from '../utils/jwt.js';
+import { findTeacherByIdentifier, getTeacherAssignedStudents } from '../utils/adminTeacherAuth.js';
+import { getAdminTeacherTimetable } from '../utils/adminTimetable.js';
 
 const router = express.Router();
 
@@ -61,6 +64,134 @@ const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+function getBearerToken(req) {
+  const header = req.header('Authorization') || '';
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function authenticateAdminTeacher(req, res, next) {
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
+    }
+
+    const decoded = verifyToken(token);
+    if (decoded?.role !== 'teacher') {
+      return res.status(403).json({ success: false, error: 'Access denied. Teacher privileges required.' });
+    }
+
+    const teacher = findTeacherByIdentifier(decoded.userId);
+    if (!teacher) {
+      return res.status(404).json({ success: false, error: 'Teacher not found.' });
+    }
+
+    req.teacher = teacher;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Invalid or expired teacher token.' });
+  }
+}
+
+router.get('/my-profile', authenticateAdminTeacher, (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      ...req.teacher,
+      assignedClass: req.teacher.assignedClass || req.teacher.classTeacherStd || '',
+      division: req.teacher.division || req.teacher.classTeacherDiv || '',
+    }
+  });
+});
+
+router.get('/my-students', authenticateAdminTeacher, (req, res) => {
+  const teacher = req.teacher;
+  const assignedClass = String(teacher?.classTeacherStd || teacher?.assignedClass || '').trim();
+  const assignedDivision = String(teacher?.classTeacherDiv || teacher?.division || '').trim().toUpperCase();
+
+  if (!assignedClass || !assignedDivision) {
+    return res.json({
+      success: true,
+      data: [],
+      teacher,
+      message: 'No class assigned.'
+    });
+  }
+
+  const students = getTeacherAssignedStudents(teacher);
+  return res.json({
+    success: true,
+    data: students,
+    teacher: {
+      ...teacher,
+      assignedClass,
+      division: assignedDivision,
+    },
+    class: {
+      standard: assignedClass,
+      division: assignedDivision,
+      classLabel: `${assignedClass}${assignedDivision}`,
+    }
+  });
+});
+
+// GET /api/teacher/timetable (auth required)
+router.get('/timetable', authenticateAdminTeacher, (req, res) => {
+  try {
+    const teacherName = String(req.teacher?.name || '').trim();
+    const timetable = getAdminTeacherTimetable(teacherName);
+    if (timetable.error) {
+      return res.status(400).json({ success: false, error: timetable.error });
+    }
+    return res.json({ success: true, data: timetable });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to load teacher timetable.', details: error.message });
+  }
+});
+
+// GET /api/teacher/timetable-public?teacherId=...&teacher=...
+router.get('/timetable-public', (req, res) => {
+  try {
+    const token = getBearerToken(req);
+    let teacherName = '';
+
+    if (token) {
+      try {
+        const decoded = verifyToken(token);
+        if (decoded?.role === 'teacher') {
+          const teacher = findTeacherByIdentifier(decoded.userId);
+          teacherName = String(teacher?.name || '').trim();
+        }
+      } catch {
+        // Ignore token errors and fall back to query params.
+      }
+    }
+
+    if (!teacherName) {
+      const teacherId = String(req.query.teacherId || '').trim();
+      const teacherRaw = String(req.query.teacher || '').trim();
+      if (teacherId) {
+        const teacher = findTeacherByIdentifier(teacherId);
+        teacherName = String(teacher?.name || '').trim();
+      }
+      if (!teacherName && teacherRaw) teacherName = teacherRaw;
+    }
+
+    if (!teacherName) {
+      return res.status(400).json({ success: false, error: 'Teacher name is required.' });
+    }
+
+    const timetable = getAdminTeacherTimetable(teacherName);
+    if (timetable.error) {
+      return res.status(400).json({ success: false, error: timetable.error });
+    }
+    return res.json({ success: true, data: timetable });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to load teacher timetable.', details: error.message });
+  }
 });
 
 // Teacher dashboard

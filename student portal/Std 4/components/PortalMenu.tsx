@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import { INITIAL_MESSAGES } from '../constants';
 
-type MenuTab = 'profile' | 'messages' | 'announcements';
+type MenuTab = 'messages' | 'announcements';
 
 const ANNOUNCEMENTS = [
   {
@@ -33,7 +33,7 @@ interface PortalMenuProps {
 const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<MenuTab>('profile');
+  const [tab, setTab] = useState<MenuTab>('messages');
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
         }}
         whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.94 }}
-        aria-label="Open profile and messages menu"
+        aria-label="Open messages menu"
       >
         <span className="text-[11px] font-black">{initials}</span>
       </motion.button>
@@ -92,7 +92,7 @@ const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
           >
             <div className="border-b border-slate-100 bg-gradient-to-br from-indigo-50 to-white px-5 py-4">
               <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-indigo-500">
-                Std 4 Profile
+                Student Menu
               </div>
               <div className="mt-2 text-[18px] font-black text-slate-900">{user.name}</div>
               <div className="mt-1 text-[12px] font-semibold text-slate-500">
@@ -100,9 +100,8 @@ const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
               </div>
             </div>
 
-            <div className="flex gap-2 px-4 pt-4">
+              <div className="flex gap-2 px-4 pt-4">
               {[
-                { id: 'profile', label: 'Profile' },
                 { id: 'messages', label: 'Messages' },
                 { id: 'announcements', label: 'Announcements' },
               ].map(item => (
@@ -123,15 +122,6 @@ const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
             </div>
 
             <div className="max-h-[320px] overflow-y-auto px-4 py-4">
-              {tab === 'profile' && (
-                <div className="space-y-3">
-                  <InfoRow label="Role" value={user.role} />
-                  <InfoRow label="Grade" value={`Std ${user.grade}`} />
-                  <InfoRow label="Username" value={user.username} />
-                  <InfoRow label="Display Name" value={user.name} />
-                </div>
-              )}
-
               {tab === 'messages' && (
                 <div className="space-y-3">
                   {INITIAL_MESSAGES.map(message => (
@@ -180,12 +170,5 @@ const PortalMenu: React.FC<PortalMenuProps> = ({ compact = false }) => {
     </div>
   );
 };
-
-const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-    <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">{label}</div>
-    <div className="mt-1 text-[13px] font-bold text-slate-800">{value}</div>
-  </div>
-);
 
 export default PortalMenu;

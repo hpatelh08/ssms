@@ -1500,30 +1500,46 @@
           </div>
         </div>
 
+        <div class="tt-view-toggle" style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px;">
+          <button class="btn btn-primary btn-sm" id="ttViewClassBtn">📘 Class Timetable</button>
+          <button class="btn btn-ghost btn-sm" id="ttViewTeacherBtn">👤 Teacher Timetable</button>
+        </div>
+
         <!-- Filters -->
         <div class="tt-filters">
-          <div class="tt-filter-group">
-            <label class="form-label">Standard</label>
-            <select class="form-control" id="ttStdSelect">
-              <option value="1" selected>Std 1</option>
-              <option value="2">Std 2</option>
-              <option value="3">Std 3</option>
-              <option value="4">Std 4</option>
-              <option value="5">Std 5</option>
-              <option value="6">Std 6</option>
-            </select>
+          <div id="ttClassFilters" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="tt-filter-group">
+              <label class="form-label">Standard</label>
+              <select class="form-control" id="ttStdSelect">
+                <option value="1" selected>Std 1</option>
+                <option value="2">Std 2</option>
+                <option value="3">Std 3</option>
+                <option value="4">Std 4</option>
+                <option value="5">Std 5</option>
+                <option value="6">Std 6</option>
+              </select>
+            </div>
+            <div class="tt-filter-group">
+              <label class="form-label">Section</label>
+              <select class="form-control" id="ttSecSelect">
+                <option value="A" selected>Section A</option>
+                <option value="B">Section B</option>
+                <option value="C">Section C</option>
+              </select>
+            </div>
           </div>
-          <div class="tt-filter-group">
-            <label class="form-label">Section</label>
-            <select class="form-control" id="ttSecSelect">
-              <option value="A" selected>Section A</option>
-              <option value="B">Section B</option>
-              <option value="C">Section C</option>
-            </select>
+          <div id="ttTeacherFilters" style="display:none;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="tt-filter-group">
+              <label class="form-label">Teacher</label>
+              <select class="form-control" id="ttTeacherSelect">
+                <option value="">Select teacher</option>
+              </select>
+            </div>
           </div>
           <div class="tt-filter-info">
             <span class="tt-badge-std" id="ttBadgeStd">Std 1</span>
             <span class="tt-badge-sec" id="ttBadgeSec">Section A</span>
+            <span class="tt-badge-sec" id="ttBadgeTeacher" style="display:none;">Teacher</span>
           </div>
         </div>
 

@@ -33,6 +33,8 @@ const SESSION_STORAGE_KEY = 'ssms_std6_student_session_v1';
 const LEGACY_ROLE_STORAGE_KEY = 'ssms_std6_auth_role_legacy';
 const ADMIN_TOKEN_STORAGE_KEY = 'ssms_std6_admin_token';
 const DEFAULT_USER: AuthUser = { role: 'student', grade: 6, name: 'Explorer' };
+const FORCE_PORTAL_PATH = '/student-portal/6';
+const FALLBACK_STUDENT_ID = 'STU20240601';
 
 interface PersistedSession {
   studentId?: string;
@@ -94,6 +96,17 @@ function loadPersistedState(): AuthState {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) {
+      if (window.location.pathname.startsWith(FORCE_PORTAL_PATH)) {
+        const profile = getStudentProfileById(FALLBACK_STUDENT_ID);
+        if (profile) {
+          return {
+            isAuthenticated: true,
+            user: profileToUser(profile, 'student'),
+            studentProfile: profile,
+            parentVerified: false,
+          };
+        }
+      }
       return { isAuthenticated: false, user: DEFAULT_USER, studentProfile: null, parentVerified: false };
     }
 

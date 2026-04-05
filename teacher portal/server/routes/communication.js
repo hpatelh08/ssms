@@ -13,7 +13,7 @@ function normalizeRecipientRole(recipientType = 'all') {
 }
 
 function normalizeClassId(value = '') {
-  return String(value || '').trim();
+  return String(value || '').trim().toLowerCase();
 }
 
 function normalizeAudienceLabel(recipientType = 'all') {
@@ -81,10 +81,6 @@ function serializeAnnouncement(announcement) {
     targetClassId: announcement.targetClassId || '',
     pinned: !!announcement.isPinned,
   };
-}
-
-function normalizeClassId(value = '') {
-  return String(value || '').trim().toLowerCase();
 }
 
 function serializeParentNotification(notification) {

@@ -2,8 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Users, BookOpen, Calendar, Edit, Eye, Trash2, Clock, Book, Target, User, Monitor, MapPin } from 'lucide-react';
 import axios from 'axios';
 import { apiUrl } from '../../config/api';
-import { fetchTeacherTeachingTimetable } from '../../services/timetable';
-import { loadTeacherClasses } from '../../services/teacherBackendData';
+import { fetchTeacherTimetable } from '../../services/timetable';
+import { fetchTeacherTeachingTimetable } from '../../teacherTimetable';
+import { loadTeacherClasses } from '../../teacherAdminData';
+import {
+  normalizeChapterStatus,
+  computeChapterProgress
+} from '../../utils/syllabusAnalytics';
 
 const ADMIN_TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const ADMIN_TIMETABLE_ROWS = [
@@ -187,6 +192,7 @@ const ClassManagement = ({ currentUser }) => {
   const [classTimetableNote, setClassTimetableNote] = useState('');
   const [classTimetableError, setClassTimetableError] = useState('');
   const [classTimetableLoading, setClassTimetableLoading] = useState(false);
+  const [syllabusSubjects, setSyllabusSubjects] = useState([]);
   const [virtualLinks, setVirtualLinks] = useState({});
   const [loading, setLoading] = useState(true);
   const [showSeatingModal, setShowSeatingModal] = useState(false);
@@ -297,39 +303,68 @@ const ClassManagement = ({ currentUser }) => {
     return Array.from({ length: 10 }, (_, idx) => `Chapter ${idx + 1}`);
   };
 
-  const getSubTopicTitlesBySubject = (subjectName = '') => {
-    const normalizedSubject = String(subjectName).toLowerCase();
-
-    if (normalizedSubject.includes('math')) {
-      return ['Concepts', 'Solved Examples', 'Practice Questions'];
-    }
-    if (normalizedSubject.includes('science')) {
-      return ['Theory', 'Diagrams / Activity', 'Worksheet'];
-    }
-    if (normalizedSubject.includes('english')) {
-      return ['Reading', 'Grammar', 'Writing Practice'];
-    }
-    return ['Concepts', 'Class Notes', 'Assessment'];
-  };
-
   const buildSyllabusForSubject = (subjectName = '') => {
     const chapterTitles = getChapterTitlesBySubject(subjectName);
-    const subTopicTitles = getSubTopicTitlesBySubject(subjectName);
-    const completedChapterCount = Math.max(1, Math.floor(chapterTitles.length * 0.6));
-
-    return chapterTitles.map((chapterTitle, chapterIdx) => {
-      const chapterCompleted = chapterIdx < completedChapterCount;
-      const chapterInProgress = chapterIdx === completedChapterCount;
-
-      return {
-        chapterName: `Chapter ${chapterIdx + 1}: ${chapterTitle}`,
-        subTopics: subTopicTitles.map((subTopicTitle, subTopicIdx) => ({
-          name: subTopicTitle,
-          completed: chapterCompleted || (chapterInProgress && subTopicIdx === 0)
-        }))
-      };
-    });
+    return chapterTitles.map((chapterTitle, chapterIdx) => ({
+      chapterName: `Chapter ${chapterIdx + 1}: ${chapterTitle}`,
+      status: 'start'
+    }));
   };
+
+  const notifySyllabusDataUpdated = () => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new Event('syllabus-data-updated'));
+  };
+
+  const normalizeSyllabusMap = (rawMap = {}) => {
+    const normalizedMap = {};
+
+    Object.entries(rawMap || {}).forEach(([subjectKey, chapters]) => {
+      normalizedMap[subjectKey] = Array.isArray(chapters)
+        ? chapters.map((chapter) => {
+            if (!chapter || typeof chapter !== 'object') {
+              return { chapterName: '', status: 'start' };
+            }
+
+            if (chapter.status) {
+              return {
+                chapterName: String(chapter.chapterName || '').trim(),
+                status: normalizeChapterStatus(chapter.status)
+              };
+            }
+
+            if (Array.isArray(chapter.subTopics) && chapter.subTopics.length > 0) {
+              const completedCount = chapter.subTopics.filter((subTopic) => subTopic?.completed).length;
+              const status = completedCount === chapter.subTopics.length
+                ? 'complete'
+                : completedCount > 0
+                  ? 'half'
+                  : 'start';
+
+              return {
+                chapterName: String(chapter.chapterName || '').trim(),
+                status
+              };
+            }
+
+            return {
+              chapterName: String(chapter.chapterName || '').trim(),
+              status: 'start'
+            };
+          })
+        : [];
+    });
+
+    return normalizedMap;
+  };
+
+  const hasValidSyllabusForSubjects = (map = {}, subjects = []) => (
+    subjects.every((subjectName, index) => {
+      const subjectKey = `${subjectName}-${index}`;
+      const chapters = map?.[subjectKey];
+      return Array.isArray(chapters) && chapters.length > 0;
+    })
+  );
 
   useEffect(() => {
     fetchClasses();
@@ -353,13 +388,13 @@ const ClassManagement = ({ currentUser }) => {
   }, [selectedClass]);
 
   useEffect(() => {
-    if (selectedClass && activeTab === 'class-timetable') {
+    if (selectedClass && (activeTab === 'class-timetable' || activeTab === 'syllabus')) {
       loadClassTimetable();
     }
   }, [selectedClass, activeTab]);
 
   useEffect(() => {
-    if (activeTab !== 'class-timetable' || !selectedClass) return undefined;
+    if ((activeTab !== 'class-timetable' && activeTab !== 'syllabus') || !selectedClass) return undefined;
 
     const timer = setInterval(() => {
       loadClassTimetable();
@@ -377,11 +412,26 @@ const ClassManagement = ({ currentUser }) => {
   }, [currentUser, activeTab]);
 
   useEffect(() => {
-    if (!selectedClass?.subjects?.length) {
+    const subjectSet = new Set();
+    const schedule = classTimetable?.schedule || {};
+    Object.values(schedule).forEach((slots) => {
+      (slots || []).forEach((slot) => {
+        if (slot?.isBreak || !slot?.subject) return;
+        subjectSet.add(String(slot.subject).trim());
+      });
+    });
+    const timetableSubjects = Array.from(subjectSet).filter(Boolean);
+    const fallbackSubjects = selectedClass?.subjects?.map((subject) => subject.subjectName).filter(Boolean) || [];
+    const subjectsToUse = timetableSubjects.length ? timetableSubjects : fallbackSubjects;
+
+    if (!subjectsToUse.length) {
+      setSyllabusSubjects([]);
       setSyllabusMap({});
       setExpandedSyllabusSubjectKey(null);
       return;
     }
+
+    setSyllabusSubjects(subjectsToUse);
 
     const classKey = `${selectedClass.className}-${selectedClass.section}`;
     const savedSyllabus = localStorage.getItem(`syllabus-data-${classKey}`);
@@ -389,52 +439,92 @@ const ClassManagement = ({ currentUser }) => {
     if (savedSyllabus) {
       try {
         const parsed = JSON.parse(savedSyllabus);
-        setSyllabusMap(parsed);
+        const normalized = normalizeSyllabusMap(parsed);
+        if (hasValidSyllabusForSubjects(normalized, subjectsToUse)) {
+          setSyllabusMap(normalized);
+        } else {
+          const regeneratedSyllabus = {};
+          subjectsToUse.forEach((subjectName, index) => {
+            const subjectKey = `${subjectName}-${index}`;
+            regeneratedSyllabus[subjectKey] = buildSyllabusForSubject(subjectName);
+          });
+          setSyllabusMap(regeneratedSyllabus);
+          localStorage.setItem(`syllabus-data-${classKey}`, JSON.stringify(regeneratedSyllabus));
+          notifySyllabusDataUpdated();
+        }
       } catch {
         const generatedSyllabus = {};
-        selectedClass.subjects.forEach((subject, index) => {
-          const subjectKey = `${subject.subjectName}-${index}`;
-          generatedSyllabus[subjectKey] = buildSyllabusForSubject(subject.subjectName);
+        subjectsToUse.forEach((subjectName, index) => {
+          const subjectKey = `${subjectName}-${index}`;
+          generatedSyllabus[subjectKey] = buildSyllabusForSubject(subjectName);
         });
         setSyllabusMap(generatedSyllabus);
         localStorage.setItem(`syllabus-data-${classKey}`, JSON.stringify(generatedSyllabus));
+        notifySyllabusDataUpdated();
       }
     } else {
       const generatedSyllabus = {};
-      selectedClass.subjects.forEach((subject, index) => {
-        const subjectKey = `${subject.subjectName}-${index}`;
-        generatedSyllabus[subjectKey] = buildSyllabusForSubject(subject.subjectName);
+      subjectsToUse.forEach((subjectName, index) => {
+        const subjectKey = `${subjectName}-${index}`;
+        generatedSyllabus[subjectKey] = buildSyllabusForSubject(subjectName);
       });
       setSyllabusMap(generatedSyllabus);
       localStorage.setItem(`syllabus-data-${classKey}`, JSON.stringify(generatedSyllabus));
+      notifySyllabusDataUpdated();
     }
 
-    setExpandedSyllabusSubjectKey(`${selectedClass.subjects[0].subjectName}-0`);
-  }, [selectedClass]);
+    setExpandedSyllabusSubjectKey(`${subjectsToUse[0]}-0`);
+  }, [selectedClass, classTimetable]);
 
   const saveSyllabusToLocalStorage = (updatedMap) => {
     if (selectedClass) {
       const classKey = `${selectedClass.className}-${selectedClass.section}`;
       localStorage.setItem(`syllabus-data-${classKey}`, JSON.stringify(updatedMap));
+      notifySyllabusDataUpdated();
     }
   };
 
-  const toggleSubTopicCompletion = (subjectKey, chapterIndex, subTopicIndex) => {
+  const updateChapterName = (subjectKey, chapterIndex, chapterName) => {
     setSyllabusMap(prev => {
       const updated = JSON.parse(JSON.stringify(prev));
-      const subTopic = updated[subjectKey][chapterIndex].subTopics[subTopicIndex];
-      subTopic.completed = !subTopic.completed;
+      if (!updated?.[subjectKey]?.[chapterIndex]) return prev;
+      updated[subjectKey][chapterIndex].chapterName = String(chapterName || '').replace(/\s+/g, ' ').trimStart();
       saveSyllabusToLocalStorage(updated);
       return updated;
     });
   };
 
-  const toggleChapterCompletion = (subjectKey, chapterIndex) => {
+  const updateChapterStatus = (subjectKey, chapterIndex, status) => {
     setSyllabusMap(prev => {
       const updated = JSON.parse(JSON.stringify(prev));
       const chapter = updated[subjectKey][chapterIndex];
-      const allCompleted = chapter.subTopics.every(st => st.completed);
-      chapter.subTopics.forEach(st => { st.completed = !allCompleted; });
+      chapter.status = normalizeChapterStatus(status);
+      saveSyllabusToLocalStorage(updated);
+      return updated;
+    });
+  };
+
+  const addChapterToSubject = (subjectKey, subjectName) => {
+    setSyllabusMap(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      const nextChapterNumber = (updated?.[subjectKey]?.length || 0) + 1;
+      if (!updated[subjectKey]) {
+        updated[subjectKey] = [];
+      }
+      updated[subjectKey].push({
+        chapterName: `Chapter ${nextChapterNumber}: ${subjectName || 'New Chapter'}`,
+        status: 'start'
+      });
+      saveSyllabusToLocalStorage(updated);
+      return updated;
+    });
+  };
+
+  const removeChapterFromSubject = (subjectKey, chapterIndex) => {
+    setSyllabusMap(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      if (!Array.isArray(updated?.[subjectKey])) return prev;
+      updated[subjectKey].splice(chapterIndex, 1);
       saveSyllabusToLocalStorage(updated);
       return updated;
     });
@@ -490,11 +580,7 @@ const ClassManagement = ({ currentUser }) => {
       setClassTimetableLoading(true);
       const std = extractClassNumber(selectedClass.className);
       const section = extractSectionCode(selectedClass.section);
-      const response = await axios.get(apiUrl('/api/class/timetable'), {
-        params: { std, section },
-        timeout: 5000
-      });
-      const timetableData = response?.data?.data || response?.data || {};
+      const timetableData = await fetchTeacherTimetable(std, section);
       setClassTimetable({
         schedule: timetableData?.schedule || {},
         days: timetableData?.days || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -828,6 +914,9 @@ const ClassManagement = ({ currentUser }) => {
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', gap: 10 }}>
                         <span style={{ fontSize: 13, fontWeight: 800, color: color.fg, lineHeight: '18px' }}>{cell.subject}</span>
                       </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: color.fg, opacity: 0.9 }}>
+                        {cell.teacher || 'Teacher'}
+                      </div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: color.fg, opacity: 0.82 }}>
                         {cell.time || ''}
                       </div>
@@ -843,18 +932,29 @@ const ClassManagement = ({ currentUser }) => {
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Syllabus Tracking for {selectedClass.className} - {selectedClass.section}</h3>
 
+              {classTimetableLoading && syllabusSubjects.length === 0 && (
+                <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 px-4 py-6 text-sm text-indigo-700">
+                  Loading subjects from the class timetable...
+                </div>
+              )}
+
+              {!classTimetableLoading && syllabusSubjects.length === 0 && (
+                <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/70 px-4 py-6 text-sm text-amber-700">
+                  No subjects were found in the class timetable yet.
+                </div>
+              )}
+
               <div className="space-y-4">
-                {selectedClass.subjects?.map((subject, index) => {
-                  const subjectKey = `${subject.subjectName}-${index}`;
+                {syllabusSubjects.map((subjectName, index) => {
+                  const subjectKey = `${subjectName}-${index}`;
                   const chapters = syllabusMap[subjectKey] || [];
-                  const totalChapters = chapters.length;
-                  const completedChapters = chapters.filter((chapter) =>
-                    chapter.subTopics.every((subTopic) => subTopic.completed)
-                  ).length;
-                  const remainingChapters = totalChapters - completedChapters;
-                  const progressPercentage = totalChapters > 0
-                    ? Math.round((completedChapters / totalChapters) * 100)
-                    : 0;
+                  const {
+                    totalChapters,
+                    completedChapters,
+                    halfChapters,
+                    startChapters,
+                    percent: progressPercentage
+                  } = computeChapterProgress(chapters);
                   const isExpanded = expandedSyllabusSubjectKey === subjectKey;
 
                   return (
@@ -865,8 +965,15 @@ const ClassManagement = ({ currentUser }) => {
                         className="w-full text-left"
                       >
                         <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium text-gray-800">{subject.subjectName}</h4>
+                          <h4 className="font-medium text-gray-800">{subjectName}</h4>
                           <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => addChapterToSubject(subjectKey, subjectName)}
+                              className="text-xs px-3 py-1.5 rounded-full font-medium border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
+                            >
+                              Add Chapter
+                            </button>
                             <span className="text-sm font-semibold text-blue-700">{progressPercentage}%</span>
                             <span className="text-xs font-medium text-gray-500">
                               {isExpanded ? 'Hide Chapters' : 'View Chapters'}
@@ -884,65 +991,80 @@ const ClassManagement = ({ currentUser }) => {
 
                       <div className="mt-2 text-sm text-gray-600 flex flex-wrap gap-4">
                         <p>Completed: {completedChapters} / {totalChapters}</p>
-                        <p>Remaining: {remainingChapters}</p>
+                        <p>Half Complete: {halfChapters}</p>
+                        <p>Start Chapter: {startChapters}</p>
                       </div>
 
                       {isExpanded && (
                         <div className="mt-4 space-y-3">
                           {chapters.map((chapter, chapterIndex) => {
-                            const completedSubTopics = chapter.subTopics.filter((subTopic) => subTopic.completed).length;
-                            const isChapterCompleted = completedSubTopics === chapter.subTopics.length;
-                            const isChapterInProgress = !isChapterCompleted && completedSubTopics > 0;
-                            const chapterStatusText = isChapterCompleted
-                              ? 'Completed'
-                              : isChapterInProgress
-                                ? 'In Progress'
-                                : 'Pending';
-                            const chapterStatusClass = isChapterCompleted
+                            const chapterStatus = normalizeChapterStatus(chapter.status);
+                            const chapterStatusText = chapterStatus === 'complete'
+                              ? 'Complete'
+                              : chapterStatus === 'half'
+                                ? 'Half Complete'
+                                : 'Start Chapter';
+                            const chapterStatusClass = chapterStatus === 'complete'
                               ? 'bg-green-100 text-green-700'
-                              : isChapterInProgress
+                              : chapterStatus === 'half'
                                 ? 'bg-yellow-100 text-yellow-700'
                                 : 'bg-gray-100 text-gray-700';
 
                             return (
                               <div key={`${subjectKey}-chapter-${chapterIndex}`} className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                                <div className="flex justify-between items-center">
-                                  <p className="font-medium text-gray-800">{chapter.chapterName}</p>
-                                  <div className="flex items-center gap-2">
+                                <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
+                                  <input
+                                    type="text"
+                                    value={chapter.chapterName || ''}
+                                    onChange={(e) => updateChapterName(subjectKey, chapterIndex, e.target.value)}
+                                    className="w-full md:flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-indigo-200"
+                                    placeholder="Chapter name"
+                                  />
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${chapterStatusClass}`}>
                                       {chapterStatusText}
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => toggleChapterCompletion(subjectKey, chapterIndex)}
-                                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
-                                        isChapterCompleted
-                                          ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                                          : 'bg-green-100 text-green-600 hover:bg-green-200'
+                                      onClick={() => updateChapterStatus(subjectKey, chapterIndex, 'start')}
+                                      className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
+                                        chapterStatus === 'start'
+                                          ? 'border-gray-400 bg-gray-100 text-gray-800'
+                                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                                       }`}
                                     >
-                                      {isChapterCompleted ? 'Mark Incomplete' : 'Mark Complete'}
+                                      Start Chapter
                                     </button>
-                                  </div>
-                                </div>
-                                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                                  {chapter.subTopics.map((subTopic, subTopicIndex) => (
                                     <button
-                                      key={`${subjectKey}-chapter-${chapterIndex}-subtopic-${subTopicIndex}`}
                                       type="button"
-                                      onClick={() => toggleSubTopicCompletion(subjectKey, chapterIndex, subTopicIndex)}
-                                      className="flex items-center gap-2 text-sm hover:bg-gray-100 rounded px-1 py-0.5 transition-colors text-left"
+                                      onClick={() => updateChapterStatus(subjectKey, chapterIndex, 'half')}
+                                      className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
+                                        chapterStatus === 'half'
+                                          ? 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                      }`}
                                     >
-                                      <span className={`h-4 w-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                                        subTopic.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 bg-white'
-                                      }`}>
-                                        {subTopic.completed && <span className="text-xs">✓</span>}
-                                      </span>
-                                      <span className={subTopic.completed ? 'text-gray-700 line-through' : 'text-gray-500'}>
-                                        {subTopic.name}
-                                      </span>
+                                      Half Complete
                                     </button>
-                                  ))}
+                                    <button
+                                      type="button"
+                                      onClick={() => updateChapterStatus(subjectKey, chapterIndex, 'complete')}
+                                      className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
+                                        chapterStatus === 'complete'
+                                          ? 'border-green-300 bg-green-100 text-green-800'
+                                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                      }`}
+                                      >
+                                        Complete
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeChapterFromSubject(subjectKey, chapterIndex)}
+                                        className="text-xs px-3 py-1.5 rounded-full font-medium border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                                      >
+                                        Remove
+                                      </button>
+                                  </div>
                                 </div>
                               </div>
                             );

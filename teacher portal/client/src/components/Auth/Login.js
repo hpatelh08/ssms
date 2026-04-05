@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { Lock, Mail, GraduationCap, Eye, EyeOff, Globe } from 'lucide-react';
-import { findTeacherByLogin } from '../../data/teachers';
+import { apiUrl } from '../../config/api';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -19,61 +20,75 @@ const Login = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    if (e.target.name === 'teacherId' || e.target.name === 'password') {
-      const nextTeacherId = e.target.name === 'teacherId' ? e.target.value : formData.teacherId;
-      const nextPassword = e.target.name === 'password' ? e.target.value : formData.password;
-      setTimeout(() => fetchTeacherClass(nextTeacherId, nextPassword), 0);
-    }
   };
 
-  // Fetch teacher class/division after entering email+password
-  const fetchTeacherClass = (teacherId, password) => {
+  useEffect(() => {
+    const teacherId = formData.teacherId.trim();
+    const password = formData.password.trim();
+
     if (!teacherId || !password) {
       setTeacherClass('');
       setTeacherDivision('');
       setTeacherName('');
-      return;
-    }
-    const matchedTeacher = findTeacherByLogin(teacherId, password);
-
-    if (!matchedTeacher) {
-      setTeacherClass('');
-      setTeacherDivision('');
-      setTeacherName('');
-      return;
+      return undefined;
     }
 
-    setTeacherName(matchedTeacher.name);
-    setTeacherClass(matchedTeacher.assignedClass);
-    setTeacherDivision(matchedTeacher.division);
-  };
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await axios.post(
+          apiUrl('/api/auth/teacher-info'),
+          { teacherId, password },
+          { signal: controller.signal, timeout: 4000 }
+        );
+
+        const teacher = response?.data?.user;
+        setTeacherName(teacher?.name || '');
+        setTeacherClass(teacher?.assignedClass || '');
+        setTeacherDivision(teacher?.division || '');
+      } catch (requestError) {
+        if (requestError.name !== 'CanceledError' && requestError.code !== 'ERR_CANCELED') {
+          setTeacherClass('');
+          setTeacherDivision('');
+          setTeacherName('');
+        }
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [formData.teacherId, formData.password]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    const matchedTeacher = findTeacherByLogin(formData.teacherId, formData.password);
+    try {
+      const response = await axios.post(apiUrl('/api/auth/teacher-login'), {
+        teacherId: formData.teacherId.trim(),
+        password: formData.password
+      });
 
-    if (!matchedTeacher) {
-      setError('Invalid teacher ID or password');
+      const userData = response?.data?.user;
+      const token = response?.data?.token;
+
+      if (!userData || !token) {
+        throw new Error('Teacher login failed');
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      window.location.href = '/';
+    } catch (loginError) {
+      setError(loginError?.response?.data?.error || 'Invalid teacher ID or password');
       setLoading(false);
       return;
     }
 
-    const userData = {
-      name: matchedTeacher.name,
-      email: matchedTeacher.email,
-      teacherId: matchedTeacher.teacherId,
-      role: 'teacher',
-      assignedClass: matchedTeacher.assignedClass,
-      division: matchedTeacher.division,
-      subject: matchedTeacher.subject
-    };
-
-    localStorage.setItem('token', `teacher-${Date.now()}`);
-    localStorage.setItem('user', JSON.stringify(userData));
-    window.location.href = '/';
+    setLoading(false);
   };
 
   const openVisitorPage = () => {
@@ -82,7 +97,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-800 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background shapes */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl" />
         <div className="absolute top-1/2 -left-20 w-60 h-60 bg-indigo-400/15 rounded-full blur-3xl" />
@@ -94,7 +108,6 @@ const Login = () => {
 
       <div className="relative z-10 w-full max-w-md">
         <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
-          {/* Logo & Title */}
           <div className="text-center mb-8">
             <div className="mx-auto w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/30">
               <GraduationCap className="h-10 w-10 text-white" />
@@ -158,7 +171,6 @@ const Login = () => {
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">Teacher Name</label>
               <input
                 type="text"
-                name="role"
                 value={teacherName || 'Teacher'}
                 disabled
                 className="w-full p-3 border-2 border-gray-200 rounded-xl bg-indigo-50/50 text-indigo-700 font-semibold"
@@ -193,8 +205,8 @@ const Login = () => {
                 type="submit"
                 disabled={loading}
                 className={`w-full py-3.5 px-4 rounded-xl font-bold text-white text-base shadow-lg transition-all duration-300 ${
-                  loading 
-                    ? 'bg-indigo-400 cursor-not-allowed' 
+                  loading
+                    ? 'bg-indigo-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-xl hover:shadow-indigo-500/25 hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
@@ -220,7 +232,7 @@ const Login = () => {
             </button>
           </form>
         </div>
-        
+
         <p className="text-center text-indigo-200/60 text-xs mt-6 font-medium">
           © 2026 Teacher Portal • All Rights Reserved
         </p>

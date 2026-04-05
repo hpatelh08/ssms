@@ -63,12 +63,12 @@ set "STD5_STATUS="
 if not defined STD5_OK set "STD5_STATUS= (missing)"
 set "STD6_STATUS="
 if not defined STD6_OK set "STD6_STATUS= (missing)"
-echo   4. Student Portal Std 1%STD1_STATUS%
-echo   5. Student Portal Std 2%STD2_STATUS%
-echo   6. Student Portal Std 3%STD3_STATUS%
-echo   7. Student Portal Std 4%STD4_STATUS%
-echo   8. Student Portal Std 5%STD5_STATUS%
-echo   9. Student Portal Std 6%STD6_STATUS%
+echo   4. Student Portal Std 1%STD1_STATUS% (http://localhost:3001)
+echo   5. Student Portal Std 2%STD2_STATUS% (http://localhost:3002)
+echo   6. Student Portal Std 3%STD3_STATUS% (http://localhost:3003)
+echo   7. Student Portal Std 4%STD4_STATUS% (http://localhost:3004)
+echo   8. Student Portal Std 5%STD5_STATUS% (http://localhost:3005)
+echo   9. Student Portal Std 6%STD6_STATUS% (http://localhost:3006)
 echo.
 echo Build options
 echo   10. Build all frontends
@@ -90,6 +90,8 @@ if /I "%CHOICE%"=="1" (
   ) else (
     echo Admin Dashboard run.bat not found.
   )
+  call :ensure_backend_running
+  timeout /t 2 /nobreak >nul
   echo Launching Teacher Portal...
   if exist "%ROOT%\teacher portal\run.bat" (
     start "SSMS Teacher Portal" cmd /k "cd /d ""%ROOT%\teacher portal"" && call run.bat"
@@ -147,6 +149,8 @@ exit /b 1
 
 :run_teacher_portal
 echo Launching Teacher Portal...
+call :ensure_backend_running
+timeout /t 2 /nobreak >nul
 if exist "%ROOT%\teacher portal\run.bat" (
   start "SSMS Teacher Portal" cmd /k "cd /d ""%ROOT%\teacher portal"" && call run.bat"
   exit /b 0

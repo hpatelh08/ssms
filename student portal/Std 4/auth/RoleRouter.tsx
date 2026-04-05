@@ -9,14 +9,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './AuthContext';
-import LoginPage from './LoginPage';
 import ChildLayout from '../child/ChildLayout';
 import { ParentLayout } from '../parent/ParentLayout';
 
 const RoleRouter: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
 
-  if (!isAuthenticated) return <LoginPage />;
+  if (!isAuthenticated) return <ChildLayout />;
 
   return (
     <AnimatePresence mode="wait">

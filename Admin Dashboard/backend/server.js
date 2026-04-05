@@ -5,9 +5,12 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs');
 
 // Ensure DB + tables exist on first run
 require('./config/db');
+const { syncStudentMasterDbFromFile, syncStudentMasterFileFromDb, startStudentMasterWatch } = require('./utils/studentMasterSync');
+const { syncTeacherMasterDbFromFile, syncTeacherMasterFileFromDb, startTeacherMasterWatch } = require('./utils/teacherMasterSync');
 
 const errorHandler = require('./middleware/errorHandler');
 
@@ -34,6 +37,8 @@ const vacationRoutes     = require('./routes/vacations');
 const visitorRoutes      = require('./routes/visitor');
 
 const app = express();
+const studentMasterFile = path.join(__dirname, 'student_master_data.json');
+const teacherMasterFile = path.join(__dirname, 'teacher_master_data.json');
 
 // ---- Middleware ----
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
@@ -61,6 +66,34 @@ app.use('/api/timetable',     timetableRoutes);
 app.use('/api/parents',       parentRoutes);
 app.use('/api/reports',       reportRoutes);
 app.use('/api',               visitorRoutes);
+
+app.get('/api/master/student-data', (_req, res) => {
+  try {
+    if (!fs.existsSync(studentMasterFile)) {
+      return res.status(404).json({ success: false, error: 'Student master file not found.' });
+    }
+
+    const raw = fs.readFileSync(studentMasterFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    return res.json({ success: true, data: parsed });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to load student master data.', details: error.message });
+  }
+});
+
+app.get('/api/master/teacher-data', (_req, res) => {
+  try {
+    if (!fs.existsSync(teacherMasterFile)) {
+      return res.status(404).json({ success: false, error: 'Teacher master file not found.' });
+    }
+
+    const raw = fs.readFileSync(teacherMasterFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    return res.json({ success: true, data: parsed });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to load teacher master data.', details: error.message });
+  }
+});
 
 const frontendDistDir = path.join(__dirname, '..', 'frontend-react', 'dist');
 
@@ -92,6 +125,16 @@ app.use(errorHandler);
 // ---- Start server ----
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
+  try {
+    syncStudentMasterDbFromFile();
+    syncStudentMasterFileFromDb();
+    startStudentMasterWatch();
+    syncTeacherMasterDbFromFile();
+    syncTeacherMasterFileFromDb();
+    startTeacherMasterWatch();
+  } catch (error) {
+    console.error('Student master sync failed to initialize:', error.message);
+  }
   console.log(`\n🚀 SSMS Backend running on http://localhost:${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
 });

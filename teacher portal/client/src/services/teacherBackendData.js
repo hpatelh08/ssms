@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import { apiUrl } from '../config/api';
 import {
   buildMockTeacherClass,
@@ -159,6 +159,31 @@ async function loadTeacherApiStudents(currentUser) {
   return getMockStudentsForClass(className, section);
 }
 
+async function loadClassApiStudents(className, section) {
+  const normalizedClass = getClassNumber(className);
+  const normalizedSection = normalizeSection(section);
+
+  if (!normalizedClass || !normalizedSection) {
+    return [];
+  }
+
+  try {
+    const response = await axios.get(apiUrl('/api/class/students'), {
+      params: { std: normalizedClass, section: normalizedSection },
+      timeout: 2500,
+    });
+
+    const students = response?.data?.data || [];
+    if (students.length > 0) {
+      return students;
+    }
+  } catch (error) {
+    console.error('Error loading students for class from teacher backend API:', error);
+  }
+
+  return getMockStudentsForClass(normalizedClass, normalizedSection);
+}
+
 export async function loadTeacherClasses(currentUser) {
   try {
     const response = await axios.get(apiUrl('/api/class/assigned'), {
@@ -201,6 +226,13 @@ export async function loadClassStudents(classId, currentUser, classes = []) {
     return selectedClass.students;
   }
 
+  if (selectedClass) {
+    const students = await loadClassApiStudents(selectedClass.className, selectedClass.section);
+    if (students.length > 0) {
+      return students;
+    }
+  }
+
   const students = await loadTeacherApiStudents(currentUser);
   if (students.length > 0) {
     return students;
@@ -209,7 +241,6 @@ export async function loadClassStudents(classId, currentUser, classes = []) {
   const fallbackClasses = await loadTeacherClasses(currentUser);
   return fallbackClasses[0]?.students || [];
 }
-
 export async function loadTeacherStudents(currentUser, classes = []) {
   if (classes.length > 0) {
     const flattened = classes.flatMap((cls) => cls.students || []);

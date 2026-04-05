@@ -9,7 +9,7 @@ import {
   getAssignedTeacherSection,
   matchesAssignedTeacherClass,
   normalizeSection,
-} from '../../config/teacherClasses';
+} from '../../teacherIdentity';
 import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const AssignmentManagement = ({ currentUser }) => {
@@ -27,6 +27,8 @@ const AssignmentManagement = ({ currentUser }) => {
   const [peerReviewEnabled, setPeerReviewEnabled] = useState({});
   const [subjectFilter, setSubjectFilter] = useState('');
   const [gradingSubjectFilter, setGradingSubjectFilter] = useState('');
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [studentStatusMap, setStudentStatusMap] = useState({});
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -49,18 +51,9 @@ const AssignmentManagement = ({ currentUser }) => {
         section: assignedDivision || 'A',
       };
     }
-
-    const fallbackClass = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
-    if (fallbackClass) {
-      return {
-        className: fallbackClass.className || 'Class',
-        section: fallbackClass.section || 'A',
-      };
-    }
-
     return {
-      className: 'Class',
-      section: 'A',
+      className: '',
+      section: '',
     };
   };
 
@@ -90,10 +83,56 @@ const AssignmentManagement = ({ currentUser }) => {
 
   const filteredAssignments = assignments.filter(isAssignmentForLoggedInTeacher);
 
+  const normalizeSubmissionStatus = (status) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'graded' || normalized === 'complete' || normalized === 'completed') {
+      return 'complete';
+    }
+    return 'incomplete';
+  };
+
+  const isSubmissionComplete = (status) => normalizeSubmissionStatus(status) === 'complete';
+
   useEffect(() => {
     fetchAssignments();
     fetchClasses();
   }, [currentUser?.email]);
+
+  useEffect(() => {
+    const loadFilterSubjects = async () => {
+      const assignedClassNumber = getAssignedTeacherClassNumber(currentUser);
+      const assignedSection = getAssignedTeacherSection(currentUser);
+      if (!assignedClassNumber || !assignedSection) {
+        setAvailableSubjects([]);
+        return;
+      }
+
+      try {
+        const response = await axios.get(apiUrl('/api/class/timetable'), {
+          params: { std: assignedClassNumber, section: assignedSection },
+          timeout: 4000
+        });
+        const schedule = response?.data?.data?.schedule || {};
+        const subjectSet = new Set();
+        Object.values(schedule).forEach((slots) => {
+          (slots || []).forEach((slot) => {
+            if (slot?.isBreak || !slot?.subject) return;
+            subjectSet.add(String(slot.subject).trim());
+          });
+        });
+        const subjectList = Array.from(subjectSet)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+        setAvailableSubjects(subjectList);
+      } catch {
+        const assignedClass = classes.find((cls) => matchesAssignedTeacherClass(cls, currentUser));
+        const fallback = assignedClass?.subjects?.map((subj) => subj.subjectName).filter(Boolean) || [];
+        setAvailableSubjects(fallback);
+      }
+    };
+
+    loadFilterSubjects();
+  }, [classes, currentUser?.assignedClass, currentUser?.division]);
 
   useEffect(() => {
     if (currentUser && currentUser.assignedClass) {
@@ -109,14 +148,91 @@ const AssignmentManagement = ({ currentUser }) => {
   }, [classes, currentUser]);
 
   useEffect(() => {
-    if (formData.class) {
-      const selectedClass = classes.find(c => c._id === formData.class);
-      if (selectedClass) {
-        setSubjects(selectedClass.subjects || []);
-      }
-    } else {
-      setSubjects([]);
+    const loadSubmissionStudents = async () => {
+      if (activeTab !== 'submissions') return;
+      if (students.length > 0) return;
+
+      const classList = classes.length ? classes : await loadTeacherClasses(currentUser);
+      const assigned = classList.find((cls) => matchesAssignedTeacherClass(cls, currentUser)) || classList[0];
+      if (!assigned) return;
+
+      const classStudents = await loadClassStudents(assigned._id, currentUser, classList);
+      setStudents(classStudents);
+    };
+
+    loadSubmissionStudents();
+  }, [activeTab, classes, currentUser, students.length]);
+
+  useEffect(() => {
+    if (activeTab !== 'submissions') return;
+    const classLabel = `${getAssignedTeacherClassNumber(currentUser) || ''}-${getAssignedTeacherSection(currentUser) || ''}`;
+    const subjectKey = subjectFilter || 'all';
+    const storageKey = `submission-status-${classLabel}-${subjectKey}`;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setStudentStatusMap(stored ? JSON.parse(stored) : {});
+    } catch {
+      setStudentStatusMap({});
     }
+  }, [activeTab, subjectFilter, currentUser]);
+
+  const updateStudentStatus = (studentId, status) => {
+    const classLabel = `${getAssignedTeacherClassNumber(currentUser) || ''}-${getAssignedTeacherSection(currentUser) || ''}`;
+    const subjectKey = subjectFilter || 'all';
+    const storageKey = `submission-status-${classLabel}-${subjectKey}`;
+    setStudentStatusMap((prev) => {
+      const updated = { ...prev, [studentId]: status };
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    const loadSubjectsForClass = async () => {
+      if (!formData.class) {
+        setSubjects([]);
+        return;
+      }
+
+      const selectedClass = classes.find(c => c._id === formData.class);
+      if (!selectedClass) {
+        setSubjects([]);
+        return;
+      }
+
+      try {
+        const std = extractClassNumber(selectedClass.className);
+        const section = normalizeSection(selectedClass.section);
+        if (std && section) {
+          const response = await axios.get(apiUrl('/api/class/timetable'), {
+            params: { std, section },
+            timeout: 4000
+          });
+          const schedule = response?.data?.data?.schedule || {};
+          const subjectSet = new Set();
+          Object.values(schedule).forEach((slots) => {
+            (slots || []).forEach((slot) => {
+              if (slot?.isBreak || !slot?.subject) return;
+              subjectSet.add(String(slot.subject).trim());
+            });
+          });
+          const subjectList = Array.from(subjectSet)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+            .map((name) => ({ _id: name, subjectName: name }));
+          if (subjectList.length) {
+            setSubjects(subjectList);
+            return;
+          }
+        }
+      } catch {
+        // Fall back to stored class subjects.
+      }
+
+      setSubjects(selectedClass.subjects || []);
+    };
+
+    loadSubjectsForClass();
   }, [formData.class, classes]);
 
   const fetchClasses = async () => {
@@ -170,21 +286,8 @@ const AssignmentManagement = ({ currentUser }) => {
       saveAssignmentsToStorage(response.data.data);
     } catch (error) {
       console.error('Error fetching assignments:', error);
-      // Fallback dummy assignment
-      const teacherClass = getLoggedInTeacherClass();
-      const fallback = [{
-        _id: 'mock_assignment_1',
-        title: 'Equations Practice',
-        description: 'Complete all equations in chapter 4.',
-        subject: { subjectName: 'Mathematics' },
-        class: teacherClass,
-        dueDate: new Date(Date.now() + 86400000).toISOString(),
-        status: 'active',
-        totalMarks: 50,
-        assignmentType: 'homework'
-      }];
-      setAssignments(fallback);
-      saveAssignmentsToStorage(fallback);
+      setAssignments([]);
+      saveAssignmentsToStorage([]);
     }
   };
 
@@ -205,35 +308,56 @@ const AssignmentManagement = ({ currentUser }) => {
       // First get all students in the class
       const assignment = assignments.find(a => a._id === assignmentId) || selectedAssignment;
       let allStudents = [];
-      if (assignment && assignment.class?._id) {
-        allStudents = await fetchStudentsInClass(assignment.class._id);
-      } else {
-        // Fallback students if no class ID found
-        allStudents = await fetchStudentsInClass('fallback');
+      if (assignment) {
+        const assignmentClassName = assignment?.class?.className || assignment?.className || assignment?.class || '';
+        const assignmentSection = assignment?.class?.section || assignment?.section || '';
+        let classId = assignment?.class?._id || assignment?.classId || '';
+
+        const classList = classes.length ? classes : await loadTeacherClasses(currentUser);
+
+        if (!classId) {
+          const fallbackClassName = assignmentClassName || currentUser?.assignedClass || '';
+          const fallbackSection = assignmentSection || currentUser?.division || '';
+          const matchedClass = classList.find((cls) =>
+            extractClassNumber(cls.className) === extractClassNumber(fallbackClassName) &&
+            (!fallbackSection || normalizeSection(cls.section) === normalizeSection(fallbackSection))
+          ) || classList.find((cls) =>
+            extractClassNumber(cls.className) === extractClassNumber(fallbackClassName)
+          );
+          classId = matchedClass?._id || '';
+        }
+
+        if (classId) {
+          allStudents = await fetchStudentsInClass(classId);
+        }
       }
       setStudents(allStudents);
 
-      const response = await axios.get(apiUrl(`/api/teacher/assignments/${assignmentId}/submissions`), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-
-      const existingSubmissions = response.data.data;
+      let existingSubmissions = [];
+      try {
+        const response = await axios.get(apiUrl(`/api/teacher/assignments/${assignmentId}/submissions`), {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          timeout: 1000
+        });
+        existingSubmissions = response?.data?.data || [];
+      } catch {
+        existingSubmissions = [];
+      }
 
       // Merge students with submissions
       const mergedSubmissions = allStudents.map(student => {
         const submission = existingSubmissions.find(s => s.student?._id === student._id || s.student === student._id);
         if (submission) {
-          return submission;
+          return { ...submission, status: normalizeSubmissionStatus(submission.status) };
         }
         // Return a shell submission for students who haven't submitted
         return {
           _id: `temp_${student._id}`,
           student: student,
           submittedAt: null,
-          status: 'pending',
+          status: 'incomplete',
           file: null
         };
       });
@@ -246,7 +370,7 @@ const AssignmentManagement = ({ currentUser }) => {
           const savedStatuses = JSON.parse(savedSubmissions);
           finalSubmissions = mergedSubmissions.map(sub => {
             const saved = savedStatuses.find(s => s._id === sub._id);
-            return saved ? { ...sub, status: saved.status } : sub;
+            return saved ? { ...sub, status: normalizeSubmissionStatus(saved.status) } : sub;
           });
         } catch { /* ignore */ }
       }
@@ -267,59 +391,9 @@ const AssignmentManagement = ({ currentUser }) => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching submissions:', error);
-
-      // Fallback merging all mock students with some mock submissions
-      const allStudents = await fetchStudentsInClass('fallback');
-      setStudents(allStudents);
-
-      const mockSubmissions = allStudents.map((student, index) => ({
-        _id: `subm_${index + 1}`,
-        student: student,
-        submittedAt: new Date(Date.now() - (index * 3600000 * 2)).toISOString(),
-        status: index % 3 === 0 ? 'graded' : 'pending',
-        file: {
-          originalName: index % 2 === 0 ? `homework_${index + 1}.pdf` : `assignment_final_${index + 1}.docx`,
-          filename: `dummy_${index + 1}.pdf`
-        }
-      }));
-
-      const mergedSubmissions = allStudents.map(student => {
-        const submission = mockSubmissions.find(s => s.student?._id === student._id);
-        if (submission) return submission;
-        return {
-          _id: `temp_${student._id}`,
-          student: student,
-          submittedAt: null,
-          status: 'pending',
-          file: null
-        };
-      });
-
-      // Load saved statuses for fallback too
-      const savedSubmissions = localStorage.getItem(`submissions-data-${assignmentId}`);
-      let finalSubmissions = mergedSubmissions;
-      if (savedSubmissions) {
-        try {
-          const savedStatuses = JSON.parse(savedSubmissions);
-          finalSubmissions = mergedSubmissions.map(sub => {
-            const saved = savedStatuses.find(s => s._id === sub._id);
-            return saved ? { ...sub, status: saved.status } : sub;
-          });
-        } catch { /* ignore */ }
-      }
-      setSubmissions(finalSubmissions);
-
-      const savedGrading = localStorage.getItem(`grading-data-${assignmentId}`);
-      let initialGrading = {};
-      if (savedGrading) {
-        try { initialGrading = JSON.parse(savedGrading); } catch { /* ignore */ }
-      }
-      finalSubmissions.forEach(sub => {
-        if (!initialGrading[sub._id]) {
-          initialGrading[sub._id] = { marks: '', remarks: '' };
-        }
-      });
-      setGradingData(initialGrading);
+      setStudents([]);
+      setSubmissions([]);
+      setGradingData({});
       setLoading(false);
     }
   };
@@ -452,9 +526,15 @@ const AssignmentManagement = ({ currentUser }) => {
 
   const handleStatusChange = (submissionId, newStatus) => {
     setSubmissions(prev => {
-      const updated = prev.map(sub =>
-        sub._id === submissionId ? { ...sub, status: newStatus } : sub
-      );
+      const updated = prev.map(sub => {
+        if (sub._id !== submissionId) return sub;
+        const nextStatus = normalizeSubmissionStatus(newStatus);
+        return {
+          ...sub,
+          status: nextStatus,
+          submittedAt: nextStatus === 'complete' ? new Date().toISOString() : null
+        };
+      });
       if (selectedAssignment) {
         saveSubmissionsToStorage(selectedAssignment._id, updated);
       }
@@ -464,7 +544,11 @@ const AssignmentManagement = ({ currentUser }) => {
 
   const handleMarkAllComplete = () => {
     setSubmissions(prev => {
-      const updated = prev.map(sub => ({ ...sub, status: 'graded' }));
+      const updated = prev.map(sub => ({
+        ...sub,
+        status: 'complete',
+        submittedAt: new Date().toISOString()
+      }));
       if (selectedAssignment) {
         saveSubmissionsToStorage(selectedAssignment._id, updated);
       }
@@ -524,11 +608,11 @@ const AssignmentManagement = ({ currentUser }) => {
         return;
       }
 
-      // Filter only pending submissions
-      const pendingSubmissions = submissions.filter(s => s.status === 'pending');
+      // Filter only incomplete submissions
+      const pendingSubmissions = submissions.filter(s => !isSubmissionComplete(s.status));
 
       if (pendingSubmissions.length === 0) {
-        alert('No pending submissions to export');
+        alert('No incomplete submissions to export');
         return;
       }
 
@@ -538,7 +622,7 @@ const AssignmentManagement = ({ currentUser }) => {
         'Roll No': s.student?.studentId || 'N/A',
         'Assignment': selectedAssignment?.title || 'N/A',
         'Due Date': selectedAssignment ? new Date(selectedAssignment.dueDate).toLocaleDateString() : 'N/A',
-        'Status': 'Pending'
+        'Status': 'Incomplete'
       }));
 
       // Create worksheet
@@ -546,10 +630,10 @@ const AssignmentManagement = ({ currentUser }) => {
 
       // Create workbook
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pending Submissions");
+      XLSX.utils.book_append_sheet(wb, ws, "Incomplete Submissions");
 
       // Generate Excel file and trigger download
-      XLSX.writeFile(wb, `Pending_Submissions_${selectedAssignment?.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `Incomplete_Submissions_${selectedAssignment?.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
 
     } catch (error) {
       console.error('Error exporting submissions:', error);
@@ -971,41 +1055,31 @@ const AssignmentManagement = ({ currentUser }) => {
           {/* Submissions Tab */}
           {activeTab === 'submissions' && (
             <div>
-              {/* Subject Filter */}
-              <div className="flex items-center gap-3 mb-5">
-                <label className="text-sm font-semibold text-gray-600">Subject:</label>
-                <select
-                  value={subjectFilter}
-                  onChange={e => { setSubjectFilter(e.target.value); setSelectedAssignment(null); }}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-white focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none shadow-sm"
-                >
-                  <option value="">All Subjects</option>
-                  {[...new Set(filteredAssignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
-                    <option key={subj} value={subj}>{subj}</option>
-                  ))}
-                </select>
-                {subjectFilter && (
-                  <button onClick={() => { setSubjectFilter(''); setSelectedAssignment(null); }} className="text-xs text-indigo-600 hover:underline font-medium">Clear</button>
-                )}
-              </div>
-
               {/* Assignment list for selected subject when no assignment picked */}
               {!selectedAssignment && (
-                <div className="space-y-3 mb-5">
-                  {(subjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === subjectFilter) : filteredAssignments).map(asgn => (
-                    <div key={asgn._id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
-                      <div>
-                        <p className="font-semibold text-gray-800">{asgn.title}</p>
-                        <p className="text-xs text-gray-500">{asgn.subject?.subjectName} &bull; Due: {asgn.dueDate ? new Date(asgn.dueDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                  {filteredAssignments.map(asgn => (
+                    <div key={asgn._id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{asgn.title}</p>
+                          <p className="text-xs text-gray-500 mt-1">{asgn.subject?.subjectName} &bull; Due: {asgn.dueDate ? new Date(asgn.dueDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                        </div>
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">
+                          {asgn.assignmentType || 'assignment'}
+                        </span>
                       </div>
-                      <button
-                        onClick={() => { setSelectedAssignment(asgn); fetchSubmissions(asgn._id); }}
-                        className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors"
-                      >View Submissions</button>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-xs text-gray-500">Class {getAssignmentClassLabel(asgn)}</span>
+                        <button
+                          onClick={() => { setSelectedAssignment(asgn); fetchSubmissions(asgn._id); }}
+                          className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700"
+                        >Submissions</button>
+                      </div>
                     </div>
                   ))}
-                  {(subjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === subjectFilter) : filteredAssignments).length === 0 && (
-                    <p className="text-center text-gray-400 py-8">No assignments found for this subject.</p>
+                  {filteredAssignments.length === 0 && (
+                    <p className="col-span-full text-center text-gray-400 py-8">No assignments found for this subject.</p>
                   )}
                 </div>
               )}
@@ -1034,7 +1108,9 @@ const AssignmentManagement = ({ currentUser }) => {
                       <table className="w-full">
                         <thead>
                           <tr className="bg-gray-50">
+                            <th className="px-4 py-3 text-left">Roll</th>
                             <th className="px-4 py-3 text-left">Student</th>
+                            <th className="px-4 py-3 text-left">Class</th>
                             <th className="px-4 py-3 text-left">Submitted At</th>
                             <th className="px-4 py-3 text-left">Given Date</th>
                             <th className="px-4 py-3 text-left">Status</th>
@@ -1044,8 +1120,14 @@ const AssignmentManagement = ({ currentUser }) => {
                         <tbody>
                           {submissions.map(submission => (
                             <tr key={submission._id} className="border-b hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-700">
+                                {submission.student?.rollNumber || submission.student?.grNumber || '-'}
+                              </td>
                               <td className="px-4 py-3">
                                 {submission.student?.name}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">
+                                {submission.student?.className || assignedClassLabel} - {submission.student?.section || assignedSection}
                               </td>
                               <td className="px-4 py-3">
                                 {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : <span className="text-gray-400 italic">Not submitted</span>}
@@ -1063,23 +1145,23 @@ const AssignmentManagement = ({ currentUser }) => {
                                     <input
                                       type="radio"
                                       name={`status-${submission._id}`}
-                                      value="graded"
-                                      checked={submission.status === 'graded'}
-                                      onChange={() => handleStatusChange(submission._id, 'graded')}
+                                      value="complete"
+                                      checked={isSubmissionComplete(submission.status)}
+                                      onChange={() => handleStatusChange(submission._id, 'complete')}
                                       className="w-4 h-4 text-green-600"
                                     />
-                                    <span className={`text-sm ${submission.status === 'graded' ? 'text-green-600 font-bold' : 'text-gray-600'}`}>Complete</span>
+                                    <span className={`text-sm ${isSubmissionComplete(submission.status) ? 'text-green-600 font-bold' : 'text-gray-600'}`}>Complete</span>
                                   </label>
                                   <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                       type="radio"
                                       name={`status-${submission._id}`}
-                                      value="pending"
-                                      checked={submission.status === 'pending'}
-                                      onChange={() => handleStatusChange(submission._id, 'pending')}
+                                      value="incomplete"
+                                      checked={!isSubmissionComplete(submission.status)}
+                                      onChange={() => handleStatusChange(submission._id, 'incomplete')}
                                       className="w-4 h-4 text-yellow-600"
                                     />
-                                    <span className={`text-sm ${submission.status === 'pending' ? 'text-yellow-600 font-bold' : 'text-gray-600'}`}>Pending</span>
+                                    <span className={`text-sm ${!isSubmissionComplete(submission.status) ? 'text-yellow-600 font-bold' : 'text-gray-600'}`}>Incomplete</span>
                                   </label>
                                 </div>
                               </td>
@@ -1108,7 +1190,7 @@ const AssignmentManagement = ({ currentUser }) => {
                   ) : (
                     <div className="text-center py-12">
                       <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">No submissions yet for this assignment</p>
+                      <p className="text-gray-500">No students found for this class</p>
                     </div>
                   )}
                 </div>
@@ -1119,41 +1201,31 @@ const AssignmentManagement = ({ currentUser }) => {
           {/* Grading Tab */}
           {activeTab === 'grading' && (
             <div>
-              {/* Subject + Assignment Filter */}
-              <div className="flex items-center gap-3 mb-5">
-                <label className="text-sm font-semibold text-gray-600">Subject:</label>
-                <select
-                  value={gradingSubjectFilter}
-                  onChange={e => { setGradingSubjectFilter(e.target.value); setSelectedAssignment(null); }}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-white focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none shadow-sm"
-                >
-                  <option value="">All Subjects</option>
-                  {[...new Set(filteredAssignments.map(a => a.subject?.subjectName).filter(Boolean))].map(subj => (
-                    <option key={subj} value={subj}>{subj}</option>
-                  ))}
-                </select>
-                {gradingSubjectFilter && (
-                  <button onClick={() => { setGradingSubjectFilter(''); setSelectedAssignment(null); }} className="text-xs text-indigo-600 hover:underline font-medium">Clear</button>
-                )}
-              </div>
-
               {/* Assignment picker when none selected */}
               {!selectedAssignment && (
-                <div className="space-y-3 mb-5">
-                  {(gradingSubjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : filteredAssignments).map(asgn => (
-                    <div key={asgn._id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
-                      <div>
-                        <p className="font-semibold text-gray-800">{asgn.title}</p>
-                        <p className="text-xs text-gray-500">{asgn.subject?.subjectName} &bull; Total Marks: {asgn.totalMarks} &bull; Due: {asgn.dueDate ? new Date(asgn.dueDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                  {filteredAssignments.map(asgn => (
+                    <div key={asgn._id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{asgn.title}</p>
+                          <p className="text-xs text-gray-500 mt-1">{asgn.subject?.subjectName} &bull; Total Marks: {asgn.totalMarks} &bull; Due: {asgn.dueDate ? new Date(asgn.dueDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                        </div>
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">
+                          {asgn.assignmentType || 'assignment'}
+                        </span>
                       </div>
-                      <button
-                        onClick={() => { setSelectedAssignment(asgn); fetchSubmissions(asgn._id); }}
-                        className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors"
-                      >Grade</button>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-xs text-gray-500">Class {getAssignmentClassLabel(asgn)}</span>
+                        <button
+                          onClick={() => { setSelectedAssignment(asgn); fetchSubmissions(asgn._id); }}
+                          className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700"
+                        >Grade</button>
+                      </div>
                     </div>
                   ))}
-                  {(gradingSubjectFilter ? filteredAssignments.filter(a => a.subject?.subjectName === gradingSubjectFilter) : filteredAssignments).length === 0 && (
-                    <p className="text-center text-gray-400 py-8">No assignments found for this subject.</p>
+                  {filteredAssignments.length === 0 && (
+                    <p className="col-span-full text-center text-gray-400 py-8">No assignments found.</p>
                   )}
                 </div>
               )}
@@ -1216,8 +1288,8 @@ const AssignmentManagement = ({ currentUser }) => {
                                     max={selectedAssignment.totalMarks}
                                     value={gradingData[submission._id]?.marks || ''}
                                     onChange={(e) => handleGradingChange(submission._id, 'marks', e.target.value)}
-                                    disabled={submission.status === 'pending'}
-                                    className={`w-20 p-2 border border-gray-300 rounded-lg text-sm ${submission.status === 'pending' ? 'bg-gray-100 cursor-not-allowed opacity-50' : ''}`}
+                                    disabled={!isSubmissionComplete(submission.status)}
+                                    className={`w-20 p-2 border border-gray-300 rounded-lg text-sm ${!isSubmissionComplete(submission.status) ? 'bg-gray-100 cursor-not-allowed opacity-50' : ''}`}
                                     placeholder={`/${selectedAssignment.totalMarks}`}
                                   />
                                 </td>
@@ -1226,26 +1298,26 @@ const AssignmentManagement = ({ currentUser }) => {
                                     type="text"
                                     value={gradingData[submission._id]?.remarks || ''}
                                     onChange={(e) => handleGradingChange(submission._id, 'remarks', e.target.value)}
-                                    disabled={submission.status === 'pending'}
-                                    className={`w-full min-w-[150px] p-2 border border-gray-300 rounded-lg text-sm ${submission.status === 'pending' ? 'bg-gray-100 cursor-not-allowed opacity-50' : ''}`}
-                                    placeholder={submission.status === 'pending' ? 'Complete submission first' : 'Feedback...'}
+                                    disabled={!isSubmissionComplete(submission.status)}
+                                    className={`w-full min-w-[150px] p-2 border border-gray-300 rounded-lg text-sm ${!isSubmissionComplete(submission.status) ? 'bg-gray-100 cursor-not-allowed opacity-50' : ''}`}
+                                    placeholder={!isSubmissionComplete(submission.status) ? 'Complete submission first' : 'Feedback...'}
                                   />
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${submission.status === 'graded'
+                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${isSubmissionComplete(submission.status)
                                     ? 'bg-green-100 text-green-800'
                                     : 'bg-yellow-100 text-yellow-800'
                                     }`}>
-                                    {submission.status.toUpperCase()}
+                                    {isSubmissionComplete(submission.status) ? 'COMPLETE' : 'INCOMPLETE'}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3">
                                   <div className="flex gap-2">
                                     <button
                                       onClick={() => handleGradeSubmission(submission._id)}
-                                      disabled={submission.status === 'pending'}
-                                      className={`p-1.5 rounded-lg ${submission.status === 'pending' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
-                                      title={submission.status === 'pending' ? "Mark as complete to grade" : "Save Grade"}
+                                      disabled={!isSubmissionComplete(submission.status)}
+                                      className={`p-1.5 rounded-lg ${!isSubmissionComplete(submission.status) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                                      title={!isSubmissionComplete(submission.status) ? "Mark as complete to grade" : "Save Grade"}
                                     >
                                       <CheckCircle className="h-4 w-4" />
                                     </button>
@@ -1253,9 +1325,9 @@ const AssignmentManagement = ({ currentUser }) => {
                                       onClick={() => {
                                         alert(`Plagiarism Check for ${submission.student?.name}:\n\nOriginality Score: 92%\nMatches found: 8% (Wikipedia)\n\nResult: 🟢 Safe`);
                                       }}
-                                      disabled={submission.status === 'pending'}
-                                      className={`p-1.5 rounded-lg ${submission.status === 'pending' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-                                      title={submission.status === 'pending' ? "Mark as complete to check" : "Check Plagiarism"}
+                                      disabled={!isSubmissionComplete(submission.status)}
+                                      className={`p-1.5 rounded-lg ${!isSubmissionComplete(submission.status) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                                      title={!isSubmissionComplete(submission.status) ? "Mark as complete to check" : "Check Plagiarism"}
                                     >
                                       <AlertTriangle className="h-4 w-4" />
                                     </button>
@@ -1265,9 +1337,9 @@ const AssignmentManagement = ({ currentUser }) => {
                                           handleGradingChange(submission._id, 'marks', Math.floor(Math.random() * (selectedAssignment.totalMarks / 2)) + Math.ceil(selectedAssignment.totalMarks / 2));
                                           handleGradingChange(submission._id, 'remarks', 'Auto-graded successfully via system.');
                                         }}
-                                        disabled={submission.status === 'pending'}
-                                        className={`p-1.5 rounded-lg ${submission.status === 'pending' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
-                                        title={submission.status === 'pending' ? "Mark as complete to auto-grade" : "Auto-Grade MCQ"}
+                                        disabled={!isSubmissionComplete(submission.status)}
+                                        className={`p-1.5 rounded-lg ${!isSubmissionComplete(submission.status) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                                        title={!isSubmissionComplete(submission.status) ? "Mark as complete to auto-grade" : "Auto-Grade MCQ"}
                                       >
                                         <Mic className="h-4 w-4" />
                                       </button>
@@ -1298,11 +1370,11 @@ const AssignmentManagement = ({ currentUser }) => {
               const savedSubs = (() => { try { return JSON.parse(localStorage.getItem(`submissions-data-${asgn._id}`)) || []; } catch { return []; } })();
               const savedGrading = (() => { try { return JSON.parse(localStorage.getItem(`grading-data-${asgn._id}`)) || {}; } catch { return {}; } })();
               const total = savedSubs.length || 45;
-              const graded = savedSubs.filter(s => s.status === 'graded').length;
+              const graded = savedSubs.filter(s => normalizeSubmissionStatus(s.status) === 'complete').length;
               const pending = total - graded;
               const completionPct = total > 0 ? Math.round((graded / total) * 100) : 0;
-              // Only count graded submissions for avg marks
-              const gradedIds = savedSubs.filter(s => s.status === 'graded').map(s => s._id);
+              // Only count completed submissions for avg marks
+              const gradedIds = savedSubs.filter(s => normalizeSubmissionStatus(s.status) === 'complete').map(s => s._id);
               const marksArr = Object.entries(savedGrading)
                 .filter(([id]) => gradedIds.length === 0 || gradedIds.includes(id))
                 .map(([, g]) => Math.min(parseFloat(g.marks), asgn.totalMarks || Infinity))
@@ -1340,13 +1412,13 @@ const AssignmentManagement = ({ currentUser }) => {
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-5 rounded-2xl shadow-sm">
                   <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Completion Rate</p>
                   <p className="text-4xl font-extrabold text-blue-600">{overallCompletion}%</p>
-                  <p className="text-xs text-gray-500 mt-1">{totalGraded} graded of {totalStudents} total submissions</p>
+                  <p className="text-xs text-gray-500 mt-1">{totalGraded} completed of {totalStudents} total submissions</p>
                   <div className="mt-3 w-full bg-blue-100 rounded-full h-2">
                     <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${overallCompletion}%` }} />
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 p-5 rounded-2xl shadow-sm">
-                  <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">Pending Submissions</p>
+                  <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">Incomplete Submissions</p>
                   <p className="text-4xl font-extrabold text-amber-600">{totalPending}</p>
                   <p className="text-xs text-gray-500 mt-1">Across {assignments.length} assignment(s)</p>
                 </div>
@@ -1371,7 +1443,7 @@ const AssignmentManagement = ({ currentUser }) => {
                         <div className="w-full bg-gray-100 rounded-full h-2.5">
                           <div className={`${subjectColors[i % subjectColors.length]} h-2.5 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5">{data.graded} graded / {data.total} total</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{data.graded} completed / {data.total} total</p>
                       </div>
                     );
                   })}
@@ -1413,7 +1485,7 @@ const AssignmentManagement = ({ currentUser }) => {
                           <td className="px-5 py-3">
                             {row.avgPct !== null
                               ? <span className={`font-bold ${row.avgPct >= 60 ? 'text-emerald-600' : row.avgPct >= 35 ? 'text-amber-600' : 'text-red-500'}`}>{row.avgMarks} / {row.asgn.totalMarks} ({row.avgPct}%)</span>
-                              : <span className="text-gray-400 italic text-xs">Not graded</span>}
+                              : <span className="text-gray-400 italic text-xs">Not completed</span>}
                           </td>
                         </tr>
                       ))}

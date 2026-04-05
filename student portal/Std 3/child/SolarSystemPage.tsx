@@ -167,7 +167,7 @@ const WorldMap: React.FC<{
     </p>
 
     {/* World Grid */}
-    <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto w-full pb-20">
+    <div className="grid grid-cols-2 gap-4 w-full pb-20 mx-auto" style={{ maxWidth: 860 }}>
       {WORLDS.map((w, i) => {
         const lvl = daily.worldLevels[w.id] || 0;
         return (
@@ -181,22 +181,23 @@ const WorldMap: React.FC<{
             whileHover={{ scale: 1.03, boxShadow: `0 0 20px ${w.glowColor}` }}
             whileTap={{ scale: 0.97 }}
             style={{
-              padding: '14px', borderRadius: 16,
+              padding: '18px 18px 16px', borderRadius: 20,
               background: `linear-gradient(135deg, ${w.color}12, ${w.color}06)`,
               border: `2px solid ${w.color}30`,
               fontFamily: 'Nunito, sans-serif',
+              minHeight: 132,
             }}
           >
             <div className="flex items-center gap-3 mb-1">
-              <span style={{ fontSize: 28 }}>{w.icon}</span>
+              <span style={{ fontSize: 34, lineHeight: 1 }}>{w.icon}</span>
               <div>
-                <div style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 800 }}>{w.name}</div>
-                <div style={{ color: w.color, fontSize: 11, fontWeight: 700 }}>
+                <div style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 800 }}>{w.name}</div>
+                <div style={{ color: w.color, fontSize: 12, fontWeight: 700 }}>
                   Level {lvl + 1}
                 </div>
               </div>
             </div>
-            <p style={{ color: '#94a3b8', fontSize: 11, lineHeight: 1.4, margin: 0 }}>
+            <p style={{ color: '#94a3b8', fontSize: 12, lineHeight: 1.45, margin: 0 }}>
               {w.description}
             </p>
           </motion.button>

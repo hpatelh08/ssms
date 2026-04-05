@@ -3,10 +3,42 @@ import axios from 'axios';
 import { Plus, FileText, Calendar, Clock, User, Edit, Trash2, Eye, Download, CheckCircle, BookOpen, Award } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { apiUrl } from '../../config/api';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection, matchesAssignedTeacherClass } from '../../config/teacherClasses';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection, matchesAssignedTeacherClass } from '../../teacherIdentity';
 import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const ExamManagement = ({ currentUser }) => {
+  const getExamStorageKey = () => `teacher-exams-${currentUser?._id || currentUser?.email || 'default'}`;
+  const buildExamKey = (exam) => {
+    const classId = exam?.class?._id || exam?.class || '';
+    const subjectId = exam?.subject?._id || exam?.subject || '';
+    const date = exam?.date || exam?.examDate || '';
+    return `${exam?.examName || ''}|${date}|${classId}|${subjectId}`;
+  };
+  const loadLocalExams = () => {
+    const key = getExamStorageKey();
+    const saved = localStorage.getItem(key);
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const saveLocalExams = (list) => {
+    const key = getExamStorageKey();
+    localStorage.setItem(key, JSON.stringify(list));
+  };
+  const mergeExams = (remoteList, localList) => {
+    const remoteKeys = new Set(remoteList.map(buildExamKey));
+    const merged = [...remoteList];
+    localList.forEach((exam) => {
+      if (!remoteKeys.has(buildExamKey(exam))) {
+        merged.push(exam);
+      }
+    });
+    return merged;
+  };
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -22,6 +54,8 @@ const ExamManagement = ({ currentUser }) => {
   const [marksSelectedClass, setMarksSelectedClass] = useState('');
   const [marksSelectedExam, setMarksSelectedExam] = useState('');
   const [marksExams, setMarksExams] = useState([]);
+  const [marksSubjects, setMarksSubjects] = useState([]);
+  const [marksSelectedSubject, setMarksSelectedSubject] = useState('');
   const [formData, setFormData] = useState({
     examName: '',
     examType: 'quiz',
@@ -54,24 +88,54 @@ const ExamManagement = ({ currentUser }) => {
   }, [classes, currentUser]);
 
   useEffect(() => {
-    if (formData.class) {
-      const selectedClass = classes.find(c => c._id === formData.class);
-      if (selectedClass) {
-        setSubjects(selectedClass.subjects || []);
+    const loadSubjectsForClass = async () => {
+      if (!formData.class) {
+        setSubjects([]);
+        return;
       }
-    } else {
-      setSubjects([]);
-    }
+
+      const selectedClass = classes.find(c => c._id === formData.class);
+      if (!selectedClass) {
+        setSubjects([]);
+        return;
+      }
+
+      try {
+        const std = String(selectedClass.className || '').match(/\d+/)?.[0] || '';
+        const section = String(selectedClass.section || '').trim().toUpperCase();
+        if (std && section) {
+          const response = await axios.get(apiUrl('/api/class/timetable'), {
+            params: { std, section },
+            timeout: 4000
+          });
+          const schedule = response?.data?.data?.schedule || {};
+          const subjectSet = new Set();
+          Object.values(schedule).forEach((slots) => {
+            (slots || []).forEach((slot) => {
+              if (slot?.isBreak || !slot?.subject) return;
+              subjectSet.add(String(slot.subject).trim());
+            });
+          });
+          const subjectList = Array.from(subjectSet)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+            .map((name) => ({ _id: name, subjectName: name }));
+          if (subjectList.length) {
+            setSubjects(subjectList);
+            return;
+          }
+        }
+      } catch {
+        // Fall back to stored class subjects.
+      }
+
+      setSubjects(selectedClass.subjects || []);
+    };
+
+    loadSubjectsForClass();
   }, [formData.class, classes]);
 
-  const marksSubjectList = [
-    { _id: 'sub_1', subjectName: 'Math' },
-    { _id: 'sub_2', subjectName: 'Science' },
-    { _id: 'sub_3', subjectName: 'English' },
-    { _id: 'sub_4', subjectName: 'Gujarati' },
-    { _id: 'sub_5', subjectName: 'Hindi' },
-    { _id: 'sub_6', subjectName: 'Sanskrit' }
-  ];
+  const marksSubjectList = marksSubjects;
 
   useEffect(() => {
     if (marksSelectedClass) {
@@ -84,16 +148,18 @@ const ExamManagement = ({ currentUser }) => {
             timeout: 1000
           });
           if (!response.data.data || response.data.data.length === 0) throw new Error('Empty');
-          setMarksExams(response.data.data);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const upcoming = (response.data.data || []).filter((exam) => {
+            const examDate = new Date(exam.date || exam.examDate || exam.startDate || '');
+            if (Number.isNaN(examDate.getTime())) return false;
+            examDate.setHours(0, 0, 0, 0);
+            return examDate >= today;
+          });
+          setMarksExams(upcoming);
         } catch {
-          setMarksExams([{
-            _id: 'mock_exam_1',
-            examName: 'Mid Term Exam',
-            examType: 'mid_term',
-            class: { className: '8', section: 'B' },
-            date: new Date().toISOString()
-          }]);
-          setMarksSelectedExam('mock_exam_1');
+          setMarksExams([]);
+          setMarksSelectedExam('');
         }
       };
       fetchMarksExams();
@@ -103,6 +169,34 @@ const ExamManagement = ({ currentUser }) => {
           console.error('Error fetching marks students:', error);
           setMarksStudents([]);
         });
+
+      const selectedClass = classes.find((cls) => cls._id === marksSelectedClass);
+      if (selectedClass) {
+        const std = String(selectedClass.className || '').match(/\d+/)?.[0] || '';
+        const section = String(selectedClass.section || '').trim().toUpperCase();
+        if (std && section) {
+          axios.get(apiUrl('/api/class/timetable'), {
+            params: { std, section },
+            timeout: 4000
+          }).then((response) => {
+            const schedule = response?.data?.data?.schedule || {};
+            const subjectSet = new Set();
+            Object.values(schedule).forEach((slots) => {
+              (slots || []).forEach((slot) => {
+                if (slot?.isBreak || !slot?.subject) return;
+                subjectSet.add(String(slot.subject).trim());
+              });
+            });
+            const subjectList = Array.from(subjectSet)
+              .filter(Boolean)
+              .sort((a, b) => a.localeCompare(b))
+              .map((name) => ({ _id: name, subjectName: name }));
+            setMarksSubjects(subjectList);
+          }).catch(() => {
+            setMarksSubjects([]);
+          });
+        }
+      }
     }
   }, [marksSelectedClass, classes, currentUser]);
 
@@ -147,11 +241,13 @@ const ExamManagement = ({ currentUser }) => {
     }
   }, [classes]);
 
-  const calcMarksTotal = (studentId) => {
+  const calcMarksTotal = (studentId, subjectList = marksSubjectList) => {
     const sm = marksData[studentId] || {};
-    return Object.values(sm).reduce((sum, val) => sum + (val || 0), 0);
+    return subjectList.reduce((sum, sub) => sum + (sm[sub._id] || 0), 0);
   };
-  const calcMarksAvg = (studentId) => Math.round(calcMarksTotal(studentId) / marksSubjectList.length);
+  const calcMarksAvg = (studentId, subjectList = marksSubjectList) => subjectList.length
+    ? Math.round(calcMarksTotal(studentId, subjectList) / subjectList.length)
+    : 0;
   const calcMarksGrade = (avg) => {
     if (avg >= 90) return 'A+';
     if (avg >= 80) return 'A';
@@ -200,23 +296,12 @@ const ExamManagement = ({ currentUser }) => {
         },
         timeout: 1000
       });
-      setExams(response.data.data);
+      const remoteExams = response.data.data || [];
+      const localExams = loadLocalExams();
+      setExams(mergeExams(remoteExams, localExams));
     } catch (error) {
       console.error('Error fetching exams:', error);
-      // Fallback dummy exam
-      setExams([{
-        _id: 'mock_exam_1',
-        examName: 'Mid Term Math',
-        examType: 'mid_term',
-        subject: { subjectName: 'Math' },
-        class: { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
-        date: new Date(Date.now() + 86400000 * 5).toISOString(), // 5 days from now
-        startTime: '09:00',
-        endTime: '12:00',
-        status: 'scheduled',
-        totalMarks: 100,
-        passingMarks: 35
-      }]);
+      setExams(loadLocalExams());
     }
   };
 
@@ -252,21 +337,17 @@ const ExamManagement = ({ currentUser }) => {
       const fallbackClassId = selectedExamDetails.class?._id || classes[0]?._id || marksSelectedClass || '';
       const fallbackStudents = await loadClassStudents(fallbackClassId, currentUser, classes);
 
-      const mockResults = fallbackStudents.map((student, index) => {
-        // Use saved marks if available, otherwise leave empty
-        const savedMarks = savedGradedMap[student.name]?.[selectedSubject];
-        return {
-          _id: `MOCK_RES_${index + 1}`,
-          student: {
-            name: student.name,
-            studentId: student.studentId
-          },
-          marksObtained: savedMarks !== undefined ? savedMarks : '',
-          totalMarks: baseTotalMarks,
-          passingMarks: selectedExamDetails.passingMarks,
-          remarks: ''
-        };
-      });
+      const mockResults = fallbackStudents.map((student, index) => ({
+        _id: `MOCK_RES_${index + 1}`,
+        student: {
+          name: student.name,
+          studentId: student.studentId
+        },
+        marksObtained: savedGradedMap[student.name]?.[selectedSubject] ?? '',
+        totalMarks: baseTotalMarks,
+        passingMarks: selectedExamDetails.passingMarks,
+        remarks: ''
+      }));
 
       setExamResults(mockResults);
       const initialGrading = {};
@@ -300,14 +381,24 @@ const ExamManagement = ({ currentUser }) => {
             'Content-Type': 'application/json'
           }
         });
+        await fetchExams();
       } else {
         // Create new exam
-        await axios.post(apiUrl('/api/teacher/exams'), formData, {
+        const response = await axios.post(apiUrl('/api/teacher/exams'), formData, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
+        const createdExam = response?.data?.data;
+        if (createdExam) {
+          const localExams = loadLocalExams();
+          const filtered = localExams.filter((exam) => buildExamKey(exam) !== buildExamKey(createdExam));
+          saveLocalExams(filtered);
+          setExams(prev => [createdExam, ...prev.filter((exam) => buildExamKey(exam) !== buildExamKey(createdExam))]);
+        } else {
+          await fetchExams();
+        }
       }
 
       setFormData({
@@ -324,33 +415,17 @@ const ExamManagement = ({ currentUser }) => {
       });
       setShowForm(false);
 
-      // Optimistic UI update
-      const mockNewExam = {
-        _id: 'new_mock_' + Date.now(),
-        examName: formData.examName,
-        examType: formData.examType,
-        subject: subjects.find(s => s._id === formData.subject) || { subjectName: 'Selected Subject' },
-        class: classes.find(c => c._id === formData.class) || { className: '8', section: 'B' },
-        date: formData.date,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        status: 'scheduled',
-        totalMarks: formData.totalMarks,
-        passingMarks: formData.passingMarks
-      };
-      setExams(prev => [mockNewExam, ...prev]);
-
       setLoading(false);
     } catch (error) {
       console.error('Error creating/updating exam:', error);
 
       // Fallback optimistic UI update for error scenario
       const mockNewExam = {
-        _id: 'new_mock_' + Date.now(),
+        _id: 'local_' + Date.now(),
         examName: formData.examName,
         examType: formData.examType,
         subject: subjects.find(s => s._id === formData.subject) || { subjectName: 'Selected Subject' },
-        class: classes.find(c => c._id === formData.class) || { className: '8', section: 'B' },
+        class: classes.find(c => c._id === formData.class) || { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
         date: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
@@ -358,6 +433,8 @@ const ExamManagement = ({ currentUser }) => {
         totalMarks: formData.totalMarks,
         passingMarks: formData.passingMarks
       };
+      const localExams = loadLocalExams();
+      saveLocalExams([mockNewExam, ...localExams]);
       setExams(prev => [mockNewExam, ...prev]);
       setShowForm(false);
       setLoading(false);
@@ -367,6 +444,13 @@ const ExamManagement = ({ currentUser }) => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this exam?')) {
       try {
+        if (String(id || '').startsWith('local_')) {
+          const localExams = loadLocalExams();
+          const filtered = localExams.filter((exam) => exam._id !== id);
+          saveLocalExams(filtered);
+          setExams(prev => prev.filter((exam) => exam._id !== id));
+          return;
+        }
         const token = localStorage.getItem('token');
         await axios.delete(apiUrl(`/api/teacher/exams/${id}`), {
           headers: {
@@ -904,31 +988,31 @@ const ExamManagement = ({ currentUser }) => {
             <div>
               {!selectedSubject ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {[
-                    { name: 'Math', color: 'bg-blue-500', icon: <BookOpen className="h-8 w-8 text-white" /> },
-                    { name: 'Science', color: 'bg-green-500', icon: <FileText className="h-8 w-8 text-white" /> },
-                    { name: 'English', color: 'bg-purple-500', icon: <FileText className="h-8 w-8 text-white" /> },
-                    { name: 'Hindi', color: 'bg-orange-500', icon: <FileText className="h-8 w-8 text-white" /> },
-                    { name: 'Sanskrit', color: 'bg-indigo-500', icon: <FileText className="h-8 w-8 text-white" /> },
-                    { name: 'Gujarati', color: 'bg-red-500', icon: <FileText className="h-8 w-8 text-white" /> }
-                  ].map((sub) => (
+                  {(subjects.length ? subjects : []).map((subj, index) => {
+                    const palette = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-indigo-500', 'bg-red-500'];
+                    const color = palette[index % palette.length];
+                    const name = subj.subjectName || '';
+                    return (
                     <div
-                      key={sub.name}
-                      onClick={() => setSelectedSubject(sub.name)}
+                      key={subj._id || name}
+                      onClick={() => setSelectedSubject(name)}
                       className="group cursor-pointer bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1"
                     >
-                      <div className={`${sub.color} p-8 flex flex-col items-center justify-center text-center`}>
+                      <div className={`${color} p-8 flex flex-col items-center justify-center text-center`}>
                         <div className="mb-4 bg-white/20 p-4 rounded-full backdrop-blur-sm group-hover:scale-110 transition-transform">
-                          {sub.icon}
+                          <BookOpen className="h-8 w-8 text-white" />
                         </div>
-                        <h4 className="text-xl font-bold text-white uppercase tracking-wider">{sub.name}</h4>
+                        <h4 className="text-xl font-bold text-white uppercase tracking-wider">{name}</h4>
                       </div>
                       <div className="p-4 bg-gray-50 text-center text-gray-600 text-sm font-medium border-t flex justify-between items-center group-hover:bg-blue-50">
                         <span>View Grading</span>
                         <Plus className="h-4 w-4" />
                       </div>
                     </div>
-                  ))}
+                  )})}
+                  {subjects.length === 0 && (
+                    <div className="col-span-full text-center text-gray-400 py-8">No subjects found for this class.</div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -1059,7 +1143,7 @@ const ExamManagement = ({ currentUser }) => {
             <div className="space-y-6">
               <div className="bg-white rounded-2xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Academic Class</label>
                       <select
@@ -1085,6 +1169,19 @@ const ExamManagement = ({ currentUser }) => {
                         ))}
                       </select>
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Subject</label>
+                      <select
+                        value={marksSelectedSubject}
+                        onChange={(e) => setMarksSelectedSubject(e.target.value)}
+                        className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      >
+                        <option value="">All Subjects</option>
+                        {marksSubjectList.map(sub => (
+                          <option key={sub._id} value={sub._id}>{sub.subjectName}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -1095,7 +1192,7 @@ const ExamManagement = ({ currentUser }) => {
                         <tr className="bg-white border-b border-gray-100">
                           <th className="px-6 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest sticky left-0 bg-white z-20">Roll No</th>
                           <th className="px-6 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest sticky left-24 bg-white z-20 border-r border-gray-100">Student Name</th>
-                          {marksSubjectList.map(sub => (
+                          {(marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList).map(sub => (
                             <th key={sub._id} className="px-4 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest text-center">{sub.subjectName}</th>
                           ))}
                           <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50 border-l border-blue-100">Total</th>
@@ -1105,8 +1202,9 @@ const ExamManagement = ({ currentUser }) => {
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {marksStudents.map((student, index) => {
-                          const total = calcMarksTotal(student._id);
-                          const avg = calcMarksAvg(student._id);
+                          const subjectList = marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList;
+                          const total = calcMarksTotal(student._id, subjectList);
+                          const avg = calcMarksAvg(student._id, subjectList);
                           const grade = calcMarksGrade(avg);
                           return (
                             <tr key={student._id} className="hover:bg-gray-50/80 transition-colors group">
@@ -1117,7 +1215,7 @@ const ExamManagement = ({ currentUser }) => {
                                 <div className="font-bold text-gray-800 text-sm">{student.name}</div>
                                 <div className="text-[9px] text-gray-400 font-medium uppercase mt-0.5 tracking-tighter">{student.studentId}</div>
                               </td>
-                              {marksSubjectList.map(sub => (
+                              {(marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList).map(sub => (
                                 <td key={sub._id} className="px-4 py-4 text-center">
                                   <span className={`inline-block w-8 text-sm font-semibold ${(marksData[student._id]?.[sub._id] || 0) < 60 ? 'text-orange-500' : 'text-gray-600'}`}>
                                     {marksData[student._id]?.[sub._id] || '-'}

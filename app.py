@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, Response
+from flask import Flask, render_template, render_template_string, request, redirect, url_for, session, flash, send_from_directory, Response, abort, make_response
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -13,6 +13,13 @@ import random
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
+
+
+def _no_cache(response: Response) -> Response:
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.errorhandler(404)
@@ -144,12 +151,12 @@ STUDENT_DASHBOARD_DIST_DIR = os.path.join(
 
 STUDENT_PORTAL_ROOT_DIR = os.path.join(os.path.dirname(__file__), 'student portal')
 STUDENT_LOGIN_ACCOUNTS = {
-    'STU2024101': {'grade': 1, 'password': 'Sch@011'},
-    'STU2024201': {'grade': 2, 'password': 'Sch@021'},
-    'STU2024301': {'grade': 3, 'password': 'Sch@031'},
-    'STU2024401': {'grade': 4, 'password': 'Sch@041'},
-    'STU2024501': {'grade': 5, 'password': 'Sch@051'},
-    'STU2024601': {'grade': 6, 'password': 'Sch@061'},
+    'STU20240001': {'grade': 1, 'password': 'Stu@001'},
+    'STU20240121': {'grade': 2, 'password': 'Stu@121'},
+    'STU20240241': {'grade': 3, 'password': 'Stu@241'},
+    'STU20240361': {'grade': 4, 'password': 'Stu@361'},
+    'STU20240481': {'grade': 5, 'password': 'Stu@481'},
+    'STU20240601': {'grade': 6, 'password': 'Stu@601'},
 }
 
 STUDENT_LOGIN_THEMES = {
@@ -257,7 +264,243 @@ STUDENT_LOGIN_THEMES = {
     },
 }
 
-STUDENT_LOGIN_PAGE_GRADES = {1, 2, 4}
+STD3_LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Std 3 Login | Smart School System</title>
+  <style>
+    :root {
+      --bg1: #07111f;
+      --bg2: #11183a;
+      --bg3: #2a1d74;
+      --card: rgba(255,255,255,0.08);
+      --line: rgba(255,255,255,0.18);
+      --text: #eef4ff;
+      --muted: rgba(238,244,255,0.72);
+      --accent: #8b5cf6;
+      --accent2: #38bdf8;
+      --accent3: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(255,255,255,0.12), transparent 0 18%),
+        radial-gradient(circle at 82% 18%, rgba(139,92,246,0.22), transparent 0 16%),
+        radial-gradient(circle at 68% 78%, rgba(56,189,248,0.16), transparent 0 18%),
+        linear-gradient(135deg, var(--bg1), var(--bg2) 52%, var(--bg3));
+      overflow-x: hidden;
+    }
+    .stars, .stars::before, .stars::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(circle at 8% 18%, rgba(255,255,255,0.92) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 18% 42%, rgba(255,255,255,0.8) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 32% 12%, rgba(255,255,255,0.78) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 46% 26%, rgba(255,255,255,0.9) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 66% 20%, rgba(255,255,255,0.82) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 78% 34%, rgba(255,255,255,0.86) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 88% 16%, rgba(255,255,255,0.84) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 14% 72%, rgba(255,255,255,0.74) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 34% 84%, rgba(255,255,255,0.82) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 62% 70%, rgba(255,255,255,0.9) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 88% 76%, rgba(255,255,255,0.76) 0 1px, transparent 1.5px);
+      opacity: 0.65;
+      animation: drift 14s linear infinite;
+    }
+    .stars::before { opacity: 0.35; animation-duration: 20s; transform: translateY(-12px); }
+    .stars::after { opacity: 0.25; animation-duration: 28s; transform: translateY(14px); }
+    .shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .panel {
+      width: min(1180px, 100%);
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      overflow: hidden;
+      border-radius: 34px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.06);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.34);
+      backdrop-filter: blur(18px);
+    }
+    .hero, .login { padding: 36px; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-right: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 25% 15%, rgba(255,255,255,0.1), transparent 0 18%),
+        linear-gradient(180deg, rgba(25,28,85,0.95), rgba(44,24,130,0.94));
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 999px;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+      color: #e0e7ff; font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    .title { margin: 18px 0 12px; font-size: clamp(2.4rem, 5vw, 4.4rem); line-height: 0.95; letter-spacing: -0.06em; }
+    .lead { margin: 0; max-width: 34rem; color: var(--muted); font-size: 1.02rem; line-height: 1.75; }
+    .orbit {
+      position: absolute; right: 32px; top: 34px; width: 132px; height: 132px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,0.22);
+      animation: spin 20s linear infinite;
+    }
+    .orbit::before {
+      content: ""; position: absolute; inset: 14px; border-radius: 50%;
+      border: 1px dashed rgba(255,255,255,0.24);
+    }
+    .planet {
+      position: absolute; right: 42px; top: 48px; width: 52px; height: 52px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #f8fafc 0 10%, #a78bfa 14%, #4c1d95 74%, #111827 100%);
+      box-shadow: 0 0 26px rgba(56,189,248,0.5);
+      animation: pulse 4.6s ease-in-out infinite;
+    }
+    .trail {
+      position: absolute; left: 30px; bottom: 32px; width: calc(100% - 60px); height: 3px;
+      border-radius: 999px; background: linear-gradient(90deg, transparent, rgba(139,92,246,0.7), rgba(56,189,248,0.95), rgba(255,255,255,0.8), transparent);
+      box-shadow: 0 0 18px rgba(56,189,248,0.28); animation: shimmer 3.4s ease-in-out infinite;
+    }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-radius: 999px; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.14); color: #f8fbff; font-size: 0.84rem; font-weight: 800;
+    }
+    .badge::before { content: "✦"; color: #fef08a; }
+    .login { background: rgba(255,255,255,0.96); color: #10233d; }
+    .login h2 { margin: 0 0 8px; font-size: 2rem; letter-spacing: -0.04em; }
+    .login p { margin: 0 0 22px; color: #5d6c84; line-height: 1.6; }
+    .error {
+      margin: 0 0 18px; padding: 14px 16px; border-radius: 16px;
+      border: 1px solid rgba(194,65,12,0.2); background: rgba(194,65,12,0.08); color: #9a3412; font-weight: 700;
+    }
+    .field { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: 800; color: #29415f; }
+    .input-wrap { position: relative; }
+    input {
+      width: 100%; border: 1px solid rgba(37,99,235,0.18); border-radius: 16px; padding: 14px 16px;
+      font: inherit; color: #10233d; background: #fff; outline: none; transition: border-color .2s, transform .2s, box-shadow .2s;
+    }
+    .input-wrap input { padding-right: 82px; }
+    input:focus { border-color: rgba(139,92,246,0.62); box-shadow: 0 0 0 4px rgba(139,92,246,0.14); transform: translateY(-1px); }
+    .toggle {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      border: 1px solid rgba(37,99,235,0.16); background: rgba(255,255,255,0.95);
+      color: #4c1d95; border-radius: 12px; padding: 8px 12px; font-size: 0.82rem; font-weight: 800; cursor: pointer;
+    }
+    .actions { display: flex; gap: 12px; align-items: center; margin-top: 24px; flex-wrap: wrap; }
+    .btn {
+      border: 0; border-radius: 16px; padding: 14px 20px; font: inherit; font-weight: 800; cursor: pointer;
+      transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.02); }
+    .btn-primary {
+      color: white;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      box-shadow: 0 16px 30px rgba(124,58,237,0.26);
+      min-width: 180px;
+    }
+    .hint { color: #5d6c84; font-size: 0.92rem; }
+    .return-link { display: inline-flex; margin-top: 18px; color: #4c1d95; text-decoration: none; font-weight: 800; font-size: 0.92rem; }
+    .return-link:hover { text-decoration: underline; }
+    .footer-note { margin-top: 22px; color: rgba(238,244,255,0.72); font-size: 0.92rem; line-height: 1.6; }
+    @media (max-width: 920px) {
+      .panel { grid-template-columns: 1fr; }
+      .hero { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+    @media (max-width: 640px) {
+      .shell { padding: 14px; }
+      .hero, .login { padding: 22px; }
+      .title { font-size: 2.25rem; }
+      .login h2 { font-size: 1.65rem; }
+      .actions { flex-direction: column; align-items: stretch; }
+      .btn-primary { width: 100%; }
+    }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.04); } }
+    @keyframes drift { from { transform: translate3d(0,0,0); } to { transform: translate3d(0,-12px,0); } }
+    @keyframes shimmer { 0%,100% { opacity: 0.65; transform: scaleX(0.95); } 50% { opacity: 1; transform: scaleX(1.02); } }
+  </style>
+</head>
+<body>
+  <span class="stars" aria-hidden="true"></span>
+  <main class="shell">
+    <section class="panel" aria-labelledby="login-title">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">{{ theme.badge }}</div>
+          <h1 class="title">{{ theme.hero_title }}</h1>
+          <p class="lead">{{ theme.hero_copy }}</p>
+          <div class="orbit" aria-hidden="true"></div>
+          <div class="planet" aria-hidden="true"></div>
+          <div class="trail" aria-hidden="true"></div>
+          <div class="badge-row">
+            {% for tag in theme.tags %}
+              <span class="badge">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="footer-note">
+          Std 3 uses the school-issued Student ID and password from the admin side. The same credentials open this space-themed portal.
+        </div>
+      </div>
+      <div class="login">
+        <h2 id="login-title">Student Login</h2>
+        <p>Enter your Student ID and password to open the Std 3 portal.</p>
+        {% if error %}
+          <div class="error" role="alert">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="{{ url_for('student_login_grade', grade=grade) }}" autocomplete="on">
+          <div class="field">
+            <label for="student_id">Student ID</label>
+            <input id="student_id" name="student_id" type="text" placeholder="{{ student_id }}" value="{{ student_id|e }}" required autofocus />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input id="password" name="password" type="password" placeholder="Enter your password" required />
+              <button type="button" class="toggle" data-toggle-password="password">Show</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">Continue Std 3</button>
+            <div class="hint">Use the Std 3 Student ID and password assigned by the school admin.</div>
+          </div>
+        </form>
+        <a class="return-link" href="{{ url_for('student_login') }}">Back to standard picker</a>
+      </div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var toggle = document.querySelector('[data-toggle-password="password"]');
+      if (!toggle) return;
+      toggle.addEventListener('click', function () {
+        var input = document.getElementById('password');
+        if (!input) return;
+        var nextType = input.type === 'password' ? 'text' : 'password';
+        input.type = nextType;
+        toggle.textContent = nextType === 'password' ? 'Show' : 'Hide';
+      });
+    })();
+  </script>
+</body>
+</html>
+"""
+
+
+def _render_std3_login(**context):
+    return render_template_string(STD3_LOGIN_TEMPLATE, **context)
+
+STUDENT_LOGIN_PAGE_GRADES = {1, 2, 3, 4, 5, 6}
 
 # Global variable to store current user (for testing)
 current_user = None
@@ -985,6 +1228,10 @@ def _get_student_login_account(student_id: str) -> dict | None:
     if not normalized:
         return None
 
+    admin_account = _get_admin_student_account(normalized)
+    if admin_account and admin_account.get('password'):
+        return admin_account
+
     if normalized in STUDENT_LOGIN_ACCOUNTS:
         meta = STUDENT_LOGIN_ACCOUNTS[normalized]
         grade = int(meta.get('grade') or 0) or _parse_student_grade(None, normalized)
@@ -1010,10 +1257,6 @@ def _get_student_login_account(student_id: str) -> dict | None:
             'theme': theme,
         }
 
-    admin_account = _get_admin_student_account(normalized)
-    if admin_account and admin_account.get('password'):
-        return admin_account
-
     return None
 
 
@@ -1032,12 +1275,13 @@ def student_login():
             grade = None
 
         if grade is None or not (1 <= grade <= 6):
-            return render_template(
+            response = make_response(render_template(
                 'student_login.html',
                 error='Please choose Std 1 to Std 6.',
                 student_grades=range(1, 7),
                 student_login_cards=student_login_cards,
-            )
+            ))
+            return _no_cache(response)
 
         if grade in STUDENT_LOGIN_PAGE_GRADES:
             return redirect(url_for('student_login_grade', grade=grade))
@@ -1067,13 +1311,16 @@ def student_login():
             'bg_start': theme['bg_start'],
             'bg_end': theme['bg_end'],
         }
+        if grade == 1:
+            return _render_student_portal_html(grade, demo_student_id)
         return redirect(url_for('student_portal', grade=grade))
 
-    return render_template(
+    response = make_response(render_template(
         'student_login.html',
         student_grades=range(1, 7),
         student_login_cards=student_login_cards,
-    )
+    ))
+    return _no_cache(response)
 
 
 @app.route('/student-login/<int:grade>', methods=['GET', 'POST'])
@@ -1091,26 +1338,25 @@ def student_login_grade(grade: int):
         f'STD{grade}',
     )
 
+    def render_login(**kwargs):
+        if grade == 3:
+            return _no_cache(make_response(_render_std3_login(grade=grade, theme=theme, **kwargs)))
+        return _no_cache(make_response(render_template('student_login_grade.html', grade=grade, theme=theme, **kwargs)))
+
     if request.method == 'POST':
         student_id = _normalize_student_login_id(request.form.get('student_id') or '')
         password = str(request.form.get('password') or '')
 
         account = _get_student_login_account(student_id)
         if not account or int(account.get('grade') or 0) != grade:
-            return render_template(
-                'student_login_grade.html',
-                grade=grade,
-                theme=theme,
+            return render_login(
                 error=f'Use the Std {grade} Student ID and password assigned by the school.',
                 student_id=student_id or demo_student_id,
             )
 
         expected_password = str(account.get('password') or '').strip()
         if not expected_password or password.strip() != expected_password:
-            return render_template(
-                'student_login_grade.html',
-                grade=grade,
-                theme=theme,
+            return render_login(
                 error='Invalid Student ID or Password.',
                 student_id=student_id or demo_student_id,
             )
@@ -1131,14 +1377,11 @@ def student_login_grade(grade: int):
             'bg_start': theme['bg_start'],
             'bg_end': theme['bg_end'],
         }
+        if grade == 1:
+            return _render_student_portal_html(grade, account['student_id'])
         return redirect(url_for('student_portal', grade=grade))
 
-    return render_template(
-        'student_login_grade.html',
-        grade=grade,
-        theme=theme,
-        student_id=demo_student_id,
-    )
+    return render_login(student_id=demo_student_id)
 
 
 @app.route('/api/students/login', methods=['POST'])
@@ -1966,6 +2209,17 @@ def _find_student_portal_dist_dir(grade: int) -> str | None:
     return None
 
 
+def _find_any_student_portal_asset(filename: str) -> str | None:
+    for grade in range(1, 8):
+        dist_dir = _find_student_portal_dist_dir(grade)
+        if not dist_dir:
+            continue
+        assets_dir = os.path.join(dist_dir, 'assets')
+        if os.path.isfile(os.path.join(assets_dir, filename)):
+            return assets_dir
+    return None
+
+
 @app.route('/student-portal')
 def student_portal_home():
     if session.get('role') != 'student':
@@ -1975,18 +2229,42 @@ def student_portal_home():
         return redirect(url_for('student_login'))
     return redirect(url_for('student_portal', grade=grade))
 
-
 @app.route('/student-portal/<int:grade>')
 @app.route('/student-portal/<int:grade>/<path:path>')
 def student_portal(grade: int, path: str = ''):
-    if session.get('role') != 'student':
-        return redirect(url_for('student_login'))
-
     if not (1 <= grade <= 7):
         return redirect(url_for('student_dashboard_portal'))
+    if grade == 1:
+        abort(404)
+
+    demo_student_id = next(
+        (
+            sid
+            for sid, meta in STUDENT_LOGIN_ACCOUNTS.items()
+            if int(meta.get('grade') or 0) == grade
+        ),
+        f'STD{grade}',
+    )
+
+    if session.get('role') != 'student':
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
+        return redirect(url_for('student_login'))
+
+    if session.get('role') != 'student':
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
+        return redirect(url_for('student_login'))
+
+    session_grade = session.get('student_grade')
+    if session_grade and int(session_grade) != grade:
+        session.clear()
+        return redirect(url_for('student_login_grade', grade=grade))
 
     dist_dir = _find_student_portal_dist_dir(grade)
     if not dist_dir:
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
         return redirect(url_for('student_login'))
 
     session['student_app'] = 'portal'
@@ -2008,6 +2286,8 @@ def student_portal(grade: int, path: str = ''):
         with open(index_path, 'r', encoding='utf-8') as f:
             html = f.read()
     except Exception:
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
         return redirect(url_for('student_login'))
 
     theme_bootstrap = (
@@ -2018,11 +2298,74 @@ def student_portal(grade: int, path: str = ''):
         "}catch(e){}})();</script>"
     )
 
+    auth_bootstrap = ""
+    student_id = session.get('student_id') or demo_student_id
+    student_profile_payload = None
+    if grade in {1, 2, 3, 4, 5, 6}:
+        account = _get_student_login_account(student_id)
+        if account:
+            account_grade = int(account.get('grade') or 0)
+            effective_grade = grade if account_grade != grade else account_grade
+            class_name = account.get('class_name') if account_grade == grade and account.get('class_name') else f"Std {grade}"
+            student_profile_payload = {
+                'studentName': account.get('name') or student_id,
+                'className': class_name,
+                'admissionNumber': account.get('admissionNumber') or '',
+                'grNo': account.get('grNo') or '',
+                'studentId': account.get('student_id') or student_id,
+                'password': account.get('password') or '',
+                'parentName': account.get('parentName') or '',
+                'fatherName': account.get('parentName') or '',
+                'phone': account.get('phone') or '',
+                'dob': account.get('dob') or '',
+                'gender': account.get('gender') or 'Male',
+                'bloodGroup': account.get('bloodGroup') or '',
+                'address': account.get('address') or '',
+                'status': account.get('status') or 'Active',
+                'parentAccessKey': account.get('parentAccessKey') or '',
+                'grade': effective_grade or grade,
+                'division': account.get('division') or 'A',
+            }
+
+    if grade in {1, 2, 3, 5, 6}:
+        session_key = (
+            'ssms_std1_student_session_v1' if grade == 1
+            else 'ssms_std2_student_session_v1' if grade == 2
+            else 'ssms_student_session_v1' if grade == 3
+            else 'ssms_std5_student_session_v1' if grade == 5
+            else 'ssms_std6_student_session_v1'
+        )
+        session_payload = {'studentId': student_id}
+        if student_profile_payload:
+            session_payload['studentProfile'] = student_profile_payload
+        auth_bootstrap = (
+            "<script>(function(){try{"
+            f"localStorage.setItem({json.dumps(session_key)}, JSON.stringify({json.dumps(session_payload)}));"
+            "}catch(e){}})();</script>"
+        )
+
+    if grade == 4:
+        std4_payload = {
+            'isAuthenticated': True,
+            'user': {
+                'role': 'student',
+                'grade': grade,
+                'name': student_profile_payload.get('studentName') if student_profile_payload else student_id,
+                'username': student_id,
+            },
+            'studentProfile': student_profile_payload,
+        }
+        auth_bootstrap += (
+            "<script>(function(){try{"
+            f"localStorage.setItem('ssms_std4_auth_session_v1', JSON.stringify({json.dumps(std4_payload)}));"
+            "}catch(e){}})();</script>"
+        )
+
     marker = '<script type=\"module\"'
     if marker in html:
-        html = html.replace(marker, theme_bootstrap + marker, 1)
+        html = html.replace(marker, theme_bootstrap + auth_bootstrap + marker, 1)
     elif '</head>' in html:
-        html = html.replace('</head>', theme_bootstrap + '</head>', 1)
+        html = html.replace('</head>', theme_bootstrap + auth_bootstrap + '</head>', 1)
 
     return Response(html, mimetype='text/html')
 
@@ -2094,6 +2437,12 @@ def shared_assets(filename):
             if os.path.isfile(os.path.join(assets_dir, filename)):
                 return send_from_directory(assets_dir, filename)
 
+    # Fallback: serve any matching student portal asset even if the
+    # session cookie is not ready yet on the very first navigation.
+    assets_dir = _find_any_student_portal_asset(filename)
+    if assets_dir:
+        return send_from_directory(assets_dir, filename)
+
     # Student Dashboard (Std 8+)
     if session.get('role') == 'student' and session.get('student_app') == 'dashboard':
         assets_dir = os.path.join(STUDENT_DASHBOARD_DIST_DIR, 'assets')
@@ -2106,6 +2455,119 @@ def shared_assets(filename):
         return send_from_directory(assets_dir, filename)
 
     return {'error': 'Not found'}, 404
+
+
+def _render_student_portal_html(grade: int, demo_student_id: str, path: str = ''):
+    if not (1 <= grade <= 7):
+        return redirect(url_for('student_dashboard_portal'))
+
+    dist_dir = _find_student_portal_dist_dir(grade)
+    if not dist_dir:
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
+        return redirect(url_for('student_login'))
+
+    session['student_app'] = 'portal'
+    session['student_grade'] = grade
+    theme = STUDENT_LOGIN_THEMES.get(grade, STUDENT_LOGIN_THEMES[1])
+    session['student_theme'] = {
+        'grade': grade,
+        'name': theme['name'],
+        'badge': theme['badge'],
+        'accent': theme['accent'],
+        'accent_soft': theme['accent_soft'],
+        'accent_deep': theme['accent_deep'],
+        'bg_start': theme['bg_start'],
+        'bg_end': theme['bg_end'],
+    }
+
+    index_path = os.path.join(dist_dir, 'index.html')
+    try:
+        with open(index_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+    except Exception:
+        if grade in STUDENT_LOGIN_PAGE_GRADES:
+            return redirect(url_for('student_login_grade', grade=grade))
+        return redirect(url_for('student_login'))
+
+    theme_bootstrap = (
+        "<script>(function(){try{"
+        f"window.__SSMS_STUDENT_THEME__={json.dumps(session['student_theme'])};"
+        f"localStorage.setItem('ssmsStudentTheme',{json.dumps(json.dumps(session['student_theme']))});"
+        f"localStorage.setItem('ssmsStudentGrade',{json.dumps(str(grade))});"
+        "}catch(e){}})();</script>"
+    )
+
+    auth_bootstrap = ""
+    student_id = session.get('student_id') or demo_student_id
+    student_profile_payload = None
+    if grade in {1, 2, 3, 4, 5, 6}:
+        account = _get_student_login_account(student_id)
+        if account:
+            account_grade = int(account.get('grade') or 0)
+            effective_grade = grade if account_grade != grade else account_grade
+            class_name = account.get('class_name') if account_grade == grade and account.get('class_name') else f"Std {grade}"
+            student_profile_payload = {
+                'studentName': account.get('name') or student_id,
+                'className': class_name,
+                'admissionNumber': account.get('admissionNumber') or '',
+                'grNo': account.get('grNo') or '',
+                'studentId': account.get('student_id') or student_id,
+                'password': account.get('password') or '',
+                'parentName': account.get('parentName') or '',
+                'fatherName': account.get('parentName') or '',
+                'phone': account.get('phone') or '',
+                'dob': account.get('dob') or '',
+                'gender': account.get('gender') or 'Male',
+                'bloodGroup': account.get('bloodGroup') or '',
+                'address': account.get('address') or '',
+                'status': account.get('status') or 'Active',
+                'parentAccessKey': account.get('parentAccessKey') or '',
+                'grade': effective_grade or grade,
+                'division': account.get('division') or 'A',
+            }
+
+    if grade in {1, 2, 3, 5, 6}:
+        session_key = (
+            'ssms_std1_student_session_v1' if grade == 1
+            else 'ssms_std2_student_session_v1' if grade == 2
+            else 'ssms_student_session_v1' if grade == 3
+            else 'ssms_std5_student_session_v1' if grade == 5
+            else 'ssms_std6_student_session_v1'
+        )
+        session_payload = {'studentId': student_id}
+        if student_profile_payload:
+            session_payload['studentProfile'] = student_profile_payload
+        auth_bootstrap = (
+            "<script>(function(){try{"
+            f"localStorage.setItem({json.dumps(session_key)}, JSON.stringify({json.dumps(session_payload)}));"
+            "}catch(e){}})();</script>"
+        )
+
+    if grade == 4:
+        std4_payload = {
+            'isAuthenticated': True,
+            'user': {
+                'role': 'student',
+                'grade': grade,
+                'name': student_profile_payload.get('studentName') if student_profile_payload else student_id,
+                'username': student_id,
+            },
+            'studentProfile': student_profile_payload,
+        }
+        auth_bootstrap += (
+            "<script>(function(){try{"
+            f"localStorage.setItem('ssms_std4_auth_session_v1', JSON.stringify({json.dumps(std4_payload)}));"
+            "}catch(e){}})();</script>"
+        )
+
+    marker = '<script type=\"module\"'
+    if marker in html:
+        html = html.replace(marker, theme_bootstrap + auth_bootstrap + marker, 1)
+    elif '</head>' in html:
+        html = html.replace('</head>', theme_bootstrap + auth_bootstrap + '</head>', 1)
+
+    return Response(html, mimetype='text/html')
 
 
 @app.route('/css/<path:filename>')
@@ -2131,6 +2593,7 @@ def teacher_portal_redirect():
     sso_params = {
         'ssms_sso': '1',
         'email': teacher_username,
+        'teacherId': teacher_username,
         'name': teacher_identity['name'],
         'assignedClass': teacher_identity['assigned_class'],
         'division': teacher_identity['division'],

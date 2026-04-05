@@ -5,6 +5,7 @@ const { Router } = require('express');
 const db = require('../config/db');
 const { authMiddleware, authorize } = require('../middleware/auth');
 const { MIN_STANDARD, MAX_STANDARD, parseStandard, isSupportedStandard } = require('../config/standards');
+const { syncStudentMasterFileFromDb } = require('../utils/studentMasterSync');
 
 const router = Router();
 const STUDENT_SECTION_ORDER = ['A', 'B', 'C'];
@@ -363,6 +364,7 @@ router.post('/', authorize('super_admin', 'admin'), (req, res) => {
       student_password: created.stuPass,
       parent_access_key: created.accessKey
     });
+    syncStudentMasterFileFromDb();
   } catch (error) {
     res.status(400).json({ error: error.message || 'Unable to create student.' });
   }
@@ -395,6 +397,7 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
       status=?, fees=?, dob=?, gender=?, blood_group=?, address=?, parent_access_key=?, parent_id=?
     WHERE id = ?
   `).run(gr_number || null, student_id || null, student_password || null, name, admission, String(classNo), normalizedSection, parent, normalizedPhone, status, normalizedFees, dob, gender, blood_group || null, address, accessKey, linkedParentId, req.params.id);
+  syncStudentMasterFileFromDb();
   res.json({ success: true });
 });
 
@@ -402,6 +405,7 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
 router.delete('/:id', authorize('super_admin', 'admin'), (req, res) => {
   const result = db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Student not found.' });
+  syncStudentMasterFileFromDb();
   res.json({ success: true });
 });
 

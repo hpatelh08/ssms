@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { apiUrl } from '../../config/api';
+import { loadTeacherClasses } from '../../teacherAdminData';
 
 const AttendanceManagement = ({ currentUser }) => {
   const [classes, setClasses] = useState([]);
@@ -48,12 +49,6 @@ const AttendanceManagement = ({ currentUser }) => {
     fetchClasses();
   }, []);
 
-  useEffect(() => {
-    if (selectedClass) {
-      fetchStudentsInClass(selectedClass);
-    }
-  }, [selectedClass]);
-
   // Load saved attendance when date changes
   useEffect(() => {
     if (!selectedDate || students.length === 0) return;
@@ -83,108 +78,18 @@ const AttendanceManagement = ({ currentUser }) => {
   const fetchClasses = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/teacher/classes', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
+      const activeUser = currentUser || JSON.parse(localStorage.getItem('user') || '{}');
+      const visibleClasses = await loadTeacherClasses(activeUser);
+      const classroom = Array.isArray(visibleClasses) && visibleClasses.length > 0 ? visibleClasses[0] : null;
 
-      const assignedClasses = response.data.data || [];
+      setClasses(Array.isArray(visibleClasses) ? visibleClasses : []);
+      setSelectedClass(classroom?._id || '');
+      setStudents(Array.isArray(classroom?.students) ? classroom.students : []);
 
-      let activeUser = currentUser;
-      if (!activeUser) {
-        try {
-          activeUser = JSON.parse(localStorage.getItem('user'));
-        } catch { }
-      }
-
-      const normalizedAssignedClass = String(activeUser?.assignedClass || '').trim().toLowerCase();
-      const normalizedAssignedSection = String(activeUser?.division || '').trim().toLowerCase();
-
-      let visibleClasses = assignedClasses;
-
-      if (normalizedAssignedClass && normalizedAssignedSection) {
-        const classTeacherClass = assignedClasses.find((cls) => (
-          String(cls.className || '').trim().toLowerCase() === normalizedAssignedClass &&
-          String(cls.section || '').trim().toLowerCase() === normalizedAssignedSection
-        ));
-        visibleClasses = classTeacherClass ? [classTeacherClass] : [];
-      } else if (normalizedAssignedClass) {
-        visibleClasses = assignedClasses.filter((cls) => String(cls.className || '').trim().toLowerCase() === normalizedAssignedClass);
-      }
-
-      if (!visibleClasses || visibleClasses.length === 0) {
-        visibleClasses = [{ _id: 'mock_class_id', className: '10th', section: 'A' }];
-      }
-
-      setClasses(visibleClasses);
-      if (visibleClasses.length > 0 && !selectedClass) {
-        setSelectedClass(visibleClasses[0]._id);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-      const mockClasses = [{ _id: 'mock_class_id', className: '10th', section: 'A' }];
-      setClasses(mockClasses);
-      if (!selectedClass) setSelectedClass(mockClasses[0]._id);
-      setLoading(false);
-    }
-  };
-
-  const fetchStudentsInClass = async (classId) => {
-    try {
-      setLoading(true);
-      // MOCK 45 Indian Students as requested
-      const indianNames = [
-        "Aarav Sharma", "Vivaan Patel", "Aditya Singh", "Vihaan Kumar", "Arjun Gupta",
-        "Sai Krishna", "Reyansh Reddy", "Ayaan Khan", "Krishna Iyer", "Ishaan Verma",
-        "Rudra Joshi", "Dhruv Desai", "Kabir Das", "Atharv Yadav", "Rishi Tiwari",
-        "Adwait Pandey", "Aanya Sharma", "Diya Patel", "Ananya Singh", "Myra Kumar",
-        "Kavya Gupta", "Siya Reddy", "Navya Khan", "Aaradhya Iyer", "Saanvi Verma",
-        "Nyra Joshi", "Sneha Desai", "Ira Das", "Riya Yadav", "Tara Tiwari",
-        "Kiara Pandey", "Advik Nair", "Pranav Menon", "Rohan Sethi", "Karthik Pillai",
-        "Siddharth Rao", "Neel Thakur", "Dev Bhardwaj", "Rahul Chatterjee", "Nikhil Sen",
-        "Mira Nair", "Anika Menon", "Zara Sethi", "Nisha Thakur", "Pooja Bhardwaj"
-      ];
-
-      const mockStudentsData = indianNames.map((name, index) => ({
-        _id: `MOCK_STU_${index + 1}`,
-        studentId: `STU${String(index + 1).padStart(3, '0')}`,
-        name: name
-      }));
-
-      setStudents(mockStudentsData);
-
-      // Check if there's saved attendance for this date
-      const saved = localStorage.getItem(`attendance-data-${classId}-${selectedDate}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-        const sanitized = {};
-        students.forEach((student) => {
-          if (parsed?.[student._id]) {
-            sanitized[student._id] = parsed[student._id];
-          }
-        });
-        setAttendanceData(sanitized);
-        } catch {
-          const initialAttendance = {};
-          mockStudentsData.forEach(student => {
-            initialAttendance[student._id] = {
-              status: 'present',
-              uniformStatus: 'yes',
-              idCardStatus: 'yes',
-              remarks: ''
-            };
-          });
-          setAttendanceData(initialAttendance);
-        }
-      } else {
-        // Initialize attendance data default to present
+      const teacherStudents = Array.isArray(classroom?.students) ? classroom.students : [];
+      if (teacherStudents.length > 0) {
         const initialAttendance = {};
-        mockStudentsData.forEach(student => {
+        teacherStudents.forEach((student) => {
           initialAttendance[student._id] = {
             status: 'present',
             uniformStatus: 'yes',
@@ -193,28 +98,16 @@ const AttendanceManagement = ({ currentUser }) => {
           };
         });
         setAttendanceData(initialAttendance);
+      } else {
+        setAttendanceData({});
       }
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching students:', error);
-      // Fallback mock students
-      const mockStudentsData = Array.from({ length: 45 }, (_, i) => ({
-        _id: `MOCK_STU_${i + 1}`,
-        studentId: `STU${String(i + 1).padStart(3, '0')}`,
-        name: `Student ${i + 1}`
-      }));
-      setStudents(mockStudentsData);
-
-      const initialAttendance = {};
-      mockStudentsData.forEach(student => {
-        initialAttendance[student._id] = {
-          status: 'present',
-          uniformStatus: 'yes',
-          idCardStatus: 'yes',
-          remarks: ''
-        };
-      });
-      setAttendanceData(initialAttendance);
+      console.error('Error fetching classes:', error);
+      setClasses([]);
+      setSelectedClass('');
+      setStudents([]);
+      setAttendanceData({});
       setLoading(false);
     }
   };
@@ -760,6 +653,18 @@ const AttendanceManagement = ({ currentUser }) => {
                       {loading ? 'Submitting...' : 'Save Attendance'}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {!loading && students.length === 0 && (
+                <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                  <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">
+                    No students found for your assigned class.
+                  </p>
+                  <p className="text-sm mt-1">
+                    Please check the teacher-class mapping in the admin panel.
+                  </p>
                 </div>
               )}
             </div>

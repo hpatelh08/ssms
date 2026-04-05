@@ -10,7 +10,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useSound } from '../child/SoundProvider';
-import { useAuth } from '../auth/AuthContext';
 import { DashboardSwitch } from './DashboardSwitch';
 
 interface TopBarProps {
@@ -19,8 +18,6 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ childName = 'Tiny Learner' }) => {
   const { muted, toggleMute } = useSound();
-  const { user } = useAuth();
-  const firstName = user.name?.split(' ')[0] || childName;
 
   return (
     <motion.header
@@ -71,13 +68,6 @@ export const TopBar: React.FC<TopBarProps> = ({ childName = 'Tiny Learner' }) =>
           {/* Dashboard Switch */}
           <DashboardSwitch />
 
-          {/* Profile Avatar */}
-          <div
-            className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center shadow-sm cursor-pointer"
-            style={{ boxShadow: '0 2px 10px rgba(59,130,246,0.2)' }}
-          >
-            <span className="text-xs font-black text-white">{firstName[0]}</span>
-          </div>
         </div>
       </div>
     </motion.header>

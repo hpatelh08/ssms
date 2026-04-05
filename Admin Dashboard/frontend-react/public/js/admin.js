@@ -4638,8 +4638,10 @@ ${issuedRow}
 
     const stdSel   = scope.querySelector('#ttStdSelect');
     const secSel   = scope.querySelector('#ttSecSelect');
+    const teacherSel = scope.querySelector('#ttTeacherSelect');
     const badgeStd = scope.querySelector('#ttBadgeStd');
     const badgeSec = scope.querySelector('#ttBadgeSec');
+    const badgeTeacher = scope.querySelector('#ttBadgeTeacher');
     const legendEl = scope.querySelector('#ttLegend');
     const thead    = scope.querySelector('#ttHead');
     const tbody    = scope.querySelector('#ttBody');
@@ -4647,6 +4649,10 @@ ${issuedRow}
     const exportBtn= scope.querySelector('#ttExportBtn');
     const changeBtn = scope.querySelector('#ttChangeBtn');
     const changeMenu = scope.querySelector('#ttChangeMenu');
+    const viewClassBtn = scope.querySelector('#ttViewClassBtn');
+    const viewTeacherBtn = scope.querySelector('#ttViewTeacherBtn');
+    const classFilters = scope.querySelector('#ttClassFilters');
+    const teacherFilters = scope.querySelector('#ttTeacherFilters');
     const uploadBtn = scope.querySelector('#ttUploadBtn');
     const editModeBtn = scope.querySelector('#ttEditModeBtn');
     const uploadModal = scope.querySelector('#ttUploadModal');
@@ -4681,11 +4687,176 @@ ${issuedRow}
     let currentSlotsSaturday = Array.isArray(TT_SLOTS_SATURDAY) ? TT_SLOTS_SATURDAY : [];
     let currentSubjectColors = typeof SUBJECT_COLORS !== 'undefined' ? SUBJECT_COLORS : {};
     let currentSubjectPool = [];
+    let viewMode = 'class';
+    let teacherList = [];
 
     // Edit mode state
     let editMode = false;
-    let pendingChanges = {}; // key: "day|num" -> { subject, teacher }
+    let pendingChanges = {}; // key: "day|num" -> { subject, teacher, overrideLecture1 }
     let editingCell = null;  // { day, num }
+
+    async function loadTeacherList() {
+      if (!teacherSel) return;
+      try {
+        const res = await api.get('/timetable/teachers');
+        const list = Array.isArray(res?.data) ? res.data : [];
+        if (list.length === 0) throw new Error('Empty timetable teacher list');
+        const nameSet = new Set(list.map((name) => String(name || '').trim()).filter(Boolean));
+        teacherList = list.map((name) => ({ name }));
+        teacherSel.innerHTML = '<option value="">Select teacher</option>';
+        list.forEach((name) => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          teacherSel.appendChild(opt);
+        });
+
+        try {
+          const detailRes = await api.get('/teachers?limit=200');
+          const detailList = detailRes?.data || [];
+          if (Array.isArray(detailList) && detailList.length) {
+            teacherList = detailList.filter((t) => nameSet.has(String(t?.name || '').trim()));
+          }
+        } catch (_) {
+          // Keep name-only list if detailed data is unavailable.
+        }
+      } catch (_) {
+        try {
+          const res = await api.get('/teachers?limit=200');
+          const list = res?.data || [];
+          teacherList = list;
+          teacherSel.innerHTML = '<option value="">Select teacher</option>';
+          list.forEach((t) => {
+            const opt = document.createElement('option');
+            opt.value = t.name;
+            opt.textContent = t.name;
+            teacherSel.appendChild(opt);
+          });
+        } catch {
+          teacherList = [];
+          teacherSel.innerHTML = '<option value="">Unable to load teachers</option>';
+        }
+      }
+
+      if (!teacherSel.value && teacherSel.options.length > 1) {
+        teacherSel.selectedIndex = 1;
+      }
+    }
+
+    function normalizeTeacherName(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function normalizeSection(value) {
+      return String(value || '').trim().toUpperCase();
+    }
+
+    function getClassTeacherName(std, section) {
+      const classNumber = String(std || '').trim();
+      const division = normalizeSection(section || '');
+      if (!classNumber || !division) return '';
+
+      const exact = teacherList.find((t) =>
+        String(t?.class || '').trim() === classNumber &&
+        normalizeSection(t?.division || '') === division
+      );
+      if (exact?.name) return exact.name;
+
+      const compact = teacherList.find((t) =>
+        String(t?.class || '').trim().toUpperCase() === `${classNumber}${division}`
+      );
+      return compact?.name || '';
+    }
+
+    function getTeacherSubject(name) {
+      const teacher = teacherList.find((t) => String(t?.name || '').trim().toLowerCase() === String(name || '').trim().toLowerCase());
+      return teacher?.subject || '';
+    }
+
+    function buildTeacherScheduleSkeleton() {
+      const schedule = {};
+      currentDays.forEach((day) => {
+        const slots = day === 'Saturday' ? currentSlotsSaturday : currentSlotsWeekday;
+        schedule[day] = (slots || []).map((slot) => ({ ...slot, entries: [] }));
+      });
+      return schedule;
+    }
+
+    async function buildTeacherScheduleFromClasses(teacherName) {
+      const schedule = buildTeacherScheduleSkeleton();
+      const teacherKey = normalizeTeacherName(teacherName);
+      const classSet = new Set();
+      let lectureCount = 0;
+
+      const standards = [1, 2, 3, 4, 5, 6];
+      const sections = ['A', 'B', 'C'];
+      const targets = standards.flatMap((std) => sections.map((section) => ({ std, section })));
+
+      const results = await Promise.all(targets.map(async ({ std, section }) => {
+        try {
+          const payload = await loadTimetable(std, section);
+          return { std, section, schedule: payload?.schedule || {} };
+        } catch {
+          return { std, section, schedule: {} };
+        }
+      }));
+
+      results.forEach(({ std, section, schedule: classSchedule }) => {
+        const classLabel = `${std}${section}`;
+        currentDays.forEach((day) => {
+          const slots = Array.isArray(classSchedule?.[day]) ? classSchedule[day] : [];
+          const targetSlots = schedule[day] || [];
+          slots.forEach((slot) => {
+            if (!slot?.subject || !slot?.teacher) return;
+            if (normalizeTeacherName(slot.teacher) !== teacherKey) return;
+            const target = targetSlots.find((entry) => entry.num === slot.num);
+            if (!target) return;
+            if (Array.isArray(target.entries) && target.entries.length > 0) {
+              target.hasConflict = true;
+              return;
+            }
+            target.entries.push({
+              subject: slot.subject,
+              teacher: slot.teacher,
+              classLabel,
+              std,
+              section
+            });
+            classSet.add(classLabel);
+            lectureCount += 1;
+          });
+        });
+      });
+
+      return {
+        schedule,
+        lectureCount,
+        matchedClasses: Array.from(classSet)
+      };
+    }
+
+    async function setViewMode(mode) {
+      viewMode = mode === 'teacher' ? 'teacher' : 'class';
+      if (viewClassBtn) viewClassBtn.classList.toggle('btn-primary', viewMode === 'class');
+      if (viewClassBtn) viewClassBtn.classList.toggle('btn-ghost', viewMode !== 'class');
+      if (viewTeacherBtn) viewTeacherBtn.classList.toggle('btn-primary', viewMode === 'teacher');
+      if (viewTeacherBtn) viewTeacherBtn.classList.toggle('btn-ghost', viewMode !== 'teacher');
+      if (classFilters) classFilters.style.display = viewMode === 'class' ? 'flex' : 'none';
+      if (teacherFilters) teacherFilters.style.display = viewMode === 'teacher' ? 'flex' : 'none';
+      if (badgeTeacher) badgeTeacher.style.display = viewMode === 'teacher' ? 'inline-flex' : 'none';
+      if (badgeStd) badgeStd.style.display = viewMode === 'class' ? 'inline-flex' : 'none';
+      if (badgeSec) badgeSec.style.display = viewMode === 'class' ? 'inline-flex' : 'none';
+      if (changeBtn) changeBtn.disabled = viewMode === 'teacher';
+      if (changeBtn) changeBtn.style.opacity = viewMode === 'teacher' ? '0.6' : '1';
+      if (editMode && viewMode === 'teacher') exitEditMode();
+      if (viewMode === 'teacher') {
+        await loadTeacherList();
+      }
+      render();
+    }
+
+    if (viewClassBtn) viewClassBtn.addEventListener('click', () => setViewMode('class'));
+    if (viewTeacherBtn) viewTeacherBtn.addEventListener('click', () => setViewMode('teacher'));
 
     /* ---------- Change Timetable dropdown ---------- */
     if (changeBtn) changeBtn.addEventListener('click', (e) => {
@@ -4725,7 +4896,13 @@ ${issuedRow}
       const sec = secSel.value;
       const changes = keys.map(k => {
         const [day, num] = k.split('|');
-        return { day, lecture_num: parseInt(num, 10), subject: pendingChanges[k].subject, teacher: pendingChanges[k].teacher };
+        return {
+          day,
+          lecture_num: parseInt(num, 10),
+          subject: pendingChanges[k].subject,
+          teacher: pendingChanges[k].teacher,
+          overrideLecture1: Boolean(pendingChanges[k].overrideLecture1)
+        };
       });
 
       editSaveAll.disabled = true;
@@ -4865,6 +5042,17 @@ ${issuedRow}
       const key = `${day}|${num}`;
       const current = pendingChanges[key] || getCellData(day, num);
       const std = parseInt(stdSel.value, 10);
+      const sec = secSel.value;
+
+      if (num === 1 && !current.teacher) {
+        const classTeacherName = getClassTeacherName(std, sec);
+        if (classTeacherName) {
+          current.teacher = classTeacherName;
+          if (!current.subject) {
+            current.subject = getTeacherSubject(classTeacherName);
+          }
+        }
+      }
 
       popupTitle.textContent = `${day} — Lecture ${num}`;
       popupSubject.innerHTML = '<option value="">Loading subjects...</option>';
@@ -4948,15 +5136,25 @@ ${issuedRow}
       const teacher = popupTeacher.value;
       if (!subject || !teacher) { alert('Please select both subject and teacher.'); return; }
 
+      const std = parseInt(stdSel.value, 10);
+      const sec = secSel.value;
+      const classTeacherName = editingCell.num === 1 ? getClassTeacherName(std, sec) : '';
+      let overrideLecture1 = false;
+      if (editingCell.num === 1 && classTeacherName && classTeacherName !== teacher) {
+        const ok = confirm(`Lecture 1 should be class teacher (${classTeacherName}). Override?`);
+        if (!ok) return;
+        overrideLecture1 = true;
+      }
+
       // Check for conflict before saving
       const result = await checkTeacherConflict(teacher, editingCell.day, editingCell.num);
       if (result && result.conflict) {
-        showConflictWarning(result.message);
-        if (!confirm(`⚠️ ${result.message}\n\nAssign anyway?`)) return;
+        showConflictWarning(result.message || 'This teacher is already assigned to another class at this time.');
+        return;
       }
 
       const key = `${editingCell.day}|${editingCell.num}`;
-      pendingChanges[key] = { subject, teacher };
+      pendingChanges[key] = { subject, teacher, overrideLecture1 };
       closeCellPopup();
       render();
     });
@@ -4974,6 +5172,11 @@ ${issuedRow}
     }
 
     async function render() {
+      if (viewMode === 'teacher') {
+        await renderTeacherTimetable();
+        return;
+      }
+
       const std = parseInt(stdSel.value, 10);
       const sec = secSel.value;
       badgeStd.textContent = 'Std ' + std;
@@ -5001,6 +5204,44 @@ ${issuedRow}
 
       tbody.innerHTML = '';
       buildUnifiedTable(currentSchedule, tbody);
+    }
+
+    async function renderTeacherTimetable() {
+      const teacherName = teacherSel ? teacherSel.value : '';
+      badgeTeacher.textContent = teacherName || 'Teacher';
+      legendEl.innerHTML = '';
+
+      if (!teacherName) {
+        thead.innerHTML = `<tr><th>Time</th>${currentDays.map(d => `<th>${d}</th>`).join('')}</tr>`;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:30px;">Select a teacher to view timetable.</td></tr>';
+        return;
+      }
+
+      try {
+        const payload = await api.get(`/timetable/teacher?teacher=${encodeURIComponent(teacherName)}`);
+        currentSchedule = payload?.schedule || {};
+        currentDays = payload?.days || currentDays;
+        currentSlotsWeekday = payload?.slotsWeekday || currentSlotsWeekday;
+        currentSlotsSaturday = payload?.slotsSaturday || currentSlotsSaturday;
+      } catch {
+        const fallback = await buildTeacherScheduleFromClasses(teacherName);
+        currentSchedule = fallback.schedule;
+      }
+
+      thead.innerHTML = `<tr>
+        <th>Time</th>
+        ${currentDays.map(d => `<th>${d}</th>`).join('')}
+      </tr>`;
+
+      tbody.innerHTML = '';
+      const hasAny = Object.values(currentSchedule || {}).some((slots) =>
+        Array.isArray(slots) && slots.some((slot) => Array.isArray(slot?.entries) && slot.entries.length > 0)
+      );
+      if (!hasAny) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:30px;">No lectures found for this teacher.</td></tr>';
+        return;
+      }
+      buildTeacherTable(currentSchedule, tbody);
     }
 
     function buildUnifiedTable(schedule, tbody) {
@@ -5092,6 +5333,90 @@ ${issuedRow}
       tbody.innerHTML = html;
     }
 
+    function buildTeacherTable(schedule, tbody) {
+      const unified = [
+        { type: 'lecture', num: 1 },
+        { type: 'lecture', num: 2 },
+        { type: 'lecture', num: 3 },
+        { type: 'sat-break' },
+        { type: 'lecture', num: 4 },
+        { type: 'week-break' },
+        { type: 'lecture', num: 5 },
+        { type: 'lecture', num: 6 },
+        { type: 'lecture', num: 7 },
+        { type: 'lecture', num: 8 },
+      ];
+
+      function getSlot(day, num) {
+        const slots = day === 'Saturday' ? currentSlotsSaturday : currentSlotsWeekday;
+        return slots.find(s => s.num === num);
+      }
+
+      let html = '';
+      unified.forEach(entry => {
+        if (entry.type === 'week-break') {
+          const wSlot = currentSlotsWeekday.find(s => s.isBreak);
+          html += `<tr class="tt-break-row">
+            <td class="tt-time-col">
+              <span class="tt-time-num">Break ☕</span>
+              <span class="tt-time-range">${wSlot ? wSlot.time : ''}</span>
+            </td>
+            ${currentDays.map(day => day === 'Saturday'
+              ? '<td>-</td>'
+              : `<td><span class="tt-break-label">Break ☕ - 20 min</span></td>`
+            ).join('')}
+          </tr>`;
+          return;
+        }
+
+        if (entry.type === 'sat-break') {
+          const sSlot = currentSlotsSaturday.find(s => s.isBreak);
+          html += `<tr class="tt-break-row">
+            <td class="tt-time-col">
+              <span class="tt-time-num">Break ☕</span>
+              <span class="tt-time-range">${sSlot ? sSlot.time : ''}</span>
+            </td>
+            ${currentDays.map(day => day === 'Saturday'
+              ? `<td><span class="tt-break-label">Break ☕ - 20 min</span></td>`
+              : '<td>-</td>'
+            ).join('')}
+          </tr>`;
+          return;
+        }
+
+        const num = entry.num;
+        const wSlot = getSlot('Monday', num);
+        if (!wSlot) return;
+
+        html += `<tr>
+          <td class="tt-time-col">
+            <span class="tt-time-num">Lecture ${num}</span>
+            <span class="tt-time-range">${wSlot.time}</span>
+          </td>
+          ${currentDays.map(day => {
+            const slot = schedule[day]?.find(s => s.num === num);
+            const entries = Array.isArray(slot?.entries) ? slot.entries : [];
+            if (!entries.length) return '<td>-</td>';
+            const entry = entries[0];
+            const conflictBadge = slot?.hasConflict || entries.length > 1
+              ? '<span style="display:inline-block;margin-top:4px;font-size:0.65rem;color:#b45309;">Conflict</span>'
+              : '';
+            const cellHtml = (() => {
+              const c = currentSubjectColors[entry.subject] || { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' };
+              return `<div class="tt-cell" style="background:${c.bg};color:${c.text};border:1px solid ${c.border};">
+                <span class="tt-subj">${entry.subject}</span>
+                <span class="tt-teacher">${entry.classLabel || ''}</span>
+                ${conflictBadge}
+              </div>`;
+            })();
+            return `<td>${cellHtml}</td>`;
+          }).join('')}
+        </tr>`;
+      });
+
+      tbody.innerHTML = html;
+    }
+
     if (tbody && !tbody.dataset.ttClickBound) {
       tbody.dataset.ttClickBound = '1';
       tbody.addEventListener('click', (e) => {
@@ -5118,10 +5443,46 @@ ${issuedRow}
 
     stdSel.addEventListener('change', () => { cachedSubjects = {}; cachedTeachers = {}; if (editMode) exitEditMode(); render(); });
     secSel.addEventListener('change', () => { if (editMode) exitEditMode(); render(); });
+    if (teacherSel) teacherSel.addEventListener('change', () => render());
 
     if (printBtn) printBtn.addEventListener('click', () => window.print());
 
     if (exportBtn) exportBtn.addEventListener('click', () => {
+      if (viewMode === 'teacher') {
+        const teacherName = teacherSel ? teacherSel.value : '';
+        if (!teacherName) return;
+        let csv = 'Time,' + currentDays.join(',') + '\n';
+        const unified = [1,2,3,'SB',4,'WB',5,6,7,8];
+        unified.forEach(entry => {
+          if (entry === 'WB') {
+            csv += 'Break (Mon-Fri),' + currentDays.map(d => d === 'Saturday' ? '' : 'Break 20min').join(',') + '\n';
+            return;
+          }
+          if (entry === 'SB') {
+            csv += 'Break (Saturday),' + currentDays.map(d => d === 'Saturday' ? 'Break 20min' : '').join(',') + '\n';
+            return;
+          }
+          const wSlot = currentSlotsWeekday.find(s => s.num === entry);
+          const timeStr = wSlot ? wSlot.time : '';
+          csv += `"Lecture ${entry} (${timeStr})",`;
+          csv += currentDays.map(day => {
+            const slot = currentSchedule[day]?.find(s => s.num === entry);
+            const entries = Array.isArray(slot?.entries) ? slot.entries : [];
+            if (!entries.length) return '';
+            return `"${entries.map(e => `${e.subject} (${e.classLabel})`).join(' | ')}"`;
+          }).join(',');
+          csv += '\n';
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Teacher_Timetable_${teacherName.replace(/\s+/g, '_')}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        return;
+      }
+
       const std = stdSel.value;
       const sec = secSel.value;
       const schedule = currentSchedule && Object.keys(currentSchedule).length
@@ -5240,6 +5601,8 @@ ${issuedRow}
     });
 
     render();
+    loadTeacherList();
+    setViewMode('class');
   }
 // Initialize timetable on enter
   sectionEnterHooks.timetable = () => {};

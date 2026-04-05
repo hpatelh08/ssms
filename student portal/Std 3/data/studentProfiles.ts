@@ -20,10 +20,10 @@ const STUDENT_PROFILES: StudentProfile[] = [
   {
     studentName: 'Yash Patel',
     className: 'Std 3',
-    admissionNumber: 'ADM-2024-021',
+    admissionNumber: 'ADM-2024-211',
     grNo: 'GR-3021',
-    studentId: 'STU2024301',
-    password: 'Sch@031',
+    studentId: 'STU20240241',
+    password: 'Stu@241',
     parentName: 'Megha Patel',
     phone: '+91 98765 43210',
     dob: '2017-08-12',
@@ -31,7 +31,7 @@ const STUDENT_PROFILES: StudentProfile[] = [
     bloodGroup: 'B+',
     address: 'Satellite Road, Ahmedabad',
     status: 'Active',
-    parentAccessKey: '0031',
+    parentAccessKey: '0211',
     grade: 3,
   },
 ];

@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './AuthContext';
-import StudentLoginPage from './StudentLoginPage';
 import ParentAccessModal from './ParentAccessModal';
 import ChildLayout from '../child/ChildLayout';
 import { ParentLayout } from '../parent/ParentLayout';
@@ -16,7 +15,7 @@ const RoleRouter: React.FC = () => {
   }, [clearNotice, notice]);
 
   if (!isAuthenticated) {
-    return <StudentLoginPage />;
+    return <ChildLayout />;
   }
 
   return (

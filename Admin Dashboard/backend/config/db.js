@@ -270,6 +270,28 @@ db.exec(`
     UNIQUE(class, section, day, lecture)
   );
 
+  CREATE TABLE IF NOT EXISTS class_teacher_mapping (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    class         INTEGER NOT NULL,
+    section       TEXT    NOT NULL,
+    teacher_id    INTEGER,
+    teacher_name  TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT (datetime('now')),
+    UNIQUE(class, section)
+  );
+
+  CREATE TABLE IF NOT EXISTS subject_teacher_mapping (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    class         INTEGER NOT NULL,
+    section       TEXT    NOT NULL,
+    subject_id    INTEGER,
+    subject_name  TEXT    NOT NULL,
+    teacher_id    INTEGER,
+    teacher_name  TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT (datetime('now')),
+    UNIQUE(class, section, subject_name)
+  );
+
   CREATE TABLE IF NOT EXISTS subjects (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     name      TEXT    NOT NULL,

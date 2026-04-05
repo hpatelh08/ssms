@@ -4,9 +4,9 @@ These Student ID and password pairs are used for standard student login. The Par
 
 | Standard | Student ID | Password | Parent Access Key |
 |-------|------------|---------|------|
-| Std 1 | STU2024101 | Sch@011 | 0011 |
-| Std 2 | STU2024201 | Sch@021 | 0021 |
-| Std 3 | STU2024301 | Sch@031 | 0031 |
-| Std 4 | STU2024401 | Sch@041 | 0041 |
-| Std 5 | STU2024501 | Sch@051 | 0051 |
-| Std 6 | STU2024601 | Sch@061 | 0061 |
+| Std 1 | STU20240001 | Stu@001 | 0001 |
+| Std 2 | STU20240121 | Stu@121 | 0106 |
+| Std 3 | STU20240241 | Stu@241 | 0211 |
+| Std 4 | STU20240361 | Stu@361 | 0316 |
+| Std 5 | STU20240481 | Stu@481 | 0421 |
+| Std 6 | STU20240601 | Stu@601 | 0526 |

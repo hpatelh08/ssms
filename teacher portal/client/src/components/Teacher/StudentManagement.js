@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Heart, AlertTriangle, Calendar, FileText, Search, Eye, X } from 'lucide-react';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
-import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
+import { loadClassStudents, loadTeacherClasses } from '../../teacherAdminData';
 
 const StudentManagement = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState('profiles');

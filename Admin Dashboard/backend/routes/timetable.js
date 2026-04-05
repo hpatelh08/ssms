@@ -54,11 +54,48 @@ const SUBJECT_MAP = {
   'Psychology':       'GK',
 };
 
+function normalizeSubjectName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return SUBJECT_MAP[raw] || raw;
+}
+
+function getTeacherSubjectForName(teacherName) {
+  const name = String(teacherName || '').trim();
+  if (!name) return '';
+  const row = db.prepare('SELECT subject FROM teachers WHERE LOWER(name) = LOWER(?) LIMIT 1').get(name);
+  return normalizeSubjectName(row?.subject || '');
+}
+
+function getClassTeacherForClass(std, section) {
+  const classNumber = String(std || '').trim();
+  const division = String(section || '').trim().toUpperCase();
+  if (!classNumber || !division) return null;
+
+  const exact = db.prepare(`
+    SELECT name, subject
+    FROM teachers
+    WHERE CAST(class AS TEXT) = ? AND UPPER(COALESCE(division, '')) = ? AND status = 'Active'
+    LIMIT 1
+  `).get(classNumber, division);
+  if (exact?.name) return { name: exact.name, subject: exact.subject };
+
+  const compact = db.prepare(`
+    SELECT name, subject
+    FROM teachers
+    WHERE UPPER(COALESCE(class, '')) = ? AND status = 'Active'
+    LIMIT 1
+  `).get(`${classNumber}${division}`);
+  if (compact?.name) return { name: compact.name, subject: compact.subject };
+
+  return null;
+}
+
 // Build TT_TEACHERS dynamically from the teachers table at startup
 function buildTTTeachers() {
   const map = {};
   try {
-    const rows = db.prepare('SELECT name, subject FROM teachers ORDER BY name').all();
+    const rows = db.prepare("SELECT name, subject FROM teachers WHERE status = 'Active' ORDER BY name").all();
     for (const { name, subject } of rows) {
       const ttSubject = SUBJECT_MAP[subject] || subject;
       if (!map[ttSubject]) map[ttSubject] = [];
@@ -106,6 +143,9 @@ function parseStdSection(stdRaw, sectionRaw) {
 function generateTimetable(std, section) {
   const isPrimary = std <= PRIMARY_STANDARD_MAX;
   const subjectPool = isPrimary ? SUBJECTS_BY_STD.primary : SUBJECTS_BY_STD.upper;
+  const classTeacher = getClassTeacherForClass(std, section);
+  const classTeacherName = String(classTeacher?.name || '').trim();
+  const classTeacherSubject = normalizeSubjectName(classTeacher?.subject || '');
 
   let seed = std * 1000 + section.charCodeAt(0);
   function rand() {
@@ -129,9 +169,15 @@ function generateTimetable(std, section) {
       if (slot.isBreak) {
         lectures.push({ ...slot, subject: null, teacher: null });
       } else {
-        const subj = shuffled[si % shuffled.length];
-        si++;
-        lectures.push({ ...slot, subject: subj, teacher: getTeacher(subj) });
+        let subj = shuffled[si % shuffled.length];
+        let teacher = getTeacher(subj);
+        if (slot.num === 1 && classTeacherName) {
+          subj = classTeacherSubject || subj;
+          teacher = classTeacherName;
+        } else {
+          si++;
+        }
+        lectures.push({ ...slot, subject: subj, teacher });
       }
     });
     schedule[day] = lectures;
@@ -156,6 +202,22 @@ function buildScheduleFromRows(rows) {
     target.teacher = row.teacher;
   }
   return schedule;
+}
+
+function findTeacherConflict({ teacher, day, lectureNum, std, section }) {
+  const normalizedTeacher = String(teacher || '').trim();
+  if (!normalizedTeacher || normalizedTeacher.toUpperCase() === 'TBD') return null;
+  if (!day || !Number.isInteger(lectureNum)) return null;
+
+  return db.prepare(`
+    SELECT class, section, day, lecture_num
+    FROM timetable
+    WHERE LOWER(teacher) = LOWER(?)
+      AND day = ?
+      AND lecture_num = ?
+      AND NOT (class = ? AND section = ?)
+    LIMIT 1
+  `).get(normalizedTeacher, day, lectureNum, std, section);
 }
 
 function toUploadLayout(schedule) {
@@ -253,6 +315,83 @@ router.get('/', (req, res) => {
   });
 });
 
+// GET /api/timetable/teacher?teacher=Name
+router.get('/teacher', (req, res) => {
+  const teacher = String(req.query.teacher || '').trim();
+  if (!teacher) return res.status(400).json({ error: 'Teacher name is required.' });
+
+  const rows = db.prepare(`
+    SELECT class, section, day, lecture, lecture_num, subject, teacher
+    FROM timetable
+    WHERE LOWER(teacher) = LOWER(?)
+    ORDER BY
+      CASE day
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        ELSE 99
+      END,
+      COALESCE(lecture_num, 999)
+  `).all(teacher);
+
+  const schedule = {};
+  for (const day of TT_DAYS) {
+    const baseSlots = (day === 'Saturday' ? TT_SLOTS_SATURDAY : TT_SLOTS_WEEKDAY)
+      .map(slot => ({ ...slot, entries: [] }));
+    schedule[day] = baseSlots;
+  }
+
+  const classSet = new Set();
+  let lectureCount = 0;
+
+  rows.forEach((row) => {
+    const day = String(row.day || '').trim();
+    if (!TT_DAYS.includes(day)) return;
+    const target = schedule[day].find(s => s.num === row.lecture_num);
+    if (!target) return;
+    const std = String(row.class || '').trim();
+    const section = String(row.section || '').trim().toUpperCase();
+    const classLabel = std && section ? `${std}${section}` : std;
+    target.entries.push({
+      subject: row.subject,
+      teacher: row.teacher,
+      classLabel,
+      std,
+      section
+    });
+    if (classLabel) classSet.add(classLabel);
+    lectureCount += 1;
+  });
+
+  res.json({
+    teacher,
+    schedule,
+    days: TT_DAYS,
+    slotsWeekday: TT_SLOTS_WEEKDAY,
+    slotsSaturday: TT_SLOTS_SATURDAY,
+    lectureCount,
+    matchedClasses: Array.from(classSet)
+  });
+});
+
+// GET /api/timetable/teachers
+router.get('/teachers', (_req, res) => {
+  const rows = db.prepare(`
+    SELECT DISTINCT teacher
+    FROM timetable
+    WHERE COALESCE(teacher, '') <> ''
+    ORDER BY teacher
+  `).all();
+
+  res.json({
+    success: true,
+    data: rows.map(r => r.teacher).filter(Boolean)
+  });
+});
+
 // GET /api/timetable/layout?std=1&section=A
 router.get('/layout', (req, res) => {
   const parsed = parseStdSection(req.query.std || MIN_STANDARD, req.query.section || 'A');
@@ -280,10 +419,33 @@ router.put('/cell', authorize('super_admin', 'admin'), (req, res) => {
   const lectureNum = parseInt(req.body.lecture_num, 10);
   const subject = String(req.body.subject || '').trim();
   const teacher = String(req.body.teacher || '').trim();
+  const overrideLecture1 = Boolean(req.body.overrideLecture1);
 
   if (!TT_DAYS.includes(day)) return res.status(400).json({ error: 'Invalid day.' });
   if (!Number.isInteger(lectureNum) || lectureNum < 1 || lectureNum > 8) return res.status(400).json({ error: 'Invalid lecture number.' });
   if (!subject || !teacher) return res.status(400).json({ error: 'Subject and teacher are required.' });
+
+  const teacherSubject = getTeacherSubjectForName(teacher);
+  if (teacherSubject && normalizeSubjectName(subject) !== teacherSubject) {
+    return res.status(400).json({ error: 'Subject does not match teacher\'s assigned subject.' });
+  }
+
+  if (lectureNum === 1 && !overrideLecture1) {
+    const classTeacher = getClassTeacherForClass(std, section);
+    if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== teacher.toLowerCase()) {
+      return res.status(409).json({
+        error: `Lecture 1 must be assigned to class teacher (${classTeacher.name}).`,
+      });
+    }
+  }
+
+  const conflict = findTeacherConflict({ teacher, day, lectureNum, std, section });
+  if (conflict) {
+    return res.status(409).json({
+      error: 'This teacher is already assigned to another class at this time.',
+      conflict
+    });
+  }
 
   // Ensure the class/section has a full timetable first (seed from generated if needed)
   const existing = db.prepare('SELECT COUNT(*) as cnt FROM timetable WHERE class = ? AND section = ?').get(std, section);
@@ -329,9 +491,32 @@ router.put('/bulk-cells', authorize('super_admin', 'admin'), (req, res) => {
     const lectureNum = parseInt(c.lecture_num, 10);
     const subject = String(c.subject || '').trim();
     const teacher = String(c.teacher || '').trim();
+    const overrideLecture1 = Boolean(c.overrideLecture1);
     if (!TT_DAYS.includes(day)) return res.status(400).json({ error: `Invalid day: ${day}` });
     if (!Number.isInteger(lectureNum) || lectureNum < 1 || lectureNum > 8) return res.status(400).json({ error: `Invalid lecture number: ${lectureNum}` });
     if (!subject || !teacher) return res.status(400).json({ error: 'Subject and teacher are required for each change.' });
+
+    const teacherSubject = getTeacherSubjectForName(teacher);
+    if (teacherSubject && normalizeSubjectName(subject) !== teacherSubject) {
+      return res.status(400).json({ error: 'Subject does not match teacher\'s assigned subject.' });
+    }
+
+    if (lectureNum === 1 && !overrideLecture1) {
+      const classTeacher = getClassTeacherForClass(std, section);
+      if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== teacher.toLowerCase()) {
+        return res.status(409).json({
+          error: `Lecture 1 must be assigned to class teacher (${classTeacher.name}).`,
+        });
+      }
+    }
+
+    const conflict = findTeacherConflict({ teacher, day, lectureNum, std, section });
+    if (conflict) {
+      return res.status(409).json({
+        error: 'This teacher is already assigned to another class at this time.',
+        conflict
+      });
+    }
   }
 
   // Seed full timetable if no rows exist yet
@@ -381,6 +566,38 @@ router.post('/import', authorize('super_admin', 'admin'), (req, res) => {
 
   const normalized = normalizeUploadSchedule(req.body.schedule);
   if (normalized.error) return res.status(400).json({ error: normalized.error });
+
+  const overrideLecture1 = Boolean(req.body.overrideLecture1);
+
+  for (const item of normalized.rows) {
+    const teacherSubject = getTeacherSubjectForName(item.teacher);
+    if (teacherSubject && normalizeSubjectName(item.subject) !== teacherSubject) {
+      return res.status(400).json({ error: 'Subject does not match teacher\'s assigned subject.' });
+    }
+
+    if (item.lecture_num === 1 && !overrideLecture1) {
+      const classTeacher = getClassTeacherForClass(std, section);
+      if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== item.teacher.toLowerCase()) {
+        return res.status(409).json({
+          error: `Lecture 1 must be assigned to class teacher (${classTeacher.name}).`,
+        });
+      }
+    }
+
+    const conflict = findTeacherConflict({
+      teacher: item.teacher,
+      day: item.day,
+      lectureNum: item.lecture_num,
+      std,
+      section
+    });
+    if (conflict) {
+      return res.status(409).json({
+        error: 'This teacher is already assigned to another class at this time.',
+        conflict
+      });
+    }
+  }
 
   const removeOld = db.prepare('DELETE FROM timetable WHERE class = ? AND section = ?');
   const insertOne = db.prepare(`

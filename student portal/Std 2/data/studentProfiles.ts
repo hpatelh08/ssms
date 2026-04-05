@@ -20,10 +20,10 @@ const STUDENT_PROFILES: StudentProfile[] = [
   {
     studentName: 'Yash Patel',
     className: 'Std 2',
-    admissionNumber: 'ADM-2024-201',
+    admissionNumber: 'ADM-2024-106',
     grNo: 'GR-2001',
-    studentId: 'STU2024201',
-    password: 'Sch@021',
+    studentId: 'STU20240121',
+    password: 'Stu@121',
     parentName: 'Megha Patel',
     phone: '+91 98765 43210',
     dob: '2018-08-12',
@@ -31,7 +31,7 @@ const STUDENT_PROFILES: StudentProfile[] = [
     bloodGroup: 'B+',
     address: 'Satellite Road, Ahmedabad',
     status: 'Active',
-    parentAccessKey: '0021',
+    parentAccessKey: '0106',
     grade: 2,
   },
 ];
@@ -71,6 +71,11 @@ function mergeProfileOverrides(profile: StudentProfile): StudentProfile {
 
 export function getStudentProfileById(studentId: string): StudentProfile | null {
   const profile = profileById.get(normalizeStudentId(studentId));
+  return profile ? mergeProfileOverrides(profile) : null;
+}
+
+export function getDefaultStudentProfile(): StudentProfile | null {
+  const profile = STUDENT_PROFILES[0];
   return profile ? mergeProfileOverrides(profile) : null;
 }
 

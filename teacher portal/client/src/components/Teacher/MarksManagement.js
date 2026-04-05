@@ -2,10 +2,38 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiUrl } from '../../config/api';
-import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../config/teacherClasses';
-import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
+import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
+import { loadClassStudents, loadTeacherClasses } from '../../teacherAdminData';
 
 const MarksManagement = ({ currentUser }) => {
+  const getExamStorageKey = () => `teacher-exams-${currentUser?._id || currentUser?.email || 'default'}`;
+  const buildExamKey = (exam) => {
+    const classId = exam?.class?._id || exam?.class || '';
+    const subjectId = exam?.subject?._id || exam?.subject || '';
+    const date = exam?.date || exam?.examDate || '';
+    return `${exam?.examName || ''}|${date}|${classId}|${subjectId}`;
+  };
+  const loadLocalExams = () => {
+    const key = getExamStorageKey();
+    const saved = localStorage.getItem(key);
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const mergeExams = (remoteList, localList) => {
+    const remoteKeys = new Set(remoteList.map(buildExamKey));
+    const merged = [...remoteList];
+    localList.forEach((exam) => {
+      if (!remoteKeys.has(buildExamKey(exam))) {
+        merged.push(exam);
+      }
+    });
+    return merged;
+  };
   const [classes, setClasses] = useState([]);
   const [exams, setExams] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -64,16 +92,20 @@ const MarksManagement = ({ currentUser }) => {
         timeout: 1000
       });
       if (!response.data.data || response.data.data.length === 0) throw new Error('Empty');
-      setExams(response.data.data);
+      const remoteExams = response.data.data || [];
+      const localExams = loadLocalExams();
+      const merged = mergeExams(remoteExams, localExams).filter((exam) => {
+        const examClassId = exam?.class?._id || exam?.class || '';
+        return !selectedClass || examClassId === selectedClass;
+      });
+      setExams(merged);
     } catch (error) {
-      setExams([{
-        _id: 'mock_exam_1',
-        examName: 'Mid Term Exam',
-        examType: 'mid_term',
-        class: { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
-        date: new Date().toISOString()
-      }]);
-      setSelectedExam('mock_exam_1');
+      const localExams = loadLocalExams().filter((exam) => {
+        const examClassId = exam?.class?._id || exam?.class || '';
+        return !selectedClass || examClassId === selectedClass;
+      });
+      setExams(localExams);
+      if (localExams.length === 0) setSelectedExam('');
     }
   };
 
@@ -85,12 +117,11 @@ const MarksManagement = ({ currentUser }) => {
   const fetchMarks = async () => {
     if (students.length === 0) return;
     setLoading(true);
-    // Generate mock consolidated data
     const consolidatedMarks = {};
-    students.forEach(student => {
+    students.forEach((student) => {
       consolidatedMarks[student._id] = {};
-      subjectList.forEach(sub => {
-        consolidatedMarks[student._id][sub._id] = Math.floor(Math.random() * 41) + 55; // 55-95
+      subjectList.forEach((sub) => {
+        consolidatedMarks[student._id][sub._id] = '';
       });
     });
     setMarks(consolidatedMarks);
@@ -163,7 +194,9 @@ const MarksManagement = ({ currentUser }) => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Marks Management</h2>
-          <p className="text-gray-500 mt-1">Consolidated subject-wise results for Class 8 - B</p>
+          <p className="text-gray-500 mt-1">
+            Consolidated subject-wise results for Class {getAssignedTeacherClassNumber(currentUser)} - {getAssignedTeacherSection(currentUser)}
+          </p>
         </div>
         <div className="flex gap-3">
           <button

@@ -5,6 +5,7 @@ const { Router } = require('express');
 const db = require('../config/db');
 const { authMiddleware, authorize } = require('../middleware/auth');
 const { isSupportedStandard, parseStandard } = require('../config/standards');
+const { syncTeacherMasterFileFromDb } = require('../utils/teacherMasterSync');
 
 const router = Router();
 router.use(authMiddleware);
@@ -84,6 +85,7 @@ router.post('/', authorize('super_admin', 'admin'), (req, res) => {
   const result = stmt.run(name, empId, subject || '', cls || '', normalizedDivision, salary || 0, phone || '',
     email || '', status || 'Active', qualification || '', joinDate, tchId, tchPass);
 
+  syncTeacherMasterFileFromDb();
   res.status(201).json({ success: true, id: result.lastInsertRowid, emp: empId, teacher_id: tchId, teacher_password: tchPass });
 });
 
@@ -104,6 +106,7 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
     WHERE id = ?
   `);
   stmt.run(name, emp, subject, cls, normalizedDivision, salary, phone, email, status, qualification, join, teacher_id || null, teacher_password || null, req.params.id);
+  syncTeacherMasterFileFromDb();
   res.json({ success: true });
 });
 
@@ -111,6 +114,7 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
 router.delete('/:id', authorize('super_admin', 'admin'), (req, res) => {
   const result = db.prepare('DELETE FROM teachers WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Teacher not found.' });
+  syncTeacherMasterFileFromDb();
   res.json({ success: true });
 });
 

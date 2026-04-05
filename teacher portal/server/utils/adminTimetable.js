@@ -63,7 +63,6 @@ const TT_SLOTS_SATURDAY = [
 ];
 
 const TT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MAX_TEACHER_STANDARD = 7;
 
 let adminDb = null;
 
@@ -87,12 +86,12 @@ function parseStdSection(stdRaw, sectionRaw) {
   const std = parseStandard(stdRaw);
   const section = normalizeSection(sectionRaw);
 
-  if (!Number.isInteger(std) || std < MIN_STANDARD || std > MAX_TEACHER_STANDARD) {
-    return { error: `Class/standard must be between ${MIN_STANDARD} and ${MAX_TEACHER_STANDARD}.` };
+  if (!Number.isInteger(std) || std < MIN_STANDARD) {
+    return { error: `Class/standard must be at least ${MIN_STANDARD}.` };
   }
 
   if (!['A', 'B', 'C'].includes(section)) {
-    return { error: 'Section must be A, B, or C.' };
+    return { std, section: 'A', warning: 'Section was not recognized. Showing timetable for section A.' };
   }
 
   return { std, section };
@@ -188,7 +187,7 @@ export function getAdminTimetable(stdRaw, sectionRaw) {
     return parsed;
   }
 
-  const { std, section } = parsed;
+  const { std, section, warning } = parsed;
   const db = getAdminDb();
   const teachersBySubject = buildTeachersBySubject(db);
 
@@ -226,6 +225,73 @@ export function getAdminTimetable(stdRaw, sectionRaw) {
     section,
     source: rows.length ? 'uploaded' : 'generated',
     schedule: rows.length ? buildScheduleFromRows(rows) : generateTimetable(std, section, teachersBySubject),
-    days: TT_DAYS
+    days: TT_DAYS,
+    ...(warning ? { note: warning } : {})
   };
 }
+
+export function getAdminTeacherTimetable(teacherRaw) {
+  const teacher = String(teacherRaw || '').trim();
+  if (!teacher) {
+    return { error: 'Teacher name is required.' };
+  }
+
+  const db = getAdminDb();
+  const rows = db.prepare(`
+    SELECT class, section, day, lecture, lecture_num, subject, teacher
+    FROM timetable
+    WHERE LOWER(teacher) = LOWER(?)
+    ORDER BY
+      CASE day
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        ELSE 99
+      END,
+      COALESCE(lecture_num, 999)
+  `).all(teacher);
+
+  const schedule = {};
+  for (const day of TT_DAYS) {
+    const baseSlots = (day === 'Saturday' ? TT_SLOTS_SATURDAY : TT_SLOTS_WEEKDAY)
+      .map((slot) => ({ ...slot, entries: [] }));
+    schedule[day] = baseSlots;
+  }
+
+  const classSet = new Set();
+  let lectureCount = 0;
+
+  rows.forEach((row) => {
+    const day = String(row.day || '').trim();
+    if (!TT_DAYS.includes(day)) return;
+    const target = schedule[day].find((slot) => slot.num === row.lecture_num);
+    if (!target) return;
+    const std = String(row.class || '').trim();
+    const section = String(row.section || '').trim().toUpperCase();
+    const classLabel = std && section ? `${std}${section}` : std;
+    target.entries.push({
+      subject: row.subject,
+      teacher: row.teacher,
+      classLabel,
+      std,
+      section
+    });
+    if (classLabel) classSet.add(classLabel);
+    lectureCount += 1;
+  });
+
+  return {
+    teacher,
+    schedule,
+    days: TT_DAYS,
+    slotsWeekday: TT_SLOTS_WEEKDAY,
+    slotsSaturday: TT_SLOTS_SATURDAY,
+    lectureCount,
+    matchedClasses: Array.from(classSet)
+  };
+}
+
+export { TT_DAYS, TT_SLOTS_WEEKDAY, TT_SLOTS_SATURDAY };

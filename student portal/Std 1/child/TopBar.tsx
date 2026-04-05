@@ -1,7 +1,7 @@
 /**
  * child/TopBar.tsx
- * ─────────────────────────────────────────────────────
- * Premium Top Bar — Student Dashboard
+ * ------------------------------------------------------------
+ * Premium Top Bar - Student Dashboard
  *
  * Height: 80px, full width, same content padding as page.
  *
@@ -9,15 +9,14 @@
  *   Left: Name (bold 18-20px) + Greeting below (smaller)
  *         Flat gradient avatar circle, no border stroke
  *   Center: Student|Parent pill-style segmented control
- *   Right: Notification bell — soft bg circle, red badge dot, hover glow
+ *   Right: Notification bell - soft bg circle, red badge dot, hover glow
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import { DashboardSwitch } from '../components/DashboardSwitch';
 
-/* ── Greeting by time ─────────────────────────────── */
 function getTimeGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good Morning';
@@ -27,13 +26,20 @@ function getTimeGreeting(): string {
 
 export const TopBar: React.FC = React.memo(() => {
   const { user, studentProfile } = useAuth();
-  const firstName = useMemo(() => user.name?.split(' ')[0] || 'Explorer', [user.name]);
+  const displayName = useMemo(() => studentProfile?.studentName || user.name || 'Explorer', [studentProfile?.studentName, user.name]);
+  const firstName = useMemo(() => displayName.split(' ')[0] || 'Explorer', [displayName]);
+  const classLabel = useMemo(() => studentProfile?.className || `Std ${user.grade}`, [studentProfile?.className, user.grade]);
   const greeting = useMemo(getTimeGreeting, []);
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const profile = studentProfile;
   const division = profile?.division || 'A';
   const fatherName = profile?.fatherName || profile?.parentName || '-';
+  const openProfile = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setShowProfile(prev => (prev ? prev : true));
+  }, []);
 
   return (
     <motion.header
@@ -55,12 +61,11 @@ export const TopBar: React.FC = React.memo(() => {
           maxWidth: 1600,
         }}
       >
-
-        {/* ── Left: Avatar + Name (top) + Greeting (below) ── */}
         <div className="flex items-center gap-3.5 min-w-0 shrink-0">
           <motion.button
             type="button"
-            onClick={() => setShowProfile(true)}
+            onClick={openProfile}
+            onDoubleClick={(event) => event.preventDefault()}
             className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-white shrink-0"
             style={{
               background: 'linear-gradient(135deg, var(--pastel-purple-deep) 0%, var(--pastel-pink-deep) 100%)',
@@ -71,7 +76,7 @@ export const TopBar: React.FC = React.memo(() => {
             whileTap={{ scale: 0.96 }}
             aria-label="Open student profile"
           >
-            {firstName[0]}
+            {displayName[0]}
           </motion.button>
           <div className="min-w-0">
             <h2 style={{
@@ -79,23 +84,21 @@ export const TopBar: React.FC = React.memo(() => {
               color: 'var(--text-primary)', lineHeight: 1.2, letterSpacing: '-0.02em',
               fontFamily: 'Nunito, Quicksand, sans-serif',
             }}>
-              {firstName}
+              {displayName}
             </h2>
             <p style={{
               margin: 0, fontSize: 13, fontWeight: 600,
               color: 'var(--text-muted)', lineHeight: 1.3, marginTop: 2,
             }}>
-              {greeting} 👋
+              {classLabel} · {greeting} 👋
             </p>
           </div>
         </div>
 
-        {/* ── Center: Dashboard Switch (absolutely centered) ── */}
         <div className="absolute left-1/2 -translate-x-1/2 hidden sm:block">
           <DashboardSwitch />
         </div>
 
-        {/* ── Right: Notification Bell ── */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="relative">
             <motion.button
@@ -116,7 +119,6 @@ export const TopBar: React.FC = React.memo(() => {
               <span style={{ fontSize: 18 }}>🔔</span>
             </motion.button>
 
-            {/* Red badge dot */}
             <motion.div
               style={{
                 position: 'absolute', top: 0, right: 0,
@@ -129,7 +131,6 @@ export const TopBar: React.FC = React.memo(() => {
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
 
-            {/* Notification dropdown */}
             <AnimatePresence>
               {showNotif && (
                 <motion.div

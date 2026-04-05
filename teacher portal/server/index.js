@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 
 // Import routes
 import authRoutes from './routes/auth.js';
+import teacherAuthRoutes from './routes/teacherAuth.js';
 import attendanceRoutes from './routes/attendance.js';
 import assignmentRoutes from './routes/assignment.js';
 import teacherRoutes from './routes/teacher.js';
@@ -41,6 +42,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/auth', teacherAuthRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/teacher', teacherRoutes);
@@ -55,7 +57,7 @@ app.use('/api/leave', leaveManagementRoutes);
 app.use('/api/analytics', performanceAnalyticsRoutes);
 app.use('/api/reports', reportsRoutes);
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/teacher_portal';
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
-  authenticateStudent,
   getStudentProfileById,
   saveStudentProfileOverrides,
   type StudentProfile,
@@ -66,7 +65,21 @@ const DEFAULT_USER: AuthUser = {
 };
 
 interface PersistedSession {
-  studentId: string;
+  studentId?: string;
+  studentProfile?: StudentProfile;
+}
+
+function buildAuthenticatedState(profile: StudentProfile): AuthState {
+  return {
+    isAuthenticated: true,
+    user: {
+      role: 'student',
+      grade: profile.grade,
+      name: profile.studentName,
+    },
+    studentProfile: profile,
+    parentVerified: false,
+  };
 }
 
 function loadPersistedState(): AuthState {
@@ -82,6 +95,9 @@ function loadPersistedState(): AuthState {
     }
 
     const parsed = JSON.parse(raw) as PersistedSession;
+    if (parsed.studentProfile) {
+      return buildAuthenticatedState(parsed.studentProfile);
+    }
     if (!parsed.studentId) {
       return {
         isAuthenticated: false,
@@ -101,16 +117,7 @@ function loadPersistedState(): AuthState {
       };
     }
 
-    return {
-      isAuthenticated: true,
-      user: {
-        role: 'student',
-        grade: profile.grade,
-        name: profile.studentName,
-      },
-      studentProfile: profile,
-      parentVerified: false,
-    };
+    return buildAuthenticatedState(profile);
   } catch {
     return {
       isAuthenticated: false,
@@ -121,9 +128,12 @@ function loadPersistedState(): AuthState {
   }
 }
 
-function persistSession(studentId: string): void {
+function persistSession(studentId: string, studentProfile?: StudentProfile): void {
   try {
     const payload: PersistedSession = { studentId };
+    if (studentProfile) {
+      payload.studentProfile = studentProfile;
+    }
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // Ignore quota/private mode failures.
@@ -285,26 +295,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setParentAccessPromptOpen(false);
       setNotice(null);
-      persistSession(remoteProfile.studentId);
+      persistSession(remoteProfile.studentId, remoteProfile);
       return { ok: true };
     }
 
-    persistAdminToken(null);
-    const profile = authenticateStudent(normalizedId, password);
-    if (!profile) {
-      return { ok: false, error: 'Invalid Student ID or Password' };
-    }
-
-    setAuthState({
-      isAuthenticated: true,
-      user: { role: 'student', grade: profile.grade, name: profile.studentName },
-      studentProfile: profile,
-      parentVerified: false,
-    });
-    setParentAccessPromptOpen(false);
-    setNotice(null);
-    persistSession(profile.studentId);
-    return { ok: true };
+    return { ok: false, error: 'Invalid Student ID or Password' };
   }, []);
 
   const loginWithParentAccessKey = useCallback(async (studentId: string, accessKey: string): Promise<AuthActionResult> => {
@@ -322,29 +317,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setParentAccessPromptOpen(false);
       setNotice({ tone: 'success', message: 'Parent view unlocked' });
-      persistSession(remoteProfile.studentId);
+      persistSession(remoteProfile.studentId, remoteProfile);
       logAction('parent_authenticated', 'parent', { studentId: remoteProfile.studentId, source: 'login' });
       return { ok: true };
     }
 
-    persistAdminToken(null);
-    const profile = getStudentProfileById(normalizedId);
-    if (!profile) return { ok: false, error: 'Invalid Student ID' };
-    if (accessKey.trim() !== profile.parentAccessKey) {
-      return { ok: false, error: 'Invalid Parent Access Key' };
-    }
-
-    setAuthState({
-      isAuthenticated: true,
-      user: { role: 'parent', grade: profile.grade, name: profile.parentName || `${profile.studentName} Parent` },
-      studentProfile: profile,
-      parentVerified: true,
-    });
-    setParentAccessPromptOpen(false);
-    setNotice({ tone: 'success', message: 'Parent view unlocked' });
-    persistSession(profile.studentId);
-    logAction('parent_authenticated', 'parent', { studentId: profile.studentId, source: 'login' });
-    return { ok: true };
+    return { ok: false, error: 'Invalid Student ID or Parent Access Key' };
   }, []);
 
   const logout = useCallback(() => {

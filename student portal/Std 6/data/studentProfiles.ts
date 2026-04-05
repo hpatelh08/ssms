@@ -1,7 +1,7 @@
 export interface StudentProfile {
   studentName: string; className: string; admissionNumber: string; grNo: string; studentId: string; password: string; parentName: string; phone: string; dob: string; gender: string; bloodGroup: string; address: string; status: 'Active' | 'Inactive'; parentAccessKey: string; grade: number;
 }
-const STUDENT_PROFILES: StudentProfile[] = [{ studentName: 'Yash Patel', className: 'Std 6', admissionNumber: 'ADM-2024-601', grNo: 'GR-6001', studentId: 'STU2024601', password: 'Sch@061', parentName: 'Megha Patel', phone: '+91 98765 43210', dob: '2014-08-12', gender: 'Male', bloodGroup: 'B+', address: 'Satellite Road, Ahmedabad', status: 'Active', parentAccessKey: '0061', grade: 6 }];
+const STUDENT_PROFILES: StudentProfile[] = [{ studentName: 'Yash Patel', className: 'Std 6', admissionNumber: 'ADM-2024-526', grNo: 'GR-6001', studentId: 'STU20240601', password: 'Stu@601', parentName: 'Megha Patel', phone: '+91 98765 43210', dob: '2014-08-12', gender: 'Male', bloodGroup: 'B+', address: 'Satellite Road, Ahmedabad', status: 'Active', parentAccessKey: '0526', grade: 6 }];
 const profileById = new Map(STUDENT_PROFILES.map(profile => [profile.studentId.toUpperCase(), profile]));
 const PROFILE_OVERRIDES_STORAGE_KEY = 'ssms_std6_student_profile_overrides_v1';
 type StudentProfileOverrideMap = Record<string, Partial<StudentProfile>>;

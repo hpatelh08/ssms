@@ -60,10 +60,40 @@ const DEFAULT_USER: AuthUser = {
   name: 'Explorer',
 };
 
+interface PersistedSession {
+  studentId?: string;
+  studentProfile?: StudentProfile;
+}
+
+function buildAuthenticatedState(profile: StudentProfile): AuthState {
+  return {
+    isAuthenticated: true,
+    user: {
+      role: 'student',
+      grade: profile.grade,
+      name: profile.studentName,
+    },
+    studentProfile: profile,
+    parentVerified: false,
+  };
+}
+
 function loadPersistedState(): AuthState {
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_ROLE_STORAGE_KEY);
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return {
+        isAuthenticated: false,
+        user: DEFAULT_USER,
+        studentProfile: null,
+        parentVerified: false,
+      };
+    }
+
+    const parsed = JSON.parse(raw) as PersistedSession;
+    if (parsed.studentProfile) {
+      return buildAuthenticatedState(parsed.studentProfile);
+    }
   } catch {
     // Ignore storage errors.
   }

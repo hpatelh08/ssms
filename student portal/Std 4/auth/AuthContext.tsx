@@ -18,6 +18,24 @@ export interface AuthUser {
   username: string;
 }
 
+export interface StudentProfile {
+  studentName?: string;
+  className?: string;
+  grade?: number;
+  status?: string;
+  studentId?: string;
+  password?: string;
+  admissionNumber?: string;
+  grNo?: string;
+  fatherName?: string;
+  parentName?: string;
+  phone?: string;
+  dob?: string;
+  gender?: string;
+  bloodGroup?: string;
+  division?: string;
+}
+
 export interface AuthActionResult {
   ok: boolean;
   error?: string;
@@ -34,6 +52,7 @@ export interface LoginInput {
 export interface AuthContextType {
   user: AuthUser;
   isAuthenticated: boolean;
+  studentProfile: StudentProfile | null;
   login: (input: LoginInput) => Promise<AuthActionResult>;
   logout: () => void;
   switchRole: () => void;
@@ -45,12 +64,13 @@ const DEFAULT_USER: AuthUser = {
   role: 'student',
   grade: 4,
   name: 'Std 4 Learner',
-  username: 'STU2024401',
+  username: 'STU20240361',
 };
 
 type PersistedSession = {
   isAuthenticated: boolean;
   user: AuthUser;
+  studentProfile?: StudentProfile | null;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -80,6 +100,7 @@ function loadSession(): PersistedSession {
         name: parsed.user.name,
         username: parsed.user.username,
       },
+      studentProfile: parsed.studentProfile || null,
     };
   } catch {
     return { isAuthenticated: false, user: DEFAULT_USER };
@@ -172,11 +193,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo<AuthContextType>(() => ({
     user: session.user,
     isAuthenticated: session.isAuthenticated,
+    studentProfile: session.studentProfile || null,
     login,
     logout,
     switchRole,
     setRole,
-  }), [session.user, session.isAuthenticated, login, logout, switchRole, setRole]);
+  }), [session.user, session.isAuthenticated, session.studentProfile, login, logout, switchRole, setRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
