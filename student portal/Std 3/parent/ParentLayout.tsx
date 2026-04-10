@@ -1,13 +1,13 @@
-﻿/**
+/**
  * parent/ParentLayout.tsx
- * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- * Magical parent dashboard shell â€” visually matches child/ChildLayout.
+ * ─────────────────────────────────────────────────────
+ * Magical parent dashboard shell — visually matches child/ChildLayout.
  *
  * Skeleton:
- *  â€¢ min-h-screen, FloatingWorld animated background
- *  â€¢ ParentTopBar (glass, pastel gradient)
- *  â€¢ ParentNav (glass sidebar + bottom nav)
- *  â€¢ Main area with spring-animated page transitions
+ *  • min-h-screen, FloatingWorld animated background
+ *  • ParentTopBar (glass, pastel gradient)
+ *  • ParentNav (glass sidebar + bottom nav)
+ *  • Main area with spring-animated page transitions
  */
 
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
@@ -27,7 +27,10 @@ import { AiWeeklyReportEngine } from './pages/AiWeeklyReportEngine';
 import { LessonVideoPlayer } from './pages/LessonVideoPlayer';
 import { VideoListingPage } from './pages/VideoListingPage';
 import { BooksPage } from './pages/BooksPage';
+import { AssignmentsPage } from './pages/AssignmentsPage';
+import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
 import { MessagesPage } from './pages/MessagesPage';
+import LeavePage from './pages/LeavePage';
 import BookReaderPage from './pages/BookReaderPage';
 import { pageTransition } from '../styles/theme';
 import { type VideoEntry, type VideoSubject } from '../data/videoConfig';
@@ -39,7 +42,7 @@ import './parent.css';
 const SpaceWarProgressPage = React.lazy(() => import('./pages/SpaceWarProgressPage'));
 const EcoSystemProgressPage = React.lazy(() => import('./pages/EcoSystemProgressPage'));
 
-/* â”€â”€ Layout Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Layout Shell ───────────────────────────────── */
 
 const ParentShell: React.FC = () => {
   const [activeScreen, setActiveScreen] = useState<ParentScreen>('overview');
@@ -89,6 +92,8 @@ const ParentShell: React.FC = () => {
       case 'attendance':  return <AttendancePage />;
       case 'books':
         return <BooksPage onOpenBook={handleOpenBook} />;
+      case 'assignments': return <AssignmentsPage />;
+      case 'study-materials': return <StudyMaterialsPage />;
       case 'ai-buddy':
         if (aiSubScreen === 'video' && videoState) return <LessonVideoPlayer video={videoState.video} subject={videoState.subject} onBack={() => setAiSubScreen('videos')} onPlayVideo={handlePlayVideo} onAskAI={handleAskAIBuddy} />;
         if (aiSubScreen === 'videos') return <VideoListingPage onBack={() => setAiSubScreen('hub')} onPlayVideo={handlePlayVideo} />;
@@ -101,10 +106,11 @@ const ParentShell: React.FC = () => {
           onOpenWorksheets={() => setAiSubScreen('worksheets')}
           onOpenWeeklyReport={() => setAiSubScreen('weekly-report')}
         />;
-      case 'space-war':    return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><SpaceWarProgressPage /></Suspense>;
-      case 'eco-system': return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><EcoSystemProgressPage /></Suspense>;
+      case 'space-war':    return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loading…</p></div>}><SpaceWarProgressPage /></Suspense>;
+      case 'eco-system': return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loading…</p></div>}><EcoSystemProgressPage /></Suspense>;
       case 'report':      return <ReportCardPage onBack={() => setActiveScreen('overview')} />;
       case 'messages':    return <MessagesPage />;
+      case 'leave':       return <LeavePage />;
       case 'settings':    return <SettingsPage />;
       default:            return null;
     }
@@ -145,7 +151,10 @@ const ParentShell: React.FC = () => {
 /**
  * Public entry-point for the parent dashboard.
  * Providers (Sound, Mascot, XP) are mounted at
- * the App root â€” ParentLayout is a pure rendering shell.
+ * the App root — ParentLayout is a pure rendering shell.
  */
 export const ParentLayout: React.FC = () => <ParentShell />;
+
+
+
 

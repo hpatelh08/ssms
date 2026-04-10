@@ -1,4 +1,4 @@
-﻿window.initAdminPage = function() {
+window.initAdminPage = function() {
   const user = renderLayout({
     pageTitle: 'Admin Panel',
     activePage: 'dashboard',
@@ -231,7 +231,7 @@
 
       async function fetchTodayAtt() {
         try {
-          const res = await fetch('/api/dashboard/today-attendance?person_type=teacher', {
+          const res = await fetch('/api/dashboard/today-attendance?person_type=student', {
             headers: { Authorization: 'Bearer ' + localStorage.getItem('ssms_token') }
           });
           if (res.ok) return await res.json();
@@ -253,7 +253,7 @@
 
       function renderToday(d) {
         if (!d) return;
-        const t = d.teachers;
+        const t = d.students;
 
         scope.querySelector('#todayT_present').textContent  = t.present;
         scope.querySelector('#todayT_absent').textContent   = t.absent;
@@ -606,14 +606,14 @@
       }
 
       // Initial load
-      let currentType = 'teacher';
+      let currentType = 'student';
       container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px 0;">Loading...</p>';
       let initData = await fetchData(currentType);
-      if (!initData.length && currentType === 'teacher') {
-        const studentData = await fetchData('student');
-        if (studentData.length) {
-          currentType = 'student';
-          initData = studentData;
+      if (!initData.length) {
+        const teacherData = await fetchData('teacher');
+        if (teacherData.length) {
+          currentType = 'teacher';
+          initData = teacherData;
         }
       }
       setActiveTypeButton(currentType);
@@ -2102,6 +2102,63 @@
       return division ? `${classNumber}-${division}` : classNumber;
     }
 
+    function normalizeTeacherClassFilterValue(t) {
+      const rawClass = String(t?.class || '').trim();
+      const rawDivision = String(t?.division || '').trim().toUpperCase();
+      const classDigits = rawClass.match(/\d+/)?.[0] || '';
+      const classLetters = rawClass.match(/[A-Za-z]+$/)?.[0]?.toUpperCase() || '';
+      const combined = `${classDigits}${classLetters}`;
+      const hyphenCombined = classDigits && classLetters ? `${classDigits}-${classLetters}` : '';
+      return {
+        rawClass,
+        rawDivision,
+        classDigits,
+        classLetters,
+        combined,
+        hyphenCombined,
+      };
+    }
+
+    function applyLocalTeacherFilters(list) {
+      const search = els.search.value.trim().toLowerCase();
+      const classValue = els.classFilter.value.trim();
+      const divisionValue = els.divisionFilter.value.trim().toUpperCase();
+      const statusValue = els.status.value.trim().toLowerCase();
+
+      return (list || []).filter((t) => {
+        const normalized = normalizeTeacherClassFilterValue(t);
+        const matchesSearch = !search || [
+          t?.name,
+          t?.subject,
+          t?.emp,
+          t?.teacher_id,
+          t?.email,
+          t?.class,
+          t?.division,
+          getTeacherClassLabel(t),
+        ].some((value) => String(value || '').toLowerCase().includes(search));
+
+        const matchesClass = !classValue || [
+          normalized.classDigits,
+          normalized.combined,
+          normalized.hyphenCombined,
+          normalized.rawClass.replace(/\s+/g, ''),
+        ].some((value) => String(value || '').replace(/\s+/g, '').toUpperCase() === classValue.replace(/\s+/g, '').toUpperCase()
+          || String(value || '').toLowerCase().includes(`class ${classValue.toLowerCase()}`));
+
+        const matchesDivision = !divisionValue || [
+          normalized.rawDivision,
+          normalized.classLetters,
+          normalized.hyphenCombined.split('-')[1] || '',
+          normalized.rawClass.match(/[A-Za-z]+$/)?.[0] || '',
+        ].some((value) => String(value || '').trim().toUpperCase() === divisionValue);
+
+        const matchesStatus = !statusValue || String(t?.status || '').trim().toLowerCase() === statusValue;
+
+        return matchesSearch && matchesClass && matchesDivision && matchesStatus;
+      });
+    }
+
     function teacherProfileStats(t) {
       return [
         { label: 'Teacher Name', value: t?.name || '—', tone: 'indigo' },
@@ -2117,6 +2174,8 @@
       salary: section.querySelector('#t-salary'),
       subjects: section.querySelector('#t-subjects'),
       search: section.querySelector('#t-searchInput'),
+      classFilter: section.querySelector('#t-classFilter'),
+      divisionFilter: section.querySelector('#t-divisionFilter'),
       status: section.querySelector('#t-statusFilter'),
       clear: section.querySelector('#t-clearFilters'),
       table: section.querySelector('#teacherTable'),
@@ -2141,16 +2200,23 @@
     };
 
     async function fetchTeachers() {
-      const params = { page: currentPage, limit: PAGE_SIZE };
       const search = els.search.value.trim();
+      const classValue = els.classFilter.value;
+      const divisionValue = els.divisionFilter.value;
       const status = els.status.value;
+      const hasFilters = Boolean(search || classValue || divisionValue || status);
+      const params = { page: currentPage, limit: hasFilters ? 1000 : PAGE_SIZE };
       if (search) params.search = search;
+      if (classValue) params.class = classValue;
+      if (divisionValue) params.division = divisionValue;
       if (status) params.status = status;
       try {
         const res = await loadTeachers(params);
-        teachers = res.data || [];
-        totalPages = res.totalPages || 1;
-        totalRecords = res.totalRecords || 0;
+        const rawTeachers = res.data || [];
+        const filteredTeachers = applyLocalTeacherFilters(rawTeachers);
+        teachers = filteredTeachers;
+        totalRecords = filteredTeachers.length;
+        totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
       } catch (e) { console.error('fetchTeachers', e); teachers = []; totalPages = 1; totalRecords = 0; }
     }
 
@@ -2311,9 +2377,13 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(applyFilters, 300);
     });
+    els.classFilter.addEventListener('change', applyFilters);
+    els.divisionFilter.addEventListener('change', applyFilters);
     els.status.addEventListener('change', applyFilters);
     els.clear.addEventListener('click', () => {
       els.search.value = '';
+      els.classFilter.value = '';
+      els.divisionFilter.value = '';
       els.status.value = '';
       applyFilters();
     });
@@ -2515,10 +2585,20 @@
     const attToggleWrap = section.querySelector('.att-person-toggle');
     const sliderPill = document.createElement('div');
     sliderPill.className = 'att-toggle-slider';
+    sliderPill.style.pointerEvents = 'none';
     attToggleWrap.insertBefore(sliderPill, attToggleWrap.firstChild);
     function moveSlider(activeBtn) {
       sliderPill.style.width = activeBtn.offsetWidth + 'px';
       sliderPill.style.transform = 'translateX(' + (activeBtn.offsetLeft - 5) + 'px)';
+    }
+
+    function resolvePersonTypeFromUi() {
+      return toggleTeacher.classList.contains('active') ? 'teacher' : 'student';
+    }
+
+    function extractLastNumber(value) {
+      const match = String(value || '').match(/(\d+)(?!.*\d)/);
+      return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
     }
 
     // â”€â”€â”€ Toggle Student / Teacher â”€â”€â”€
@@ -2563,28 +2643,89 @@
 
     // â”€â”€â”€ Load People â”€â”€â”€
     async function loadPeople() {
-      const cls = personType === 'student' ? attClass.value : '';
-      const sectionValue = personType === 'student' ? (attSection ? attSection.value : '') : '';
-      const selectedDate = attDate.value || getLocalDateISO();
-      const detail = await loadAttendanceDayDetail(selectedDate, personType, cls, sectionValue);
-      const statusLookup = (detail.records || []).reduce((lookup, record) => {
-        lookup[String(record.person_id || '')] = attendanceStatusCode(record.status_code || record.status);
-        return lookup;
-      }, {});
+      try {
+        const uiType = resolvePersonTypeFromUi();
+        if (uiType !== personType) {
+          personType = uiType;
+          attClassGroup.style.display = uiType === 'student' ? '' : 'none';
+          if (attSectionGroup) attSectionGroup.style.display = uiType === 'student' ? '' : 'none';
+          attColExtra.textContent = uiType === 'student' ? 'Class' : 'Subject';
+        }
+        const cls = personType === 'student' ? attClass.value : '';
+        const sectionValue = personType === 'student' ? (attSection ? attSection.value : '') : '';
+        const selectedDate = attDate.value || getLocalDateISO();
 
-      people = await loadAttendancePeople(personType, cls, sectionValue);
-      attRecords = people.map(p => ({
-        person_id: personType === 'student' ? p.student_id : p.teacher_id,
-        roll: p.roll || '',
-        name: p.name || '',
-        class: p.class || '',
-        section: p.section || '',
-        extra: personType === 'student' ? ('Class ' + (p.class || '') + '-' + (p.section || '')) : (p.subject || ''),
-        status: statusLookup[String(personType === 'student' ? p.student_id : p.teacher_id)] || 'P'
-      }));
-      currentPage = 1;
-      renderTable();
-      updateSummaryFromRecords();
+        let detail = { records: [] };
+        try {
+          detail = await loadAttendanceDayDetail(selectedDate, personType, cls, sectionValue);
+        } catch (detailError) {
+          console.warn('Attendance day detail unavailable, continuing without prefill', detailError);
+        }
+
+        const statusLookup = (detail.records || []).reduce((lookup, record) => {
+          lookup[String(record.person_id || '')] = attendanceStatusCode(record.status_code || record.status);
+          return lookup;
+        }, {});
+
+        let loadedPeople = [];
+        if (personType === 'student') {
+          try {
+            const studentResponse = await loadStudents({
+              page: 1,
+              limit: 500,
+              class: cls,
+              section: sectionValue,
+              status: 'Active'
+            });
+            loadedPeople = Array.isArray(studentResponse?.data) ? studentResponse.data : [];
+          } catch (studentError) {
+            console.warn('Student roster API unavailable, falling back to attendance people', studentError);
+          }
+        }
+
+        if (!loadedPeople.length) {
+          try {
+            loadedPeople = await loadAttendancePeople(personType, cls, sectionValue);
+          } catch (peopleError) {
+            console.warn('Attendance people API unavailable, using empty roster', peopleError);
+            loadedPeople = [];
+          }
+        }
+
+        people = Array.isArray(loadedPeople)
+          ? loadedPeople.slice().sort((a, b) => {
+            if (personType !== 'student') return String(a.name || '').localeCompare(String(b.name || ''));
+            const left = extractLastNumber(a.roll || a.gr_number || a.student_id || '');
+            const right = extractLastNumber(b.roll || b.gr_number || b.student_id || '');
+            if (left !== right) return left - right;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+          })
+          : [];
+
+        attRecords = people.map(p => ({
+          person_id: personType === 'student'
+            ? String(p.student_id || p.studentId || p.id || '').trim()
+            : String(p.teacher_id || p.teacherId || p.id || '').trim(),
+          roll: String(p.roll || p.gr_number || p.grNo || p.student_id || p.studentId || '').trim(),
+          name: p.name || '',
+          class: String(p.class || p.standard || '').trim(),
+          section: String(p.section || p.division || '').trim(),
+          extra: personType === 'student'
+            ? ('Class ' + (p.class || p.standard || '') + '-' + (p.section || p.division || ''))
+            : (p.subject || ''),
+          status: statusLookup[String(personType === 'student' ? (p.student_id || p.studentId || p.id || '') : (p.teacher_id || p.teacherId || p.id || ''))] || 'P'
+        }));
+        currentPage = 1;
+        renderTable();
+        updateSummaryFromRecords();
+      } catch (error) {
+        console.error('Failed to load attendance people:', error);
+        people = [];
+        attRecords = [];
+        renderTable();
+        updateSummaryFromRecords();
+        showErrorPopup('Unable to load attendance records. Please check the class and division.');
+      }
     }
     section.querySelector('#loadPeopleBtn').addEventListener('click', loadPeople);
 
@@ -2618,10 +2759,16 @@
       const pageRecords = attRecords.slice(start, end);
 
       attTable.innerHTML = pageRecords.map((r, idx) => {
+        const rowNumber = idx + 1;
         const globalIdx = start + idx;
         return `<tr>
-          <td style="font-weight:700;color:#94a3b8;">${globalIdx + 1}</td>
-          <td style="font-weight:600;font-size:0.78rem;">${r.roll}</td>
+          <td style="font-weight:700;color:#94a3b8;">${rowNumber}</td>
+          <td>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-weight:700;font-size:0.82rem;color:#0f172a;">${r.roll || '—'}</span>
+              <span style="font-weight:600;font-size:0.72rem;color:#3b82f6;">${r.person_id || '—'}</span>
+            </div>
+          </td>
           <td>
             <div style="display:flex;align-items:center;gap:10px;">
               <div class="avatar-sm" style="background:${avatarColor(r.name)};">${r.name.charAt(0)}</div>
@@ -4982,11 +5129,31 @@ ${issuedRow}
       return normalizedTeacher.includes(normalizedSubject);
     }
 
-    function syncTeacherDropdownForSubject(subjectName, currentTeacher = '') {
+    async function syncTeacherDropdownForSubject(subjectName, standard, currentTeacher = '') {
       const subject = String(subjectName || '').trim();
-      const matchedTeachers = Array.isArray(teachers)
-        ? teachers.filter((teacher) => teacherNameMatchesSubject(teacher?.name, subject))
-        : [];
+      const std = parseInt(standard, 10);
+      let matchedTeachers = [];
+      const selectedOption = popupSubject && popupSubject.options
+        ? Array.from(popupSubject.options).find((option) => String(option.textContent || '').trim() === subject || String(option.value || '').trim() === subject)
+        : null;
+      const subjectId = selectedOption?.dataset?.id ? parseInt(selectedOption.dataset.id, 10) : null;
+
+      if (Number.isInteger(std) && Number.isInteger(subjectId)) {
+        try {
+          const data = await fetchTeachersForSubject(subjectId, std);
+          if (Array.isArray(data) && data.length) {
+            matchedTeachers = data.map((teacher) => ({ name: teacher.name }));
+          }
+        } catch (_) {
+          matchedTeachers = [];
+        }
+      }
+
+      if (!matchedTeachers.length) {
+        matchedTeachers = Array.isArray(teachers)
+          ? teachers.filter((teacher) => teacherNameMatchesSubject(teacher?.name, subject))
+          : [];
+      }
 
       popupTeacher.innerHTML = '';
 
@@ -5030,7 +5197,7 @@ ${issuedRow}
     popupSubject.addEventListener('change', async () => {
       const selectedOpt = popupSubject.options[popupSubject.selectedIndex];
       const subjectName = selectedOpt ? selectedOpt.textContent : '';
-      const selectedTeacher = syncTeacherDropdownForSubject(subjectName, '');
+      const selectedTeacher = await syncTeacherDropdownForSubject(subjectName, stdSel.value, '');
       if (selectedTeacher && editingCell) {
         const result = await checkTeacherConflict(selectedTeacher, editingCell.day, editingCell.num);
         if (result && result.conflict) showConflictWarning(result.message);
@@ -5084,7 +5251,7 @@ ${issuedRow}
       // Populate teacher list for the currently selected subject
       const selSubject = subjects.find(s => s.name === current.subject) || subjects[0];
       if (selSubject) {
-        const selectedTeacher = syncTeacherDropdownForSubject(selSubject.name, current.teacher || '');
+        const selectedTeacher = await syncTeacherDropdownForSubject(selSubject.name, std, current.teacher || '');
         if (selectedTeacher && editingCell) {
           const result = await checkTeacherConflict(selectedTeacher, editingCell.day, editingCell.num);
           if (result && result.conflict) showConflictWarning(result.message);

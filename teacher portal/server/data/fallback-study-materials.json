@@ -1,0 +1,34 @@
+[
+  {
+    "_id": "FB_MAT_1775658043531",
+    "title": "maths",
+    "description": "",
+    "teacher": "teacher101@teacher.com",
+    "uploadedByTeacherId": "teacher101@teacher.com",
+    "materialType": "pdf",
+    "class": {
+      "_id": "admin-class-1-A",
+      "className": "1",
+      "section": "A"
+    },
+    "standard": "1",
+    "division": "A",
+    "subject": {
+      "_id": "Mathematics",
+      "subjectName": "Mathematics"
+    },
+    "url": "",
+    "file": {
+      "filename": "1775658043529-marks_Diya_Patel_report_2026-04-01.pdf",
+      "path": "D:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775658043529-marks_Diya_Patel_report_2026-04-01.pdf",
+      "originalName": "marks_Diya_Patel_report_2026-04-01.pdf",
+      "size": 5826,
+      "mimetype": "application/pdf"
+    },
+    "downloadCount": 0,
+    "createdAt": "2026-04-08T14:20:43.531Z",
+    "updatedAt": "2026-04-08T14:20:43.531Z",
+    "fallbackMode": true,
+    "fileUrl": "D:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775658043529-marks_Diya_Patel_report_2026-04-01.pdf"
+  }
+]

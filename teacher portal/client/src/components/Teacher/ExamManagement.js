@@ -7,12 +7,43 @@ import { getAssignedTeacherClassNumber, getAssignedTeacherSection, matchesAssign
 import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const ExamManagement = ({ currentUser }) => {
+  const isSubmissionComplete = (status) => {
+    if (!status) return true;
+    const normalized = String(status).toLowerCase();
+    return ['submitted', 'completed', 'graded'].includes(normalized);
+  };
+
   const getExamStorageKey = () => `teacher-exams-${currentUser?._id || currentUser?.email || 'default'}`;
   const buildExamKey = (exam) => {
     const classId = exam?.class?._id || exam?.class || '';
     const subjectId = exam?.subject?._id || exam?.subject || '';
     const date = exam?.date || exam?.examDate || '';
     return `${exam?.examName || ''}|${date}|${classId}|${subjectId}`;
+  };
+  const buildMarksExamGroupKey = (exam) => {
+    const classId = exam?.class?._id || exam?.class || '';
+    const examName = String(exam?.examName || '').trim().toLowerCase();
+    const examType = String(exam?.examType || '').trim().toLowerCase();
+    const date = String(exam?.date || exam?.examDate || '').trim();
+    const startTime = String(exam?.startTime || '').trim().toLowerCase();
+    const endTime = String(exam?.endTime || '').trim().toLowerCase();
+    const totalMarks = String(exam?.totalMarks || '').trim();
+    const passingMarks = String(exam?.passingMarks || '').trim();
+    return [classId, examName, examType, date, startTime, endTime, totalMarks, passingMarks].join('|');
+  };
+  const formatDate = (value) => {
+    if (!value) return 'TBA';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+  const statusLabel = (status) => {
+    const value = String(status || '').toLowerCase();
+    if (value === 'ongoing') return 'In Progress';
+    if (value === 'completed') return 'Completed';
+    if (value === 'cancelled') return 'Cancelled';
+    if (value === 'upcoming' || value === 'scheduled') return 'Upcoming';
+    return 'Scheduled';
   };
   const loadLocalExams = () => {
     const key = getExamStorageKey();
@@ -50,12 +81,14 @@ const ExamManagement = ({ currentUser }) => {
   const [examResults, setExamResults] = useState([]);
   const [gradingData, setGradingData] = useState({});
   const [marksStudents, setMarksStudents] = useState([]);
-  const [marksData, setMarksData] = useState({});
   const [marksSelectedClass, setMarksSelectedClass] = useState('');
-  const [marksSelectedExam, setMarksSelectedExam] = useState('');
   const [marksExams, setMarksExams] = useState([]);
   const [marksSubjects, setMarksSubjects] = useState([]);
-  const [marksSelectedSubject, setMarksSelectedSubject] = useState('');
+  const [marksSelectedExamGroup, setMarksSelectedExamGroup] = useState('');
+  const [marksExamData, setMarksExamData] = useState({});
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
+  const [subjectChapters, setSubjectChapters] = useState({});
+  const [subjectDates, setSubjectDates] = useState({});
   const [formData, setFormData] = useState({
     examName: '',
     examType: 'quiz',
@@ -66,7 +99,8 @@ const ExamManagement = ({ currentUser }) => {
     endTime: '',
     totalMarks: '',
     passingMarks: '',
-    description: ''
+    description: '',
+    chapter: ''
   });
 
   useEffect(() => {
@@ -91,12 +125,18 @@ const ExamManagement = ({ currentUser }) => {
     const loadSubjectsForClass = async () => {
       if (!formData.class) {
         setSubjects([]);
+        setSelectedSubjects([]);
+        setSubjectChapters({});
+        setSubjectDates({});
         return;
       }
 
       const selectedClass = classes.find(c => c._id === formData.class);
       if (!selectedClass) {
         setSubjects([]);
+        setSelectedSubjects([]);
+        setSubjectChapters({});
+        setSubjectDates({});
         return;
       }
 
@@ -135,34 +175,123 @@ const ExamManagement = ({ currentUser }) => {
     loadSubjectsForClass();
   }, [formData.class, classes]);
 
+  useEffect(() => {
+    if (formData.subject) {
+      setSelectedSubjects([formData.subject]);
+      return;
+    }
+
+    if (!formData._id) {
+      setSelectedSubjects([]);
+    }
+  }, [formData.subject, formData._id]);
+
   const marksSubjectList = marksSubjects;
+  const marksExamGroups = React.useMemo(() => {
+    const groups = new Map();
+    const sourceExams = marksExams.length ? marksExams : exams;
+    const selectedClassLabel = String(marksSelectedClass || '').trim();
+
+    sourceExams.forEach((exam) => {
+      const examClassId = String(exam.class?._id || exam.class || '').trim();
+      const examClassName = String(exam.class?.className || exam.class?.name || '').trim();
+      const classMatches = !selectedClassLabel
+        || examClassId === selectedClassLabel
+        || examClassName === selectedClassLabel
+        || String(exam.class?.className || '').trim() === String(marksSelectedClass || '').trim();
+      if (!classMatches) return;
+
+      const key = buildMarksExamGroupKey(exam);
+      const subjectName = String(exam.subject?.subjectName || exam.subject || '').trim() || 'Subject';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          examName: String(exam.examName || 'Exam').trim(),
+          className: exam.class?.className || exam.class?.name || exam.class || '',
+          section: exam.class?.section || exam.class?.division || '',
+          date: exam.date || exam.examDate || exam.startDate || '',
+          startTime: exam.startTime || '',
+          endTime: exam.endTime || '',
+          totalMarks: exam.totalMarks || 0,
+          passingMarks: exam.passingMarks || 0,
+          exams: [],
+          subjects: [],
+        });
+      }
+      const group = groups.get(key);
+      group.exams.push(exam);
+      if (!group.subjects.includes(subjectName)) {
+        group.subjects.push(subjectName);
+      }
+    });
+
+    return Array.from(groups.values())
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+      .map((group) => ({
+        ...group,
+        exams: group.exams.sort((a, b) => {
+          const subjectA = String(a.subject?.subjectName || a.subject || '').trim();
+          const subjectB = String(b.subject?.subjectName || b.subject || '').trim();
+          return subjectA.localeCompare(subjectB);
+        }),
+      }));
+  }, [marksExams, exams, marksSelectedClass]);
+
+  const selectedMarksExamGroup = React.useMemo(() => {
+    if (!marksExamGroups.length) return null;
+    return marksExamGroups.find((group) => group.key === marksSelectedExamGroup) || marksExamGroups[0];
+  }, [marksExamGroups, marksSelectedExamGroup]);
+
+  const selectedMarksGroupExams = selectedMarksExamGroup?.exams || [];
+  const selectedMarksGroupColumns = selectedMarksGroupExams.map((exam) => ({
+    examId: exam._id,
+    subjectName: String(exam.subject?.subjectName || exam.subject || 'Subject').trim() || 'Subject',
+    totalMarks: exam.totalMarks || 0,
+  }));
+
+  const getStudentLookupKeys = (student) => [
+    student?._id,
+    student?.studentId,
+    student?.id,
+    student?.student_id,
+  ]
+    .map((key) => String(key || '').trim())
+    .filter(Boolean);
+
+  const selectedExamMarksLookup = React.useMemo(() => {
+    const lookup = {};
+    examResults.forEach((result) => {
+      const value = gradingData[result._id]?.marks ?? result.marksObtained ?? '';
+      getStudentLookupKeys(result.student).forEach((key) => {
+        lookup[key] = value;
+      });
+    });
+    return lookup;
+  }, [examResults, gradingData]);
+
+  const findMarksGroupForExam = (exam) => {
+    if (!exam) return null;
+    const exactKey = buildMarksExamGroupKey(exam);
+    return marksExamGroups.find((group) => {
+      if (group.key === exactKey) return true;
+      if (group.examName && exam.examName && String(group.examName).trim().toLowerCase() === String(exam.examName).trim().toLowerCase()) {
+        return true;
+      }
+      const subjectName = String(exam.subject?.subjectName || exam.subject || '').trim().toLowerCase();
+      const groupSubjectMatch = Array.isArray(group.subjects) && group.subjects.some((subject) => String(subject || '').trim().toLowerCase() === subjectName);
+      const classMatch = String(group.className || '').trim() === String(exam.class?.className || exam.class?.name || exam.class || '').trim();
+      return groupSubjectMatch && classMatch;
+    }) || null;
+  };
 
   useEffect(() => {
     if (marksSelectedClass) {
-      // Fetch exams for marks tab
-      const fetchMarksExams = async () => {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await axios.get(apiUrl(`/api/teacher/exams?class=${marksSelectedClass}`), {
-            headers: { 'Authorization': `Bearer ${token}` },
-            timeout: 1000
-          });
-          if (!response.data.data || response.data.data.length === 0) throw new Error('Empty');
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const upcoming = (response.data.data || []).filter((exam) => {
-            const examDate = new Date(exam.date || exam.examDate || exam.startDate || '');
-            if (Number.isNaN(examDate.getTime())) return false;
-            examDate.setHours(0, 0, 0, 0);
-            return examDate >= today;
-          });
-          setMarksExams(upcoming);
-        } catch {
-          setMarksExams([]);
-          setMarksSelectedExam('');
-        }
-      };
-      fetchMarksExams();
+      setMarksExams(exams.filter((exam) => {
+        const examClassId = String(exam.class?._id || exam.class || '').trim();
+        const examClassName = String(exam.class?.className || exam.class?.name || '').trim();
+        const selectedClassLabel = String(marksSelectedClass || '').trim();
+        return examClassId === selectedClassLabel || examClassName === selectedClassLabel || !selectedClassLabel;
+      }));
       loadClassStudents(marksSelectedClass, currentUser, classes)
         .then((loadedStudents) => setMarksStudents(loadedStudents))
         .catch((error) => {
@@ -198,41 +327,77 @@ const ExamManagement = ({ currentUser }) => {
         }
       }
     }
-  }, [marksSelectedClass, classes, currentUser]);
+  }, [marksSelectedClass, classes, currentUser, exams]);
 
   useEffect(() => {
-    if (marksSelectedClass && marksSelectedExam && marksStudents.length > 0) {
-      // Try loading graded marks from Grading tab
-      const gradedKey = `graded-marks-${marksSelectedExam}`;
-      const gradedSaved = localStorage.getItem(gradedKey);
-      let gradedMap = {};
-      if (gradedSaved) { try { gradedMap = JSON.parse(gradedSaved); } catch { /* ignore */ } }
+    const loadMarksForExamGroup = async () => {
+      if (!marksSelectedClass || !marksSelectedExamGroup || marksStudents.length === 0) {
+        setMarksExamData({});
+        return;
+      }
 
-      const consolidated = {};
-      marksStudents.forEach(student => {
-        consolidated[student._id] = {};
-        marksSubjectList.forEach(sub => {
-          // Check if this student has graded marks for this subject
-          if (gradedMap[student.name] && gradedMap[student.name][sub.subjectName] !== undefined) {
-            consolidated[student._id][sub._id] = gradedMap[student.name][sub.subjectName];
-          } else {
-            // Fallback: check old localStorage or generate
-            const oldKey = `marks-data-${marksSelectedClass}-${marksSelectedExam}`;
-            const oldSaved = localStorage.getItem(oldKey);
-            let oldData = null;
-            if (oldSaved) { try { oldData = JSON.parse(oldSaved); } catch { /* ignore */ } }
-            if (oldData && oldData[student._id] && oldData[student._id][sub._id] !== undefined) {
-              consolidated[student._id][sub._id] = oldData[student._id][sub._id];
-            } else {
-              consolidated[student._id][sub._id] = '';
-            }
-          }
-        });
-      });
-      setMarksData(consolidated);
-      localStorage.setItem(`marks-data-${marksSelectedClass}-${marksSelectedExam}`, JSON.stringify(consolidated));
+      const token = localStorage.getItem('token');
+      const group = marksExamGroups.find((item) => item.key === marksSelectedExamGroup);
+      const examsForGroup = group?.exams || [];
+
+      const nextData = {};
+      await Promise.all(examsForGroup.map(async (exam) => {
+        try {
+          const subjectId = exam.subject?._id || exam.subject || '';
+          const response = await axios.get(apiUrl('/api/teacher/marks'), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+              classId: marksSelectedClass,
+              examId: exam._id,
+              subjectId
+            },
+            timeout: 1000
+          });
+          const rows = response?.data?.data || [];
+          const cached = readMarksCache(exam._id);
+          const marksByStudent = { ...(cached?.marksByStudent || {}) };
+          rows.forEach((row) => {
+            const studentId = row.student?._id || row.student?.studentId || row.student || '';
+            if (studentId) marksByStudent[String(studentId)] = row.marksObtained;
+          });
+          nextData[exam._id] = {
+            marksByStudent,
+            totalMarks: rows[0]?.totalMarks || cached?.totalMarks || exam.totalMarks || 0
+          };
+        } catch {
+          const cached = readMarksCache(exam._id);
+          nextData[exam._id] = {
+            marksByStudent: cached?.marksByStudent || {},
+            totalMarks: cached?.totalMarks || exam.totalMarks || 0
+          };
+        }
+      }));
+
+      setMarksExamData(nextData);
+    };
+
+    loadMarksForExamGroup();
+  }, [marksSelectedClass, marksSelectedExamGroup, marksStudents.length, marksExamGroups]);
+
+  useEffect(() => {
+    if (!marksExamGroups.length) {
+      setMarksSelectedExamGroup('');
+      return;
     }
-  }, [marksSelectedClass, marksSelectedExam, marksStudents.length, activeTab]);
+    setMarksSelectedExamGroup((current) => {
+      if (current && marksExamGroups.some((group) => group.key === current)) {
+        return current;
+      }
+      return marksExamGroups[0].key;
+    });
+  }, [marksExamGroups]);
+
+  useEffect(() => {
+    const matchedGroup = findMarksGroupForExam(selectedExam);
+    if (matchedGroup?.key) {
+      setMarksSelectedExamGroup(matchedGroup.key);
+    }
+  }, [selectedExam, marksExamGroups]);
 
   useEffect(() => {
     // Auto-select class for marks tab
@@ -241,41 +406,14 @@ const ExamManagement = ({ currentUser }) => {
     }
   }, [classes]);
 
-  const calcMarksTotal = (studentId, subjectList = marksSubjectList) => {
-    const sm = marksData[studentId] || {};
-    return subjectList.reduce((sum, sub) => sum + (sm[sub._id] || 0), 0);
-  };
-  const calcMarksAvg = (studentId, subjectList = marksSubjectList) => subjectList.length
-    ? Math.round(calcMarksTotal(studentId, subjectList) / subjectList.length)
-    : 0;
-  const calcMarksGrade = (avg) => {
-    if (avg >= 90) return 'A+';
-    if (avg >= 80) return 'A';
-    if (avg >= 70) return 'B+';
-    if (avg >= 60) return 'B';
-    if (avg >= 50) return 'C';
-    if (avg >= 40) return 'D';
+  const calcMarksGrade = (percentage) => {
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 50) return 'C';
+    if (percentage >= 40) return 'D';
     return 'F';
-  };
-  const handleMarksExportCSV = () => {
-    if (!marksSelectedExam || marksStudents.length === 0) return;
-    const headers = ['Roll No', 'Student Name', ...marksSubjectList.map(s => s.subjectName), 'Total', 'Avg%', 'Grade'];
-    const rows = marksStudents.map((student, index) => {
-      const sm = marksData[student._id] || {};
-      const total = calcMarksTotal(student._id);
-      const avg = calcMarksAvg(student._id);
-      return [`#${String(index + 1).padStart(2, '0')}`, student.name, ...marksSubjectList.map(sub => sm[sub._id] || '-'), total, `${avg}%`, calcMarksGrade(avg)];
-    });
-    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Marks_Sheet_${classes.find(c => c._id === marksSelectedClass)?.className}_${marksExams.find(e => e._id === marksSelectedExam)?.examName}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const fetchClasses = async () => {
@@ -321,12 +459,63 @@ const ExamManagement = ({ currentUser }) => {
       response.data.data.forEach(result => {
         initialGrading[result._id] = { marks: result.marksObtained, remarks: result.remarks };
       });
-      setGradingData(initialGrading);
+      const gradingKey = `grading-data-${examId}`;
+      let savedGrading = {};
+      const savedRaw = localStorage.getItem(gradingKey);
+      if (savedRaw) {
+        try { savedGrading = JSON.parse(savedRaw) || {}; } catch { /* ignore */ }
+      }
+      const mergedGrading = { ...initialGrading, ...savedGrading };
+      setGradingData(mergedGrading);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching exam results:', error);
       const selectedExamDetails = exams.find(e => e._id === examId) || { totalMarks: 100, passingMarks: 35 };
       const baseTotalMarks = selectedExamDetails.totalMarks;
+
+      try {
+        const token = localStorage.getItem('token');
+        const subjectId = selectedExamDetails.subject?._id || selectedExamDetails.subject || '';
+        const classId = selectedExamDetails.class?._id || selectedExamDetails.class || '';
+        if (classId && subjectId) {
+          const marksResponse = await axios.get(apiUrl('/api/teacher/marks'), {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: {
+              classId,
+              examId,
+              subjectId
+            },
+            timeout: 1000
+          });
+          const serverResults = marksResponse?.data?.data || [];
+          if (serverResults.length > 0) {
+            setExamResults(serverResults.map((mark) => ({
+              _id: mark._id,
+              student: mark.student,
+              marksObtained: mark.marksObtained,
+              totalMarks: mark.totalMarks,
+              passingMarks: selectedExamDetails.passingMarks,
+              remarks: mark.remarks || ''
+            })));
+            const initialGrading = {};
+            serverResults.forEach(mark => {
+              initialGrading[mark._id] = { marks: mark.marksObtained, remarks: mark.remarks };
+            });
+            const gradingKey = `grading-data-${examId}`;
+            let savedGrading = {};
+            const savedRaw = localStorage.getItem(gradingKey);
+            if (savedRaw) {
+              try { savedGrading = JSON.parse(savedRaw) || {}; } catch { /* ignore */ }
+            }
+            const mergedGrading = { ...initialGrading, ...savedGrading };
+            setGradingData(mergedGrading);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall back to local mock data.
+      }
 
       // Check if graded marks already exist in localStorage
       const savedGradedKey = `graded-marks-${examId}`;
@@ -354,7 +543,14 @@ const ExamManagement = ({ currentUser }) => {
       mockResults.forEach(result => {
         initialGrading[result._id] = { marks: result.marksObtained, remarks: result.remarks };
       });
-      setGradingData(initialGrading);
+      const gradingKey = `grading-data-${examId}`;
+      let savedGrading = {};
+      const savedRaw = localStorage.getItem(gradingKey);
+      if (savedRaw) {
+        try { savedGrading = JSON.parse(savedRaw) || {}; } catch { /* ignore */ }
+      }
+      const mergedGrading = { ...initialGrading, ...savedGrading };
+      setGradingData(mergedGrading);
       setLoading(false);
     }
   };
@@ -367,15 +563,61 @@ const ExamManagement = ({ currentUser }) => {
     }));
   };
 
+  const handleChapterChange = (subjectId, value) => {
+    setSubjectChapters((prev) => ({
+      ...prev,
+      [subjectId]: value
+    }));
+    setSelectedSubjects((prev) => (prev.includes(subjectId) ? prev : [...prev, subjectId]));
+  };
+
+  const handleSubjectDateChange = (subjectId, value) => {
+    setSubjectDates((prev) => ({
+      ...prev,
+      [subjectId]: value
+    }));
+    setSelectedSubjects((prev) => (prev.includes(subjectId) ? prev : [...prev, subjectId]));
+  };
+
+  const handleSubjectToggle = (subjectId) => {
+    if (!subjectId) return;
+    setSelectedSubjects((prev) => {
+      if (formData._id) {
+        return [subjectId];
+      }
+      if (prev.includes(subjectId)) {
+        return prev.filter((id) => id !== subjectId);
+      }
+      return [...prev, subjectId];
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
 
+      const chapterSubjects = Object.keys(subjectChapters || {}).filter((subjectId) => subjectChapters[subjectId]);
+      const datedSubjects = Object.keys(subjectDates || {}).filter((subjectId) => subjectDates[subjectId]);
+      const subjectIds = selectedSubjects.length
+        ? selectedSubjects
+        : ((chapterSubjects.length || datedSubjects.length) ? Array.from(new Set([...chapterSubjects, ...datedSubjects])) : (formData.subject ? [formData.subject] : []));
+
+      if (subjectIds.length === 0) {
+        alert('Please select at least one subject.');
+        setLoading(false);
+        return;
+      }
+
       if (formData._id) {
         // Update existing exam
-        await axios.put(apiUrl(`/api/teacher/exams/${formData._id}`), formData, {
+        await axios.put(apiUrl(`/api/teacher/exams/${formData._id}`), {
+          ...formData,
+          subject: subjectIds[0],
+          chapter: subjectChapters[subjectIds[0]] || '',
+          date: subjectDates[subjectIds[0]] || formData.date
+        }, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -383,19 +625,31 @@ const ExamManagement = ({ currentUser }) => {
         });
         await fetchExams();
       } else {
-        // Create new exam
-        const response = await axios.post(apiUrl('/api/teacher/exams'), formData, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+        // Create new exam(s)
+        const createdExams = [];
+        for (const subjectId of subjectIds) {
+          const response = await axios.post(apiUrl('/api/teacher/exams'), {
+            ...formData,
+            subject: subjectId,
+            chapter: subjectChapters[subjectId] || '',
+            date: subjectDates[subjectId] || formData.date
+          }, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          const createdExam = response?.data?.data;
+          if (createdExam) {
+            createdExams.push(createdExam);
           }
-        });
-        const createdExam = response?.data?.data;
-        if (createdExam) {
+        }
+
+        if (createdExams.length > 0) {
           const localExams = loadLocalExams();
-          const filtered = localExams.filter((exam) => buildExamKey(exam) !== buildExamKey(createdExam));
+          const filtered = localExams.filter((exam) => !createdExams.some((created) => buildExamKey(created) === buildExamKey(exam)));
           saveLocalExams(filtered);
-          setExams(prev => [createdExam, ...prev.filter((exam) => buildExamKey(exam) !== buildExamKey(createdExam))]);
+          setExams(prev => [...createdExams, ...prev.filter((exam) => !createdExams.some((created) => buildExamKey(created) === buildExamKey(exam)))]);
         } else {
           await fetchExams();
         }
@@ -411,8 +665,12 @@ const ExamManagement = ({ currentUser }) => {
         endTime: '',
         totalMarks: '',
         passingMarks: '',
-        description: ''
+        description: '',
+        chapter: ''
       });
+      setSelectedSubjects([]);
+      setSubjectChapters({});
+      setSubjectDates({});
       setShowForm(false);
 
       setLoading(false);
@@ -420,22 +678,26 @@ const ExamManagement = ({ currentUser }) => {
       console.error('Error creating/updating exam:', error);
 
       // Fallback optimistic UI update for error scenario
-      const mockNewExam = {
-        _id: 'local_' + Date.now(),
+      const subjectIds = selectedSubjects.length
+        ? selectedSubjects
+        : (formData.subject ? [formData.subject] : []);
+      const fallbackSubjects = subjectIds.length ? subjectIds : [formData.subject || ''];
+      const mockExams = fallbackSubjects.map((subjectId, index) => ({
+        _id: `local_${Date.now()}_${index + 1}`,
         examName: formData.examName,
         examType: formData.examType,
-        subject: subjects.find(s => s._id === formData.subject) || { subjectName: 'Selected Subject' },
+        subject: subjects.find(s => s._id === subjectId) || { subjectName: 'Selected Subject' },
         class: classes.find(c => c._id === formData.class) || { className: getAssignedTeacherClassNumber(currentUser), section: getAssignedTeacherSection(currentUser) },
-        date: formData.date,
+        date: subjectDates[subjectId] || formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
         status: 'scheduled',
         totalMarks: formData.totalMarks,
         passingMarks: formData.passingMarks
-      };
+      }));
       const localExams = loadLocalExams();
-      saveLocalExams([mockNewExam, ...localExams]);
-      setExams(prev => [mockNewExam, ...prev]);
+      saveLocalExams([...mockExams, ...localExams]);
+      setExams(prev => [...mockExams, ...prev]);
       setShowForm(false);
       setLoading(false);
     }
@@ -465,13 +727,19 @@ const ExamManagement = ({ currentUser }) => {
   };
 
   const handleGradingChange = (resultId, field, value) => {
-    setGradingData(prev => ({
-      ...prev,
-      [resultId]: {
-        ...prev[resultId],
-        [field]: value
+    setGradingData(prev => {
+      const next = {
+        ...prev,
+        [resultId]: {
+          ...prev[resultId],
+          [field]: value
+        }
+      };
+      if (selectedExam?._id) {
+        localStorage.setItem(`grading-data-${selectedExam._id}`, JSON.stringify(next));
       }
-    }));
+      return next;
+    });
   };
 
   const saveGradingToMarks = (resultId) => {
@@ -498,30 +766,203 @@ const ExamManagement = ({ currentUser }) => {
     localStorage.setItem(storageKey, JSON.stringify(gradedMap));
   };
 
-  const handleGradeStudent = async (resultId) => {
+  const persistGradeForResult = async (resultId, token) => {
+    saveGradingToMarks(resultId);
+
+    const result = examResults.find((item) => item._id === resultId);
+    if (!result || !selectedExam) return;
+
+    const subjectId = selectedExam.subject?._id || selectedExam.subject || '';
+    const classId = selectedExam.class?._id || selectedExam.class || '';
+    const studentId = result.student?._id || result.student?.studentId || result.studentId || '';
+    if (!subjectId || !classId || !studentId) return;
+
+    await axios.post(apiUrl('/api/teacher/marks'), {
+      examId: selectedExam._id,
+      subjectId,
+      classId,
+      marksData: [{
+        studentId,
+        marksObtained: Number(gradingData[resultId].marks) || 0,
+        totalMarks: getResultTotalMarks(result),
+        remarks: gradingData[resultId].remarks || ''
+      }]
+    }, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  };
+
+  const getResultTotalMarks = (result) => {
+    if (!result) return Number(selectedExam?.totalMarks || 0) || 0;
+    return Number(result.totalMarks || selectedExam?.totalMarks || 0) || 0;
+  };
+
+  const buildMarksCacheKey = (examId) => `teacher-marks-cache-${examId}`;
+
+  const readMarksCache = (examId) => {
+    const saved = localStorage.getItem(buildMarksCacheKey(examId));
+    if (!saved) return null;
     try {
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const syncMarksCacheForExam = (examId, rows, totalMarks) => {
+    if (!examId) return;
+
+    const marksByStudent = {};
+    (rows || []).forEach((row) => {
+      const value = Number(row?.marksObtained) || 0;
+      const keys = [
+        row?.student?._id,
+        row?.student?.studentId,
+        row?.studentId,
+        row?.student,
+        row?._id,
+      ]
+        .map((key) => String(key || '').trim())
+        .filter(Boolean);
+
+      keys.forEach((key) => {
+        marksByStudent[key] = value;
+      });
+    });
+
+    const payload = {
+      marksByStudent,
+      totalMarks: Number(totalMarks) || 0,
+      updatedAt: Date.now(),
+    };
+
+    localStorage.setItem(buildMarksCacheKey(examId), JSON.stringify(payload));
+    setMarksExamData((prev) => ({
+      ...prev,
+      [examId]: payload,
+    }));
+  };
+
+  const findInvalidMarks = () => {
+    const invalid = [];
+    examResults.forEach((result) => {
+      if (!isSubmissionComplete(result.status)) return;
+      const valueRaw = gradingData[result._id]?.marks;
+      if (valueRaw === '' || valueRaw === null || valueRaw === undefined) return;
+      const value = Number(valueRaw);
+      const total = getResultTotalMarks(result);
+      if (!Number.isFinite(value) || value < 0 || (total && value > total)) {
+        invalid.push({ result, value, total });
+      }
+    });
+    return invalid;
+  };
+
+  const handleSaveAllGrades = async () => {
+    if (!selectedExam || examResults.length === 0) return;
+
+    try {
+      const invalid = findInvalidMarks();
+      if (invalid.length > 0) {
+        alert('Obtained marks must be between 0 and total marks. Please fix the highlighted entries before saving.');
+        return;
+      }
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      // Save to localStorage for Marks tab
-      saveGradingToMarks(resultId);
+      const subjectId = selectedExam.subject?._id || selectedExam.subject || '';
+      const classId = selectedExam.class?._id || selectedExam.class || '';
+      const marksPayload = [];
 
-      await axios.put(apiUrl(`/api/teacher/exam-results/${resultId}/grade`), {
-        marks: gradingData[resultId].marks,
-        remarks: gradingData[resultId].remarks
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      for (const result of examResults) {
+        if (!isSubmissionComplete(result.status)) continue;
+        saveGradingToMarks(result._id);
+        const studentId = result.student?._id || result.student?.studentId || result.studentId || '';
+        if (!studentId) continue;
+        marksPayload.push({
+          studentId,
+          marksObtained: Number(gradingData[result._id]?.marks) || 0,
+          totalMarks: getResultTotalMarks(result),
+          remarks: gradingData[result._id]?.remarks || ''
+        });
+      }
+
+      if (subjectId && classId && marksPayload.length > 0) {
+        await axios.post(apiUrl('/api/teacher/marks'), {
+          examId: selectedExam._id,
+          subjectId,
+          classId,
+          marksData: marksPayload
+        }, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+
+      if (selectedExam?._id) {
+        localStorage.setItem(`grading-data-${selectedExam._id}`, JSON.stringify(gradingData));
+        syncMarksCacheForExam(selectedExam._id, examResults.map((result) => ({
+          ...result,
+          student: result.student,
+          marksObtained: Number(gradingData[result._id]?.marks) || 0,
+        })), getResultTotalMarks(examResults[0]));
+      }
+      await fetchExamResults(selectedExam._id);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error saving all grades:', error);
+      setLoading(false);
+    }
+  };
+
+  const handleMarkAllGood = () => {
+    if (!selectedExam) return;
+
+    setGradingData((prev) => {
+      const updated = { ...prev };
+      examResults.forEach((result) => {
+        updated[result._id] = {
+          ...(updated[result._id] || { marks: '', remarks: '' }),
+          remarks: 'Good'
+        };
       });
+      localStorage.setItem(`grading-data-${selectedExam._id}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleGradeStudent = async (resultId) => {
+    try {
+      const result = examResults.find((item) => item._id === resultId);
+      const total = getResultTotalMarks(result);
+      const valueRaw = gradingData[resultId]?.marks;
+      const value = valueRaw === '' || valueRaw === null || valueRaw === undefined ? '' : Number(valueRaw);
+      if (value !== '' && (!Number.isFinite(value) || value < 0 || (total && value > total))) {
+        alert('Obtained marks must be between 0 and total marks.');
+        return;
+      }
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      await persistGradeForResult(resultId, token);
+
+      if (selectedExam) {
+        syncMarksCacheForExam(selectedExam._id, examResults.map((row) => ({
+          ...row,
+          marksObtained: Number(gradingData[row._id]?.marks) || 0,
+        })), getResultTotalMarks(result));
+      }
 
       fetchExamResults(selectedExam._id);
       setLoading(false);
     } catch (error) {
       console.error('Error updating grade:', error);
-      // Still save locally even if API fails
-      saveGradingToMarks(resultId);
       setLoading(false);
     }
   };
@@ -620,15 +1061,7 @@ const ExamManagement = ({ currentUser }) => {
               Export Results
             </button>
           )}
-          {activeTab === 'marks' && (
-            <button
-              onClick={handleMarksExportCSV}
-              className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-50 transition shadow-sm"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </button>
-          )}
+          {activeTab === 'marks' && null}
         </div>
       </div>
 
@@ -673,7 +1106,10 @@ const ExamManagement = ({ currentUser }) => {
             <div className="space-y-6">
               {/* Upcoming Exams Section */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {exams.filter(e => new Date(e.date) >= new Date()).slice(0, 3).map(exam => (
+                {exams
+                  .filter(e => new Date(e.date) >= new Date())
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map(exam => (
                   <div key={exam._id} className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-white/20 rounded-lg">
@@ -700,7 +1136,7 @@ const ExamManagement = ({ currentUser }) => {
                 <div className="bg-white rounded-xl shadow-md p-6 mb-6">
                   <h3 className="text-lg font-semibold mb-4">Create New Exam</h3>
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Exam Name *</label>
                         <input
@@ -712,6 +1148,23 @@ const ExamManagement = ({ currentUser }) => {
                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Enter exam name"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
+                        <select
+                          name="class"
+                          value={formData.class}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select Class</option>
+                          {classes.map(cls => (
+                            <option key={cls._id} value={cls._id}>
+                              {cls.className} - {cls.section}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Exam Type *</label>
@@ -731,57 +1184,57 @@ const ExamManagement = ({ currentUser }) => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
-                        <select
-                          name="class"
-                          value={formData.class}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Select Class</option>
-                          {classes.map(cls => (
-                            <option key={cls._id} value={cls._id}>
-                              {cls.className} - {cls.section}
-                            </option>
-                          ))}
-                        </select>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Subjects *</label>
+                      <div className={`p-4 border border-gray-300 rounded-xl ${!formData.class ? 'bg-gray-100' : 'bg-gradient-to-br from-white to-blue-50/40'}`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {subjects.map((subject) => {
+                            const active = selectedSubjects.includes(subject._id);
+                            return (
+                              <div key={subject._id} className={`rounded-xl border ${active ? 'border-blue-200 bg-white shadow-sm' : 'border-gray-200 bg-white/80'} p-3`}> 
+                                <div className="flex items-center justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!formData.class}
+                                    onClick={() => handleSubjectToggle(subject._id)}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${active
+                                      ? 'bg-blue-600 text-white border-blue-600'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'} ${!formData.class ? 'opacity-60' : ''}`}
+                                  >
+                                    {subject.subjectName}
+                                  </button>
+                                  <span className="text-[10px] text-gray-400">Chapter + Date</span>
+                                </div>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={subjectChapters[subject._id] || ''}
+                                    onChange={(e) => handleChapterChange(subject._id, e.target.value)}
+                                    disabled={!formData.class}
+                                    className={`w-28 p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!formData.class ? 'bg-gray-100' : ''}`}
+                                    placeholder="Chapter"
+                                  />
+                                  <input
+                                    type="date"
+                                    value={subjectDates[subject._id] || ''}
+                                    onChange={(e) => handleSubjectDateChange(subject._id, e.target.value)}
+                                    disabled={!formData.class}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    className={`p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!formData.class ? 'bg-gray-100' : ''}`}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {subjects.length === 0 && (
+                            <span className="text-xs text-gray-400">No subjects available</span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
-                        <select
-                          name="subject"
-                          value={formData.subject}
-                          onChange={handleInputChange}
-                          required
-                          disabled={!formData.class}
-                          className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!formData.class ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                        >
-                          <option value="">Select Subject</option>
-                          {subjects.map(subject => (
-                            <option key={subject._id} value={subject._id}>
-                              {subject.subjectName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1">Subjects can appear side-by-side with chapter and date inputs.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
-                        <input
-                          type="date"
-                          name="date"
-                          value={formData.date}
-                          onChange={handleInputChange}
-                          required
-                          min={new Date().toISOString().split('T')[0]}
-                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Start Time *</label>
                         <input
@@ -870,8 +1323,12 @@ const ExamManagement = ({ currentUser }) => {
                             endTime: '',
                             totalMarks: '',
                             passingMarks: '',
-                            description: ''
+                            description: '',
+                            chapter: ''
                           });
+                          setSelectedSubjects([]);
+                          setSubjectChapters({});
+                          setSubjectDates({});
                         }}
                         className="px-6 py-3 rounded-lg bg-gray-300 text-gray-700 font-medium hover:bg-gray-400"
                       >
@@ -882,103 +1339,6 @@ const ExamManagement = ({ currentUser }) => {
                 </div>
               )}
 
-              <div className="bg-white rounded-xl shadow-md overflow-hidden">
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">All Exams</h3>
-                  {exams.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            <th className="px-4 py-3 text-left">Exam</th>
-                            <th className="px-4 py-3 text-left">Class</th>
-                            <th className="px-4 py-3 text-left">Subject</th>
-                            <th className="px-4 py-3 text-left">Date</th>
-                            <th className="px-4 py-3 text-left">Time</th>
-                            <th className="px-4 py-3 text-left">Status</th>
-                            <th className="px-4 py-3 text-left">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {exams.map(exam => (
-                            <tr key={exam._id} className="border-b hover:bg-gray-50">
-                              <td className="px-4 py-3">
-                                <div className="font-medium">{exam.examName}</div>
-                                <div className="text-sm text-gray-600">{exam.examType.replace('_', ' ')}</div>
-                              </td>
-                              <td className="px-4 py-3">
-                                {exam.class?.className} - {exam.class?.section}
-                              </td>
-                              <td className="px-4 py-3">
-                                {exam.subject?.subjectName}
-                              </td>
-                              <td className="px-4 py-3">
-                                {new Date(exam.date).toLocaleDateString()}
-                              </td>
-                              <td className="px-4 py-3">
-                                {exam.startTime} - {exam.endTime}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded-full text-xs ${new Date(exam.date) < new Date()
-                                  ? exam.status === 'completed'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-blue-100 text-blue-800'
-                                  }`}>
-                                  {new Date(exam.date) < new Date()
-                                    ? exam.status === 'completed' ? 'Completed' : 'Pending'
-                                    : exam.status === 'scheduled' ? 'Scheduled' : exam.status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedExam(exam);
-                                      setActiveTab('grading');
-                                      fetchExamResults(exam._id);
-                                    }}
-                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-                                    title="Go to Grading"
-                                  >
-                                    <CheckCircle className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setFormData({
-                                        ...exam,
-                                        date: new Date(exam.date).toISOString().split('T')[0]
-                                      });
-                                      setShowForm(true);
-                                    }}
-                                    className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
-                                    title="Edit"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(exam._id)}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">No exams found</p>
-                      <p className="text-gray-400 text-sm mt-2">Create your first exam using the button above</p>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
 
@@ -1060,9 +1420,35 @@ const ExamManagement = ({ currentUser }) => {
                     </div>
                   </div>
 
-                  {selectedExam ? (
-                    <div className="border rounded-xl overflow-hidden shadow-sm bg-white">
-                      <table className="w-full text-left border-collapse">
+                {selectedExam ? (
+                  <div className="border rounded-xl overflow-hidden shadow-sm bg-white">
+                    <div className="px-6 py-4 border-b flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Student Results</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Quick remark fill for all rows</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleMarkAllGood}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 transition-colors"
+                          title="Fill Good remark for all results"
+                        >
+                          <span className="text-base leading-none">🙂</span>
+                          All Good
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveAllGrades}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors"
+                          title="Save all grades"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Save All Grades
+                        </button>
+                      </div>
+                    </div>
+                    <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-gray-50 border-b">
                             <th className="px-6 py-4 font-semibold text-gray-600">Roll No</th>
@@ -1141,94 +1527,159 @@ const ExamManagement = ({ currentUser }) => {
           {/* Marks Tab */}
           {activeTab === 'marks' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Academic Class</label>
-                      <select
-                        value={marksSelectedClass}
-                        onChange={(e) => setMarksSelectedClass(e.target.value)}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                      >
-                        {classes.map(cls => (
-                          <option key={cls._id} value={cls._id}>{cls.className} - {cls.section}</option>
-                        ))}
-                      </select>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-5 border-b border-gray-100 bg-gray-50/60">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-indigo-500">Marks Entry</p>
+                      <h3 className="mt-1 text-lg font-bold text-gray-800">Select an exam to open subject-wise columns</h3>
+                      <p className="mt-1 text-sm text-gray-500">Each exam group opens as one table with all its subjects.</p>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Exam Period</label>
-                      <select
-                        value={marksSelectedExam}
-                        onChange={(e) => setMarksSelectedExam(e.target.value)}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                      >
-                        <option value="">Select Exam</option>
-                        {marksExams.map(exam => (
-                          <option key={exam._id} value={exam._id}>{exam.examName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Subject</label>
-                      <select
-                        value={marksSelectedSubject}
-                        onChange={(e) => setMarksSelectedSubject(e.target.value)}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                      >
-                        <option value="">All Subjects</option>
-                        {marksSubjectList.map(sub => (
-                          <option key={sub._id} value={sub._id}>{sub.subjectName}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">
+                      {marksExamGroups.length} exam{marksExamGroups.length === 1 ? '' : 's'}
+                    </span>
                   </div>
                 </div>
 
-                {marksSelectedExam ? (
+                <div className="p-5 border-b border-gray-100">
+                  <div className="max-w-xl">
+                    <label className="block text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400 mb-2">
+                      Select Exam
+                    </label>
+                    <select
+                      value={marksSelectedExamGroup}
+                      onChange={(e) => setMarksSelectedExamGroup(e.target.value)}
+                      disabled={marksExamGroups.length === 0}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      {marksExamGroups.length === 0 ? (
+                        <option value="">No exams available for this class</option>
+                      ) : (
+                        marksExamGroups.map((group) => (
+                          <option key={group.key} value={group.key}>
+                            {(group.subjects && group.subjects.length ? group.subjects.join(' / ') : 'Subject')}
+                            {group.examName ? ` - ${group.examName}` : ''}
+                            {group.date ? ` - ${formatDate(group.date)}` : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {marksExamGroups.length === 0 && (
+                      <p className="mt-2 text-sm text-gray-400">Exam ka data abhi load nahi hua ya is class ke liye exam publish nahi hua.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {!selectedMarksExamGroup ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
+                  Select an exam from the dropdown above to view its subject-wise marks sheet.
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-fuchsia-500">Selected Exam</p>
+                        <h3 className="mt-1 text-xl font-bold text-gray-800">{selectedMarksExamGroup.examName || 'Exam'}</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {selectedMarksExamGroup.subjects && selectedMarksExamGroup.subjects.length
+                            ? selectedMarksExamGroup.subjects.join(' | ')
+                            : 'Subject'}
+                          {selectedMarksExamGroup.date ? ` - ${formatDate(selectedMarksExamGroup.date)}` : ''}
+                        </p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                        {selectedMarksGroupColumns.length} subject{selectedMarksGroupColumns.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[1200px]">
                       <thead>
-                        <tr className="bg-white border-b border-gray-100">
-                          <th className="px-6 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest sticky left-0 bg-white z-20">Roll No</th>
-                          <th className="px-6 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest sticky left-24 bg-white z-20 border-r border-gray-100">Student Name</th>
-                          {(marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList).map(sub => (
-                            <th key={sub._id} className="px-4 py-5 font-bold text-gray-400 text-[10px] uppercase tracking-widest text-center">{sub.subjectName}</th>
-                          ))}
-                          <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50 border-l border-blue-100">Total</th>
-                          <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50">Avg %</th>
-                          <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50">Grade</th>
+                        <tr className="border-b border-gray-100 bg-gray-50">
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 sticky left-0 bg-gray-50 z-20">#</th>
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 sticky left-16 bg-gray-50 z-20 border-r border-gray-100">Student Name</th>
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400">Section</th>
+                          {selectedMarksGroupColumns.map((column, index) => {
+                            const palette = [
+                              'bg-indigo-100 text-indigo-700',
+                              'bg-blue-100 text-blue-700',
+                              'bg-emerald-100 text-emerald-700',
+                              'bg-fuchsia-100 text-fuchsia-700',
+                              'bg-amber-100 text-amber-700',
+                              'bg-rose-100 text-rose-700',
+                              'bg-violet-100 text-violet-700',
+                              'bg-cyan-100 text-cyan-700',
+                            ];
+                            const themeClass = palette[index % palette.length];
+                            return (
+                              <th key={column.examId} className={`px-6 py-4 text-[10px] uppercase tracking-widest font-bold ${themeClass}`}>
+                                <div className="truncate">{column.subjectName}</div>
+                                <div className="mt-1 text-[9px] opacity-75">/ {column.totalMarks || '-'}</div>
+                              </th>
+                            );
+                          })}
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 text-center bg-gray-50">Total</th>
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 text-center bg-gray-50">%</th>
+                          <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 text-center bg-gray-50">Grade</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {marksStudents.map((student, index) => {
-                          const subjectList = marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList;
-                          const total = calcMarksTotal(student._id, subjectList);
-                          const avg = calcMarksAvg(student._id, subjectList);
-                          const grade = calcMarksGrade(avg);
+                        {marksStudents.length === 0 ? (
+                          <tr>
+                            <td colSpan={6 + selectedMarksGroupColumns.length} className="px-6 py-10 text-center text-gray-400">
+                              No students found for this class.
+                            </td>
+                          </tr>
+                        ) : selectedMarksGroupColumns.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                              No subjects are linked to the selected exam.
+                            </td>
+                          </tr>
+                        ) : marksStudents.map((student, index) => {
+                          const cells = selectedMarksGroupColumns.map((column) => {
+                            const examData = marksExamData[column.examId] || { marksByStudent: {}, totalMarks: column.totalMarks || 0 };
+                            const studentKeys = getStudentLookupKeys(student);
+                            const obtained = studentKeys
+                              .map((key) => examData.marksByStudent[key] ?? selectedExamMarksLookup[key])
+                              .find((value) => value !== undefined && value !== null && value !== '') ?? '';
+                            const totalMarks = examData.totalMarks || column.totalMarks || 0;
+                            return {
+                              subjectName: column.subjectName,
+                              obtained,
+                              totalMarks,
+                            };
+                          });
+                          const totalObtained = cells.reduce((sum, cell) => sum + (Number(cell.obtained) || 0), 0);
+                          const maxTotal = cells.reduce((sum, cell) => sum + (Number(cell.totalMarks) || 0), 0);
+                          const percentage = maxTotal ? Math.round((totalObtained / maxTotal) * 100) : 0;
+                          const grade = calcMarksGrade(percentage);
+
                           return (
-                            <tr key={student._id} className="hover:bg-gray-50/80 transition-colors group">
-                              <td className="px-6 py-4 font-mono text-blue-600 text-sm sticky left-0 bg-white group-hover:bg-gray-50">
-                                #{String(index + 1).padStart(2, '0')}
-                              </td>
-                              <td className="px-6 py-4 sticky left-24 bg-white group-hover:bg-gray-50 border-r border-gray-100 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.05)]">
+                            <tr key={student._id} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="px-6 py-4 font-mono text-blue-600 text-sm sticky left-0 bg-white z-10">{String(index + 1).padStart(2, '0')}</td>
+                              <td className="px-6 py-4 sticky left-16 bg-white z-10 border-r border-gray-100 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.05)]">
                                 <div className="font-bold text-gray-800 text-sm">{student.name}</div>
                                 <div className="text-[9px] text-gray-400 font-medium uppercase mt-0.5 tracking-tighter">{student.studentId}</div>
                               </td>
-                              {(marksSelectedSubject ? marksSubjectList.filter(sub => sub._id === marksSelectedSubject) : marksSubjectList).map(sub => (
-                                <td key={sub._id} className="px-4 py-4 text-center">
-                                  <span className={`inline-block w-8 text-sm font-semibold ${(marksData[student._id]?.[sub._id] || 0) < 60 ? 'text-orange-500' : 'text-gray-600'}`}>
-                                    {marksData[student._id]?.[sub._id] || '-'}
+                              <td className="px-6 py-4 text-gray-600 text-sm">{student.section || profile?.section || profile?.division || 'A'}</td>
+                              {cells.map((cell) => (
+                                <td key={`${student._id}-${cell.subjectName}`} className="px-6 py-4 text-center">
+                                  <span className="inline-flex min-w-[42px] justify-center rounded-lg bg-gray-50 px-3 py-1 text-sm font-bold text-gray-700">
+                                    {cell.obtained === '' ? '-' : cell.obtained}
                                   </span>
                                 </td>
                               ))}
-                              <td className="px-6 py-4 text-center bg-blue-50/20 border-l border-blue-50">
-                                <span className="font-extrabold text-gray-900 text-sm">{total}</span>
+                              <td className="px-6 py-4 text-center bg-gray-50">
+                                <span className="font-extrabold text-gray-900 text-sm">{totalObtained}</span>
                               </td>
-                              <td className="px-6 py-4 text-center bg-blue-50/20">
-                                <span className="font-extrabold text-blue-600 text-sm">{avg}%</span>
+                              <td className="px-6 py-4 text-center bg-gray-50">
+                                <span className="font-extrabold text-emerald-700 text-sm">{percentage}%</span>
                               </td>
-                              <td className="px-6 py-4 text-center bg-blue-50/20">
+                              <td className="px-6 py-4 text-center bg-gray-50">
                                 <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-black ring-1 ring-inset ${
                                   grade.startsWith('A') ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' :
                                   grade.startsWith('B') ? 'bg-blue-50 text-blue-700 ring-blue-200' :
@@ -1244,16 +1695,8 @@ const ExamManagement = ({ currentUser }) => {
                       </tbody>
                     </table>
                   </div>
-                ) : (
-                  <div className="p-20 text-center bg-white">
-                    <div className="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                      <FileText className="h-10 w-10 text-blue-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">Select an Exam</h3>
-                    <p className="text-gray-500">Choose a class and exam to view marks</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>

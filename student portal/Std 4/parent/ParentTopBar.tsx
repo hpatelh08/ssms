@@ -19,7 +19,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import { DashboardSwitch } from '../components/DashboardSwitch';
 import { springIn } from '../styles/theme';
-import PortalMenu from '../components/PortalMenu';
 
 function getTimeGreeting(): string {
   const h = new Date().getHours();
@@ -132,11 +131,11 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onNavigat
               onClick={() => setShowNotif(!showNotif)}
               className="w-11 h-11 rounded-[30px] flex items-center justify-center cursor-pointer"
               style={{
-                background: 'rgba(255,255,255,0.7)',
-                border: '1px solid rgba(255,255,255,0.5)',
+                background: 'linear-gradient(135deg, rgba(245,158,11,0.92), rgba(236,72,153,0.9))',
+                border: '1px solid rgba(255,255,255,0.28)',
                 boxShadow: 'var(--shadow-soft)',
               }}
-              whileHover={{ scale: 1.08, boxShadow: 'var(--shadow-glow-purple)' }}
+              whileHover={{ scale: 1.08, boxShadow: '0 14px 28px rgba(245,158,11,0.24)' }}
               whileTap={{ scale: 0.9 }}
               aria-label="Notifications"
             >
@@ -147,8 +146,8 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onNavigat
             <motion.div
               className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white"
               style={{
-                background: 'linear-gradient(135deg, #f59e0b, #EC4899)',
-                boxShadow: '0 0 8px rgba(167,139,250,0.5)',
+                background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                boxShadow: '0 0 8px rgba(236,72,153,0.45)',
               }}
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -196,8 +195,6 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onNavigat
               )}
             </AnimatePresence>
           </div>
-
-          <PortalMenu compact />
 
           {/* Settings gear */}
           <motion.button

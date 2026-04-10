@@ -310,12 +310,12 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
                     width: 44,
                     height: 44,
                     borderRadius: 30,
-                    background: 'rgba(15,23,42,0.82)',
+                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
                     boxShadow: 'var(--shadow-soft)',
-                    border: '1px solid rgba(148,163,184,0.18)',
+                    border: '1px solid rgba(255,255,255,0.24)',
                     transition: 'all 0.25s ease',
                   }}
-                  whileHover={{ scale: 1.08, boxShadow: 'var(--shadow-glow-purple)' }}
+                  whileHover={{ scale: 1.08, boxShadow: '0 14px 28px rgba(99,102,241,0.28)' }}
                   whileTap={{ scale: 0.92 }}
                   aria-label="Notifications"
                 >
@@ -330,9 +330,9 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, var(--pastel-pink-deep), #ef6b6b)',
-                    boxShadow: '0 0 8px rgba(255,140,180,0.5)',
-                    border: '2px solid #0f172a',
+                    background: 'linear-gradient(135deg, #f472b6, #f59e0b)',
+                    boxShadow: '0 0 8px rgba(244,114,182,0.5)',
+                    border: '2px solid rgba(255,255,255,0.78)',
                   }}
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}

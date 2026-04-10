@@ -1,13 +1,13 @@
-﻿/**
+/**
  * parent/ParentLayout.tsx
- * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- * Magical parent dashboard shell â€” visually matches child/ChildLayout.
+ * ─────────────────────────────────────────────────────
+ * Magical parent dashboard shell — visually matches child/ChildLayout.
  *
  * Skeleton:
- *  â€¢ min-h-screen, FloatingWorld animated background
- *  â€¢ ParentTopBar (glass, pastel gradient)
- *  â€¢ ParentNav (glass sidebar + bottom nav)
- *  â€¢ Main area with spring-animated page transitions
+ *  • min-h-screen, FloatingWorld animated background
+ *  • ParentTopBar (glass, pastel gradient)
+ *  • ParentNav (glass sidebar + bottom nav)
+ *  • Main area with spring-animated page transitions
  */
 
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
@@ -28,7 +28,10 @@ import { AiWeeklyReportEngine } from './pages/AiWeeklyReportEngine';
 import { LessonVideoPlayer } from './pages/LessonVideoPlayer';
 import { VideoListingPage } from './pages/VideoListingPage';
 import { BooksPage } from './pages/BooksPage';
+import { AssignmentsPage } from './pages/AssignmentsPage';
+import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
 import { MessagesPage } from './pages/MessagesPage';
+import LeavePage from './pages/LeavePage';
 import BookReaderPage from './pages/BookReaderPage';
 import { FloatingWorld } from '../components/background/FloatingWorld';
 import { pageTransition } from '../styles/theme';
@@ -41,7 +44,7 @@ const FillBlanksParentReport = React.lazy(() => import('./pages/FillBlanksParent
 const BrainPuzzleParentReport = React.lazy(() => import('./pages/BrainPuzzleParentReport'));
 const FunFactsParentReport = React.lazy(() => import('./pages/FunFactsParentReport'));
 
-/* â”€â”€ Layout Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Layout Shell ───────────────────────────────── */
 
 const ParentShell: React.FC = () => {
   const { setRole } = useAuth();
@@ -121,19 +124,22 @@ const ParentShell: React.FC = () => {
           onOpenWeeklyReport={() => setAiSubScreen('weekly-report')}
         />;
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
+      case 'assignments': return <AssignmentsPage />;
+      case 'study-materials': return <StudyMaterialsPage />;
       case 'messages':    return <MessagesPage />;
+      case 'leave':       return <LeavePage />;
       case 'garden':      return (
-        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loadingâ€¦</div>}>
+        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loading…</div>}>
           <BrainPuzzleParentReport />
         </Suspense>
       );
       case 'fillblanks':  return (
-        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loadingâ€¦</div>}>
+        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loading…</div>}>
           <FillBlanksParentReport />
         </Suspense>
       );
       case 'funfacts':    return (
-        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loadingâ€¦</div>}>
+        <Suspense fallback={<div style={{textAlign:'center',padding:40}}>Loading…</div>}>
           <FunFactsParentReport />
         </Suspense>
       );
@@ -171,8 +177,11 @@ const ParentShell: React.FC = () => {
 /**
  * Public entry-point for the parent dashboard.
  * Providers (Sound, Mascot, XP, Tree) are mounted at
- * the App root â€” ParentLayout is a pure rendering shell.
+ * the App root — ParentLayout is a pure rendering shell.
  */
 export const ParentLayout: React.FC = () => <ParentShell />;
+
+
+
 
 

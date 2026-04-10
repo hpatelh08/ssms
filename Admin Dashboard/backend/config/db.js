@@ -363,6 +363,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_attendance_class_date ON attendance(class, date);
   CREATE INDEX IF NOT EXISTS idx_attendance_class_section_date ON attendance(class, section, date);
   CREATE INDEX IF NOT EXISTS idx_timetable_class_section ON timetable(class, section);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_teachers_class_nodiv_unique
+    ON teachers(class)
+    WHERE class IS NOT NULL
+      AND TRIM(class) != ''
+      AND COALESCE(TRIM(division), '') = '';
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_teachers_class_div_unique
+    ON teachers(class, division)
+    WHERE class IS NOT NULL
+      AND TRIM(class) != ''
+      AND COALESCE(TRIM(division), '') != '';
 `);
 
 // Migrate existing students table — add new columns if missing

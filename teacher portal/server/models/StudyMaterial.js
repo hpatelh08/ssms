@@ -8,6 +8,16 @@ const studyMaterialSchema = new mongoose.Schema({
   description: {
     type: String
   },
+  standard: {
+    type: String,
+    required: true
+  },
+  division: {
+    type: String,
+    required: true,
+    uppercase: true,
+    trim: true
+  },
   subject: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject',
@@ -23,6 +33,10 @@ const studyMaterialSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  uploadedByTeacherId: {
+    type: String,
+    required: true
+  },
   materialType: {
     type: String,
     enum: ['pdf', 'video', 'image', 'document', 'link'],
@@ -32,7 +46,8 @@ const studyMaterialSchema = new mongoose.Schema({
     filename: String,
     path: String,
     originalName: String,
-    size: Number // Size in bytes
+    size: Number, // Size in bytes
+    mimetype: String
   },
   url: {
     type: String // For external links

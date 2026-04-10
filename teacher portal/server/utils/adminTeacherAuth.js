@@ -131,17 +131,24 @@ function findTeacherRowByIdentifier(db, identifier) {
 function mapTeacherStudentRow(student) {
   const std = normalize(student.class);
   const section = normalizeDivision(student.section);
+  const grNumber = normalize(student.gr_number);
+  const admissionNumber = normalize(student.admission);
   return {
     _id: `stu_${student.id}`,
     id: student.id,
     studentDbId: student.id,
     studentId: normalize(student.student_id),
-    rollNumber: normalize(student.gr_number) || normalize(student.admission) || `R${student.id}`,
+    grNo: grNumber,
+    grNumber,
+    admissionNumber,
+    rollNumber: grNumber || admissionNumber || `R${student.id}`,
     name: normalize(student.name),
     className: std,
     section,
     standard: std,
     division: section,
+    parentId: normalize(student.parent_id) || normalize(student.parentId) || normalize(student.student_id) || normalize(student.gr_number),
+    parent_id: normalize(student.parent_id) || normalize(student.parentId) || normalize(student.student_id) || normalize(student.gr_number),
     parentName: normalize(student.parent),
     parentContact: normalize(student.phone),
     parentPhone: normalize(student.phone),

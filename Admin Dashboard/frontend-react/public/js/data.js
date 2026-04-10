@@ -250,7 +250,7 @@ const LEAVE_REQUESTS = [
 // --- DASHBOARD STATS ---
 const DASH_STATS = {
   totalStudents: 630,
-  totalTeachers: 35,
+  totalTeachers: 0,
   totalClasses: 18,
   attendancePercent: 87.4,
   pendingFees: DASH_FEE_TOTALS.pendingFees,

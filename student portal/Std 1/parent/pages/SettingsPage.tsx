@@ -86,7 +86,7 @@ const SettingsCard: React.FC<{ children: React.ReactNode; delay?: number; gradie
 
 export const SettingsPage: React.FC = () => {
   const { muted, toggleMute } = useSound();
-  const { user } = useAuth();
+  const { user, studentProfile, updateStudentProfile } = useAuth();
 
   const settingsKey = `ssms_parent_settings_std_${user.grade}`;
 
@@ -132,9 +132,7 @@ export const SettingsPage: React.FC = () => {
   });
   const [oldParentAccessKey, setOldParentAccessKey] = useState('');
   const [parentAccessKey, setParentAccessKey] = useState(() => {
-    try {
-      return localStorage.getItem('ssms_parent_access_key') || '2025';
-    } catch { return '2025'; }
+    return studentProfile?.parentAccessKey || '0001';
   });
   const [showCurrentAccessKey, setShowCurrentAccessKey] = useState(false);
   const [showNewAccessKey, setShowNewAccessKey] = useState(false);
@@ -241,8 +239,7 @@ export const SettingsPage: React.FC = () => {
     }
 
     const currentKey = (() => {
-      try { return localStorage.getItem('ssms_parent_access_key') || '2025'; }
-      catch { return '2025'; }
+      return studentProfile?.parentAccessKey || '0001';
     })();
 
     const keyChanged = parentAccessKey.trim() !== currentKey;
@@ -265,7 +262,11 @@ export const SettingsPage: React.FC = () => {
         allowAiBuddy,
         allowExtendedPlay,
       }));
-      localStorage.setItem('ssms_parent_access_key', parentAccessKey.trim());
+      const profileResult = updateStudentProfile({ parentAccessKey: parentAccessKey.trim() });
+      if (!profileResult.ok) {
+        setSaveFeedback({ tone: 'error', message: profileResult.error || 'Unable to sync parent access key.' });
+        return;
+      }
       setSaveFeedback({ tone: 'success', message: keyChanged ? 'Saved. New access key is active.' : 'Parent settings saved.' });
       setOldParentAccessKey('');
       setTimeout(() => setSaveFeedback(null), 3000);
@@ -286,7 +287,9 @@ export const SettingsPage: React.FC = () => {
     phone,
     settingsKey,
     smsAlerts,
+    studentProfile,
     weeklyReport,
+    updateStudentProfile,
   ]);
 
   return (

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * parent/ParentNav.tsx
  * Water-themed parent sidebar + mobile bottom nav.
  */
@@ -12,10 +12,12 @@ export type ParentScreen =
   | 'attendance'
   | 'ai-buddy'
   | 'books'
+  | 'assignments'
+  | 'study-materials'
   | 'garden'
   | 'fillblanks'
   | 'messages'
-  | 'settings';
+  | 'leave' | 'settings';
 
 interface NavItem {
   key: ParentScreen;
@@ -29,16 +31,44 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'overview', label: 'Overview', sublabel: 'Dashboard', icon: 'ðŸ“Š', gradient: 'from-sky-400 to-cyan-500', glowColor: 'rgba(67, 171, 212, 0.22)', accentColor: '#1f91bd', iconBg: 'rgba(67, 171, 212, 0.12)' },
-  { key: 'progress', label: 'Progress', sublabel: 'Academics', icon: 'ðŸ“ˆ', gradient: 'from-cyan-400 to-teal-500', glowColor: 'rgba(52, 194, 196, 0.2)', accentColor: '#159ca7', iconBg: 'rgba(52, 194, 196, 0.12)' },
-  { key: 'attendance', label: 'Attendance', sublabel: 'Tracking', icon: 'ðŸ“…', gradient: 'from-teal-400 to-sky-500', glowColor: 'rgba(61, 191, 176, 0.2)', accentColor: '#1b9f97', iconBg: 'rgba(61, 191, 176, 0.12)' },
-  { key: 'ai-buddy', label: 'AI Insights', sublabel: 'Smart Help', icon: 'ðŸ§ ', gradient: 'from-cyan-400 to-emerald-400', glowColor: 'rgba(52, 197, 170, 0.2)', accentColor: '#20a8a4', iconBg: 'rgba(52, 197, 170, 0.12)' },
-  { key: 'books', label: 'Books', sublabel: 'Library', icon: 'ðŸ“š', gradient: 'from-blue-400 to-cyan-500', glowColor: 'rgba(79, 166, 222, 0.2)', accentColor: '#328fcb', iconBg: 'rgba(79, 166, 222, 0.12)' },
-  { key: 'garden', label: 'Brain Puzzle', sublabel: 'Puzzles', icon: 'ðŸ§©', gradient: 'from-teal-400 to-cyan-500', glowColor: 'rgba(54, 190, 184, 0.2)', accentColor: '#179d9b', iconBg: 'rgba(54, 190, 184, 0.12)' },
-  { key: 'fillblanks', label: 'Fill in the Blanks', sublabel: 'Student Panel', icon: '✍️', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(46, 186, 154, 0.2)', accentColor: '#159e85', iconBg: 'rgba(46, 186, 154, 0.12)' },
-  { key: 'messages', label: 'Messages', sublabel: 'Parent Inbox', icon: '💬', gradient: 'from-indigo-400 to-cyan-500', glowColor: 'rgba(59,130,246,0.18)', accentColor: '#3b82f6', iconBg: 'rgba(59,130,246,0.10)' },
-  { key: 'settings', label: 'Settings', sublabel: 'Preferences', icon: 'âš™ï¸', gradient: 'from-slate-400 to-sky-500', glowColor: 'rgba(109, 156, 176, 0.18)', accentColor: '#658ea0', iconBg: 'rgba(109, 156, 176, 0.1)' },
+  { key: 'overview', label: 'Overview', sublabel: 'Dashboard', icon: '??', gradient: 'from-sky-400 to-cyan-500', glowColor: 'rgba(67, 171, 212, 0.22)', accentColor: '#1f91bd', iconBg: 'rgba(67, 171, 212, 0.12)' },
+  { key: 'progress', label: 'Progress', sublabel: 'Academics', icon: '??', gradient: 'from-cyan-400 to-teal-500', glowColor: 'rgba(52, 194, 196, 0.2)', accentColor: '#159ca7', iconBg: 'rgba(52, 194, 196, 0.12)' },
+  { key: 'attendance', label: 'Attendance', sublabel: 'Tracking', icon: '??', gradient: 'from-teal-400 to-sky-500', glowColor: 'rgba(61, 191, 176, 0.2)', accentColor: '#1b9f97', iconBg: 'rgba(61, 191, 176, 0.12)' },
+  { key: 'ai-buddy', label: 'AI Insights', sublabel: 'Smart Help', icon: '??', gradient: 'from-cyan-400 to-emerald-400', glowColor: 'rgba(52, 197, 170, 0.2)', accentColor: '#20a8a4', iconBg: 'rgba(52, 197, 170, 0.12)' },
+  { key: 'books', label: 'Books', sublabel: 'Library', icon: '??', gradient: 'from-blue-400 to-cyan-500', glowColor: 'rgba(79, 166, 222, 0.2)', accentColor: '#328fcb', iconBg: 'rgba(79, 166, 222, 0.12)' },
+  { key: 'garden', label: 'Brain Puzzle', sublabel: 'Puzzles', icon: '??', gradient: 'from-teal-400 to-cyan-500', glowColor: 'rgba(54, 190, 184, 0.2)', accentColor: '#179d9b', iconBg: 'rgba(54, 190, 184, 0.12)' },
+  { key: 'fillblanks', label: 'Fill in the Blanks', sublabel: 'Student Panel', icon: '??', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(46, 186, 154, 0.2)', accentColor: '#159e85', iconBg: 'rgba(46, 186, 154, 0.12)' },
+  { key: 'messages', label: 'Messages', sublabel: 'Parent Inbox', icon: '??', gradient: 'from-indigo-400 to-cyan-500', glowColor: 'rgba(59,130,246,0.18)', accentColor: '#3b82f6', iconBg: 'rgba(59,130,246,0.10)' },
+  { key: 'leave', label: 'Leave', sublabel: 'Applications', icon: '??', gradient: 'from-orange-400 to-rose-500', glowColor: 'rgba(249,115,22,0.18)', accentColor: '#f97316', iconBg: 'rgba(249,115,22,0.10)' },
+  { key: 'settings', label: 'Settings', sublabel: 'Preferences', icon: '??', gradient: 'from-slate-400 to-sky-500', glowColor: 'rgba(109, 156, 176, 0.18)', accentColor: '#658ea0', iconBg: 'rgba(109, 156, 176, 0.10)' },
+  { key: 'assignments', label: 'Assignments', sublabel: 'Class Work', icon: '??', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(168,85,247,0.2)', accentColor: '#7c3aed', iconBg: 'rgba(168,85,247,0.12)' },
+  { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: '??', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16, 185, 129, 0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.12)' },
 ];
+
+function getNavIcon(key: ParentScreen) {
+  switch (key) {
+    case 'overview': return '\u{1F3E0}';
+    case 'progress': return '\u{1F4C8}';
+    case 'attendance': return '\u{1F4C5}';
+    case 'ai-buddy': return '\u{1F9E0}';
+    case 'books': return '\u{1F4DA}';
+    case 'garden': return '\u{1F333}';
+    case 'colors': return '\u{1F3A8}';
+    case 'messages': return '\u{1F4AC}';
+    case 'leave': return '\u{1F4DD}';
+    case 'settings': return '\u{2699}\u{FE0F}';
+    case 'assignments': return '\u{1F4DD}';
+    case 'study-materials': return '\u{1F4C1}';
+    case 'games': return '\u{1F3AE}';
+    case 'report': return '\u{1F4C4}';
+    case 'brain-boost': return '\u{1F331}';
+    case 'puzzle-zone': return '\u{1FA9C}';
+    case 'fillblanks': return '\u{1F9E9}';
+    case 'space-war': return '\u{1F680}';
+    case 'eco-system': return '\u{1F30D}';
+    default: return '\u2728';
+  }
+}
 
 const DIVIDER_AFTER = new Set([2, 4]);
 
@@ -100,7 +130,7 @@ const SidebarItem: React.FC<{
         animate={isActive ? { scale: [1, 1.02, 1] } : {}}
         transition={isActive ? { duration: 3, repeat: Infinity, ease: 'easeInOut' } : {}}
       >
-        <span style={{ fontSize: isActive ? 18 : 16 }}>{item.icon}</span>
+        <span style={{ fontSize: isActive ? 18 : 16 }}>{getNavIcon(item.key)}</span>
       </motion.div>
 
       <div style={{ minWidth: 0, flex: 1 }}>
@@ -163,7 +193,7 @@ const BottomTab: React.FC<{
         animate={isActive ? { scale: 1.18, y: -1 } : { scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       >
-        {item.icon}
+        {getNavIcon(item.key)}
       </motion.span>
       <span
         style={{
@@ -186,33 +216,90 @@ interface Props {
   onNavigate: (screen: ParentScreen) => void;
 }
 
-export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
+export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, []);
 
   return (
     <>
-      <motion.aside
+    <motion.aside
         className="hidden lg:flex fixed left-0 w-[240px] flex-col pb-4 px-3 z-30 overflow-hidden"
         style={{
           top: 0,
           height: '100vh',
-          paddingTop: 70,
+          paddingTop: 18,
           background: 'linear-gradient(180deg, rgba(242,253,255,0.88) 0%, rgba(231,248,255,0.84) 42%, rgba(232,252,247,0.8) 100%)',
           backdropFilter: 'blur(32px)',
           WebkitBackdropFilter: 'blur(32px)',
           borderRight: '1px solid rgba(228,247,252,0.82)',
+          borderRadius: '0 30px 30px 0',
           boxShadow: '8px 0 34px rgba(74, 146, 173, 0.08)',
         }}
         initial={{ x: -260 }}
         animate={{ x: 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 25 }}
       >
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+        <div
+          style={{
+            padding: '16px 16px 12px',
+            borderBottom: '1px solid rgba(117, 203, 226, 0.12)',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: 'linear-gradient(135deg, rgba(217,243,255,0.78), rgba(229,251,247,0.66))',
+              borderRadius: 18,
+              padding: '10px 14px',
+              border: '1px solid rgba(182, 229, 240, 0.42)',
+            }}
+          >
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7cc4e8 0%, #61aacd 100%)',
+                boxShadow: '0 3px 12px rgba(74, 146, 173, 0.22)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16,
+                fontWeight: 800,
+                color: '#fff',
+                flexShrink: 0,
+              }}
+            >
+              G
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#0d617f', lineHeight: '16px', whiteSpace: 'nowrap' }}>Guardian Panel</p>
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 500, color: '#5e9eb2', lineHeight: '14px', whiteSpace: 'nowrap' }}>Std 6 · Analytics View</p>
+            </div>
+          </div>
+        </div>
+
+        <nav
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 3,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingTop: 10,
+            paddingRight: 2,
+            scrollbarWidth: 'thin',
+          }}
+        >
           {NAV_ITEMS.map((item, idx) => (
             <React.Fragment key={item.key}>
               <SidebarItem item={item} isActive={active === item.key} onNavigate={onNavigate} />
@@ -274,7 +361,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
               marginTop: 8,
             }}
           >
-            <span style={{ fontSize: 14 }}>ðŸ•</span>
+            <span style={{ fontSize: 14 }}>{'\u{1F550}'}</span>
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#0d617f', margin: 0 }}>Current Time</p>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#1b8aae', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
@@ -307,4 +394,11 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
 });
 
 ParentNav.displayName = 'ParentNav';
+
+
+
+
+
+
+
 

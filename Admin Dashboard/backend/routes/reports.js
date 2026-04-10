@@ -260,11 +260,12 @@ router.get('/attendance', (req, res) => {
   const whereSQL = 'WHERE ' + where.join(' AND ');
 
   const rows = db.prepare(`
-    SELECT a.person_id, s.name, a.class, a.date, a.status
+    SELECT a.person_id, COALESCE(s.name, s1.name) AS name, a.class, a.date, a.status
     FROM attendance a
-    LEFT JOIN students s ON CAST(a.person_id AS TEXT) = CAST(s.id AS TEXT)
+    LEFT JOIN students s ON s.student_id = a.person_id
+    LEFT JOIN students s1 ON CAST(a.person_id AS TEXT) = CAST(s1.id AS TEXT)
     ${whereSQL}
-    ORDER BY a.date DESC, a.class, s.name
+    ORDER BY a.date DESC, a.class, COALESCE(s.name, s1.name)
     LIMIT 2000
   `).all(...params);
 

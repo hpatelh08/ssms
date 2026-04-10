@@ -119,7 +119,48 @@ type TimetableData = {
   slotsSaturday?: TimetableSlot[];
 };
 
+type ClassResourceItem = {
+  _id: string;
+  title?: string;
+  description?: string;
+  createdAt?: string;
+  dueDate?: string;
+  assignmentType?: string;
+  materialType?: string;
+  attachment?: { path?: string } | null;
+  attachments?: Array<{ path?: string }>;
+  file?: { path?: string } | null;
+  fileUrl?: string;
+  url?: string;
+};
+
+type ClassResourceBundle = {
+  assignments: ClassResourceItem[];
+  materials: ClassResourceItem[];
+  error?: string;
+};
+
+type ChildOption = {
+  studentId: string;
+  parentAccessKey: string;
+  studentName: string;
+  className: string;
+  division: string;
+};
+
+type ParentProfileLike = {
+  studentId?: string;
+  parentAccessKey?: string;
+  studentName?: string;
+  className?: string;
+  division?: string;
+  grade?: number;
+  section?: string;
+  children?: Array<Record<string, unknown>>;
+};
+
 const TEACHER_API_BASE = `${window.location.protocol}//${window.location.hostname}:5001`;
+const TEACHER_CONTENT_BASE = `${window.location.protocol}//${window.location.hostname}:5002`;
 
 function buildClassIds(grade: number): string[] {
   return ['A', 'B', 'C'].map(section => `admin-class-${grade}-${section}`);
@@ -375,6 +416,95 @@ async function loadTimetable(grade: number, section: string): Promise<TimetableD
 
   const data = await response.json().catch(() => ({}));
   return data?.data || data || {};
+}
+
+function buildTeacherFileUrl(filePath?: string | null) {
+  const value = String(filePath || '').trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('/')) return `${TEACHER_CONTENT_BASE}${value}`;
+  return `${TEACHER_CONTENT_BASE}/${value}`;
+}
+
+function getResourceAttachmentUrl(item: ClassResourceItem) {
+  const attachmentPath = item.attachment?.path || item.attachments?.[0]?.path || item.file?.path || item.fileUrl || item.url || '';
+  return buildTeacherFileUrl(attachmentPath);
+}
+
+function normalizeIdentifier(value: unknown): string {
+  return String(value || '').trim();
+}
+
+function normalizeIdentifierUpper(value: unknown): string {
+  return normalizeIdentifier(value).toUpperCase();
+}
+
+function buildParentVisibilityIdentifiers(profile: ParentProfileLike | null): string[] {
+  const children = Array.isArray(profile?.children) ? profile.children : [];
+  const values = [
+    profile?.studentId,
+    ...(children.flatMap((child: any) => [
+      child?.studentId,
+      child?.student_id,
+      child?.grNo,
+      child?.gr_number,
+      child?.admissionNumber,
+      child?.admission_number,
+      child?.rollNumber,
+      child?.roll_number,
+    ] as Array<unknown>)),
+  ];
+  return [...new Set(values.map((value) => normalizeIdentifier(value)).filter(Boolean))];
+}
+
+function buildChildOptions(profile: ParentProfileLike | null): ChildOption[] {
+  const children = Array.isArray(profile?.children) ? profile.children : [];
+  if (children.length > 0) {
+    return children.map((child: any) => ({
+      studentId: normalizeIdentifier(child.studentId || child.student_id || ''),
+      parentAccessKey: normalizeIdentifier(child.parentAccessKey || profile?.parentAccessKey || ''),
+      studentName: normalizeIdentifier(child.studentName || child.name || profile?.studentName || 'Student'),
+      className: normalizeIdentifier(child.className || child.class || profile?.className || `Std ${profile?.grade || ''}`),
+      division: normalizeIdentifierUpper(child.division || child.section || profile?.division || 'A'),
+    }));
+  }
+
+  return [{
+    studentId: normalizeIdentifier(profile?.studentId || ''),
+    parentAccessKey: normalizeIdentifier(profile?.parentAccessKey || ''),
+    studentName: normalizeIdentifier(profile?.studentName || 'Student'),
+    className: normalizeIdentifier(profile?.className || `Std ${profile?.grade || ''}`),
+    division: normalizeIdentifierUpper(profile?.division || 'A'),
+  }];
+}
+
+async function loadClassResources(studentId: string, accessKey: string, aliases: string[]): Promise<ClassResourceBundle> {
+  const query = new URLSearchParams({
+    studentId,
+    accessKey,
+  });
+  if (aliases.length > 0) {
+    query.set('aliases', aliases.join(','));
+  }
+
+  const [assignmentsResponse, materialsResponse] = await Promise.all([
+    fetch(`${TEACHER_CONTENT_BASE}/api/parent/my-child-assignments?${query.toString()}`),
+    fetch(`${TEACHER_CONTENT_BASE}/api/parent/my-child-study-materials?${query.toString()}`),
+  ]);
+
+  const [assignmentsJson, materialsJson] = await Promise.all([
+    assignmentsResponse.json().catch(() => ({})),
+    materialsResponse.json().catch(() => ({})),
+  ]);
+
+  return {
+    assignments: assignmentsResponse.ok && Array.isArray(assignmentsJson?.data) ? assignmentsJson.data : [],
+    materials: materialsResponse.ok && Array.isArray(materialsJson?.data) ? materialsJson.data : [],
+    error: [
+      !assignmentsResponse.ok ? String(assignmentsJson?.error || 'Assignments could not be loaded.') : '',
+      !materialsResponse.ok ? String(materialsJson?.error || 'Study materials could not be loaded.') : '',
+    ].filter(Boolean).join(' '),
+  };
 }
 
 /* ── Count-up animation hook ────────────────────── */
@@ -840,6 +970,10 @@ export const OverviewPage: React.FC = () => {
   const [timetable, setTimetable] = useState<TimetableData | null>(null);
   const [timetableLoading, setTimetableLoading] = useState(true);
   const [timetableError, setTimetableError] = useState('');
+  const [classAssignments, setClassAssignments] = useState<ClassResourceItem[]>([]);
+  const [classMaterials, setClassMaterials] = useState<ClassResourceItem[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
+  const [resourcesError, setResourcesError] = useState('');
 
   const greeting = useMemo(getTimeGreeting, []);
   const firstName = useMemo(() => analytics.studentName.split(' ')[0], [analytics.studentName]);
@@ -861,6 +995,9 @@ export const OverviewPage: React.FC = () => {
   const avgSession = activeDaysCount > 0 ? Math.round(weeklyTotal / activeDaysCount) : 0;
   const classGrade = Number(studentProfile?.grade || analytics.level || 1) || 1;
   const classSection = String(studentProfile?.division || 'A').trim().toUpperCase() || 'A';
+  const studentOptions = useMemo(() => buildChildOptions(studentProfile), [studentProfile]);
+  const selectedStudent = studentOptions[0];
+  const parentIdentifiers = useMemo(() => buildParentVisibilityIdentifiers(studentProfile), [studentProfile]);
 
   useEffect(() => {
     let alive = true;
@@ -869,7 +1006,7 @@ export const OverviewPage: React.FC = () => {
       try {
         setAnnouncementsLoading(true);
         setAnnouncementsError('');
-        const loaded = await loadAnnouncements(1);
+        const loaded = await loadAnnouncements(classGrade);
         if (alive) setAnnouncements(Array.isArray(loaded) ? loaded : []);
       } catch {
         if (alive) {
@@ -887,7 +1024,7 @@ export const OverviewPage: React.FC = () => {
       alive = false;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [classGrade]);
 
   useEffect(() => {
     let alive = true;
@@ -915,6 +1052,51 @@ export const OverviewPage: React.FC = () => {
       window.clearInterval(intervalId);
     };
   }, [classGrade, classSection]);
+
+  useEffect(() => {
+    let alive = true;
+
+    const refreshResources = async () => {
+      const studentId = String(studentProfile?.studentId || '').trim();
+      const accessKey = String(selectedStudent?.parentAccessKey || studentProfile?.parentAccessKey || '').trim();
+      const aliases = parentIdentifiers.join(',');
+
+      if ((!studentId && !selectedStudent?.studentId) || !accessKey) {
+        if (alive) {
+          setClassAssignments([]);
+          setClassMaterials([]);
+          setResourcesLoading(false);
+          setResourcesError('');
+        }
+        return;
+      }
+
+      try {
+        setResourcesLoading(true);
+        setResourcesError('');
+        const loaded = await loadClassResources(selectedStudent?.studentId || studentId, accessKey, parentIdentifiers);
+        if (!alive) return;
+        setClassAssignments(Array.isArray(loaded.assignments) ? loaded.assignments.slice(0, 3) : []);
+        setClassMaterials(Array.isArray(loaded.materials) ? loaded.materials.slice(0, 3) : []);
+        setResourcesError(loaded.error || '');
+      } catch {
+        if (alive) {
+          setClassAssignments([]);
+          setClassMaterials([]);
+          setResourcesError('Teacher uploads will appear here once assignments or study materials are posted for this class.');
+        }
+      } finally {
+        if (alive) setResourcesLoading(false);
+      }
+    };
+
+    refreshResources();
+    const intervalId = window.setInterval(refreshResources, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [studentProfile?.studentId, studentProfile?.parentAccessKey, parentIdentifiers, selectedStudent?.studentId, selectedStudent?.parentAccessKey, classGrade, classSection]);
 
   // Subject status tags — from centralized mock data
   const getSubjectTag = (subject: string, progress: number) => {
@@ -1087,6 +1269,156 @@ export const OverviewPage: React.FC = () => {
           </GlassCard>
         </div>
       </div>
+
+      <GlassCard delay={0.04}>
+        <SectionTitle
+          icon="📎"
+          title="Teacher Uploads"
+          subtitle="Latest assignments and study materials shared for this class"
+        />
+
+        {resourcesLoading ? (
+          <div style={{
+            padding: '14px 16px',
+            borderRadius: 16,
+            background: 'rgba(255,255,255,0.78)',
+            border: '1px solid rgba(129,140,248,0.12)',
+            color: CLR.muted,
+            fontSize: 12,
+            fontWeight: 600,
+          }}>
+            Loading teacher uploads...
+          </div>
+        ) : (
+          <>
+            {!!resourcesError && (!classAssignments.length || !classMaterials.length) && (
+              <div style={{
+                marginBottom: 14,
+                padding: '12px 14px',
+                borderRadius: 14,
+                background: 'rgba(244,114,182,0.08)',
+                border: '1px solid rgba(244,114,182,0.14)',
+                color: CLR.secondary,
+                fontSize: 11,
+                fontWeight: 600,
+              }}>
+                {resourcesError}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {[
+                {
+                  title: 'Assignments',
+                  badge: classAssignments.length,
+                  items: classAssignments,
+                  emptyText: 'No assignments uploaded yet.',
+                  accent: CLR.indigo,
+                  background: 'rgba(99,102,241,0.06)',
+                },
+                {
+                  title: 'Study Materials',
+                  badge: classMaterials.length,
+                  items: classMaterials,
+                  emptyText: 'No study materials uploaded yet.',
+                  accent: CLR.mint,
+                  background: 'rgba(16,185,129,0.06)',
+                },
+              ].map((column) => (
+                <div
+                  key={column.title}
+                  style={{
+                    borderRadius: 18,
+                    padding: 16,
+                    background: column.background,
+                    border: `1px solid ${column.accent}18`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: CLR.primary, margin: 0 }}>{column.title}</p>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: column.accent,
+                      background: `${column.accent}14`,
+                      padding: '4px 9px',
+                      borderRadius: 999,
+                    }}>
+                      {column.badge} item{column.badge === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {column.items.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {column.items.map((item) => {
+                        const attachmentUrl = getResourceAttachmentUrl(item);
+                        return (
+                          <div
+                            key={item._id}
+                            style={{
+                              background: 'rgba(255,255,255,0.8)',
+                              border: '1px solid rgba(129,140,248,0.10)',
+                              borderRadius: 14,
+                              padding: '12px 14px',
+                              boxShadow: '0 2px 10px rgba(92,106,196,0.04)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: 12, fontWeight: 800, color: CLR.primary, margin: 0 }}>
+                                  {item.title || 'Untitled'}
+                                </p>
+                                <p style={{ fontSize: 11, fontWeight: 500, color: CLR.muted, lineHeight: '17px', margin: '5px 0 0' }}>
+                                  {item.description || 'Uploaded by the class teacher'}
+                                </p>
+                              </div>
+                              {attachmentUrl ? (
+                                <a
+                                  href={attachmentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    flexShrink: 0,
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    color: column.accent,
+                                    textDecoration: 'none',
+                                    background: `${column.accent}12`,
+                                    padding: '5px 10px',
+                                    borderRadius: 999,
+                                  }}
+                                >
+                                  Open
+                                </a>
+                              ) : null}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 10, fontSize: 10, fontWeight: 600, color: CLR.soft }}>
+                              <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN') : 'Recently uploaded'}</span>
+                              <span>{item.dueDate ? `Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : item.assignmentType || item.materialType || 'Teacher upload'}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '14px 16px',
+                      borderRadius: 14,
+                      background: 'rgba(255,255,255,0.70)',
+                      border: '1px dashed rgba(129,140,248,0.16)',
+                      color: CLR.muted,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}>
+                      {column.emptyText}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </GlassCard>
 
       {/* ═════════════════════════════════════════════
           2. ACADEMIC PERFORMANCE

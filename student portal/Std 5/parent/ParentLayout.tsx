@@ -1,13 +1,13 @@
 /**
  * parent/ParentLayout.tsx
- * ─────────────────────────────────────────────────────
- * Magical parent dashboard shell — visually matches child/ChildLayout.
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * Magical parent dashboard shell â€” visually matches child/ChildLayout.
  *
  * Skeleton:
- *  • min-h-screen, FloatingWorld animated background
- *  • ParentTopBar (glass, pastel gradient)
- *  • ParentNav (glass sidebar + bottom nav)
- *  • Main area with spring-animated page transitions
+ *  â€¢ min-h-screen, FloatingWorld animated background
+ *  â€¢ ParentTopBar (glass, pastel gradient)
+ *  â€¢ ParentNav (glass sidebar + bottom nav)
+ *  â€¢ Main area with spring-animated page transitions
  */
 
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
@@ -26,7 +26,10 @@ import { AiWeeklyReportEngine } from './pages/AiWeeklyReportEngine';
 import { LessonVideoPlayer } from './pages/LessonVideoPlayer';
 import { VideoListingPage } from './pages/VideoListingPage';
 import { BooksPage } from './pages/BooksPage';
+import { AssignmentsPage } from './pages/AssignmentsPage';
+import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
 import { MessagesPage } from './pages/MessagesPage';
+import LeavePage from './pages/LeavePage';
 import { FloatingWorld } from '../components/background/FloatingWorld';
 import { pageTransition } from '../styles/theme';
 import { type BookEntry } from '../data/bookConfig';
@@ -34,12 +37,12 @@ import { type VideoEntry, type VideoSubject } from '../data/videoConfig';
 import AIBuddyFloating from '../components/AIBuddyFloating';
 import { ReportCardPage } from './pages/ReportCardPage';
 
-/* ── Lazy-loaded immersive book reader ────────── */
+/* â”€â”€ Lazy-loaded immersive book reader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const BookReaderPage       = React.lazy(() => import('./pages/BookReaderPage'));
 const BrainBoostProgressPage = React.lazy(() => import('./pages/BrainBoostProgressPage'));
 const PuzzleZoneProgressPage = React.lazy(() => import('./pages/PuzzleZoneProgressPage'));
 
-/* ── Layout Shell ───────────────────────────────── */
+/* â”€â”€ Layout Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const ParentShell: React.FC = () => {
   const [activeScreen, setActiveScreen] = useState<ParentScreen>('overview');
@@ -115,22 +118,25 @@ const ParentShell: React.FC = () => {
           onOpenWeeklyReport={() => setAiSubScreen('weekly-report')}
         />;
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
-      case 'brain-boost': return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loading…</p></div>}><BrainBoostProgressPage /></Suspense>;
-      case 'puzzle-zone':  return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loading…</p></div>}><PuzzleZoneProgressPage /></Suspense>;
+      case 'assignments': return <AssignmentsPage />;
+      case 'study-materials': return <StudyMaterialsPage />;
+      case 'brain-boost': return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><BrainBoostProgressPage /></Suspense>;
+      case 'puzzle-zone':  return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><PuzzleZoneProgressPage /></Suspense>;
       case 'report':      return <ReportCardPage onBack={() => setActiveScreen('overview')} />;
       case 'messages':    return <MessagesPage />;
+      case 'leave':       return <LeavePage />;
       case 'settings':    return <SettingsPage />;
       default:            return null;
     }
   };
 
-  /* ── Immersive mode: Book reader takes over the full viewport ── */
+  /* â”€â”€ Immersive mode: Book reader takes over the full viewport â”€â”€ */
   if (readerBook) {
     return (
       <Suspense
         fallback={
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100">
-            <p className="text-sm text-gray-400 font-medium">Loading reader…</p>
+            <p className="text-sm text-gray-400 font-medium">Loading readerâ€¦</p>
           </div>
         }
       >
@@ -170,6 +176,11 @@ const ParentShell: React.FC = () => {
 /**
  * Public entry-point for the parent dashboard.
  * Providers (Sound, Mascot, XP, Tree) are mounted at
- * the App root — ParentLayout is a pure rendering shell.
+ * the App root â€” ParentLayout is a pure rendering shell.
  */
 export const ParentLayout: React.FC = () => <ParentShell />;
+
+
+
+
+

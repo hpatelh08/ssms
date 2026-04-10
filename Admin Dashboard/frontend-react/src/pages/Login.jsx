@@ -22,14 +22,14 @@ const DEMO_ACCOUNTS = [
 ];
 
 const VISITOR_ITEMS = [
-  { icon: '\u{1F3EB}', title: 'Welcome Visitors', desc: 'Explore the school environment and services.' },
-  { icon: '\u{1F4DA}', title: 'Programs & Curriculum', desc: 'Overview of academics, clubs and labs.' },
-  { icon: '\u{1F393}', title: 'Admissions Info', desc: 'Eligibility, seats, and application timeline.' },
-  { icon: '\u{1F4CD}', title: 'Campus Facilities', desc: 'Library, sports, transport and safety.' },
-  { icon: '\u{1F91D}', title: 'Parent Connect', desc: 'Meetings, updates and support channels.' },
-  { icon: '\u{1F3C6}', title: 'Achievements', desc: 'Student awards, projects and events.' },
-  { icon: '\u{1F4E3}', title: 'Announcements', desc: 'Latest circulars and community notices.' },
-  { icon: '\u{1F9D1}\u{200D}\u{1F3EB}', title: 'Faculty Team', desc: 'Experienced teachers and mentors.' },
+  { icon: '\u{1F3EB}', title: 'Welcome Visitors', desc: 'Explore the school environment and services.', tone: 'welcome' },
+  { icon: '\u{1F4DA}', title: 'Programs & Curriculum', desc: 'Overview of academics, clubs and labs.', tone: 'curriculum' },
+  { icon: '\u{1F393}', title: 'Admissions Info', desc: 'Eligibility, seats, and application timeline.', tone: 'admissions' },
+  { icon: '\u{1F4CD}', title: 'Campus Facilities', desc: 'Library, sports, transport and safety.', tone: 'facilities' },
+  { icon: '\u{1F91D}', title: 'Parent Connect', desc: 'Meetings, updates and support channels.', tone: 'parent-connect' },
+  { icon: '\u{1F3C6}', title: 'Achievements', desc: 'Student awards, projects and events.', tone: 'achievements' },
+  { icon: '\u{1F4E3}', title: 'Announcements', desc: 'Latest circulars and community notices.', tone: 'announcements' },
+  { icon: '\u{1F9D1}\u{200D}\u{1F3EB}', title: 'Faculty Team', desc: 'Experienced teachers and mentors.', tone: 'faculty' },
 ];
 
 const LOGIN_OPTIONS = DEMO_ACCOUNTS.map(d => ({
@@ -152,7 +152,7 @@ export default function Login() {
           <div className="visitor-loop" aria-hidden="true">
             <div className="visitor-track">
               {VISITOR_ITEMS.map(item => (
-                <div className="visitor-card" key={`v1-${item.title}`}>
+                <div className={`visitor-card visitor-card--${item.tone}`} key={`v1-${item.title}`}>
                   <div className="visitor-icon">{item.icon}</div>
                   <div className="visitor-text">
                     <div className="visitor-name">{item.title}</div>
@@ -161,7 +161,7 @@ export default function Login() {
                 </div>
               ))}
               {VISITOR_ITEMS.map(item => (
-                <div className="visitor-card" key={`v2-${item.title}`}>
+                <div className={`visitor-card visitor-card--${item.tone}`} key={`v2-${item.title}`}>
                   <div className="visitor-icon">{item.icon}</div>
                   <div className="visitor-text">
                     <div className="visitor-name">{item.title}</div>

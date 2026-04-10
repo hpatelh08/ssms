@@ -257,7 +257,7 @@ function App() {
       case 'dashboard':
         return <Dashboard currentUser={currentUser} onLogout={handleLogout} onNavigate={setCurrentPage} />;
       case 'attendance':
-        return <AttendanceManagement currentUser={currentUser} />;
+        return <AttendanceManagement currentUser={currentUser} onNavigate={setCurrentPage} />;
       case 'class':
         return <ClassManagement currentUser={currentUser} />;
       case 'assignments':
@@ -273,7 +273,7 @@ function App() {
       case 'reports':
         return <Reports currentUser={currentUser} />;
       case 'leave':
-        return <LeaveManagement />;
+        return <LeaveManagement currentUser={currentUser} />;
       case 'analytics':
         return <PerformanceAnalytics currentUser={currentUser} />;
       case 'profile':
@@ -315,4 +315,3 @@ function App() {
 }
 
 export default App;
-

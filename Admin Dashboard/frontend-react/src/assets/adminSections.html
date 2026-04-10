@@ -100,7 +100,7 @@
         <div class="stat-card info" data-section="attendance">
           <div class="stat-icon cyan">📊</div>
             <div class="stat-info">
-              <div class="stat-label">Attendance Today</div>
+              <div class="stat-label">Student Attendance Today</div>
               <div class="stat-value" id="stat-att" data-roll-suffix="%">0</div>
             </div>
           </div>
@@ -125,8 +125,8 @@
             <div class="card-header" style="flex-wrap:wrap;gap:8px;">
               <span class="card-title">📅 Academic Year Attendance <small id="dashHmYearLabel" style="font-size:0.75rem;font-weight:600;color:#6366f1;background:#eef2ff;padding:2px 7px;border-radius:6px;margin-left:6px;"></small></span>
               <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
-                <button class="btn btn-outline btn-sm dash-hm-btn active" data-type="teacher" style="padding:3px 10px;font-size:0.72rem;">👨‍🏫 Teachers</button>
-                <button class="btn btn-outline btn-sm dash-hm-btn" data-type="student" style="padding:3px 10px;font-size:0.72rem;">🎓 Students</button>
+                <button class="btn btn-outline btn-sm dash-hm-btn" data-type="teacher" style="padding:3px 10px;font-size:0.72rem;">👨‍🏫 Teachers</button>
+                <button class="btn btn-outline btn-sm dash-hm-btn active" data-type="student" style="padding:3px 10px;font-size:0.72rem;">🎓 Students</button>
               </div>
             </div>
             <div class="card-body" style="overflow-x:auto;padding-top:8px;">
@@ -496,8 +496,23 @@
             <div class="flex gap-2" style="flex-wrap:wrap;">
               <div class="search-bar" style="min-width:220px;">
                 <span>🔍</span>
-                <input type="text" id="t-searchInput" placeholder="Search by name or subject…" />
+                <input type="text" id="t-searchInput" placeholder="Search by name, subject, or ID�" />
               </div>
+              <select class="form-control" style="width:auto;min-width:108px;" id="t-classFilter">
+                <option value="">All Class</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+              <select class="form-control" style="width:auto;min-width:108px;" id="t-divisionFilter">
+                <option value="">All Division</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+              </select>
               <select class="form-control" style="width:auto;" id="t-statusFilter">
                 <option value="">All Status</option>
                 <option>Active</option><option>Inactive</option>
@@ -699,7 +714,7 @@
               <thead>
                 <tr>
                   <th style="width:50px;">#</th>
-                  <th>ID</th>
+                  <th>GR No / Student ID</th>
                   <th>Name</th>
                   <th id="attColExtra">Class</th>
                   <th style="width:180px;">Mark Attendance</th>

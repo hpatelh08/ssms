@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { apiUrl } from '../../config/api';
 import { loadTeacherClasses } from '../../teacherAdminData';
 
-const AttendanceManagement = ({ currentUser }) => {
+const AttendanceManagement = ({ currentUser, onNavigate }) => {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -44,6 +44,31 @@ const AttendanceManagement = ({ currentUser }) => {
   const normalizeSection = (value) => String(value || '').trim().toUpperCase() || 'A';
 
   const buildClassTargetId = (className, section) => `admin-class-${getClassNumber(className) || '1'}-${normalizeSection(section)}`;
+  const attendanceSmsDraftKey = 'teacher-pending-attendance-sms';
+
+  const buildTeacherAuthHeaders = () => {
+    const token = localStorage.getItem('token') || '';
+    const headers = {};
+    const teacherIdentity = String(
+      currentUser?.teacherId
+      || currentUser?.loginId
+      || currentUser?.email
+      || currentUser?.name
+      || currentUser?.classTeacherOf
+      || [currentUser?.assignedClass, currentUser?.division].filter(Boolean).join('-')
+      || ''
+    ).trim();
+
+    if (token.includes('.') && token.split('.').length === 3) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (teacherIdentity) headers['X-Teacher-Id'] = teacherIdentity;
+    if (currentUser?.email) headers['X-Teacher-Email'] = String(currentUser.email).trim();
+    if (currentUser?.name) headers['X-Teacher-Name'] = String(currentUser.name).trim();
+    if (currentUser?.assignedClass || currentUser?.classTeacherStd) headers['X-Teacher-Class'] = String(currentUser.assignedClass || currentUser.classTeacherStd || '').trim();
+    if (currentUser?.division || currentUser?.classTeacherDiv) headers['X-Teacher-Division'] = String(currentUser.division || currentUser.classTeacherDiv || '').trim();
+    return headers;
+  };
 
   useEffect(() => {
     fetchClasses();
@@ -145,13 +170,18 @@ const AttendanceManagement = ({ currentUser }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      const attendanceDataArray = Object.keys(attendanceData).map(studentId => ({
-        studentId,
-        status: attendanceData[studentId].status,
-        uniformStatus: attendanceData[studentId].uniformStatus || 'yes',
-        idCardStatus: attendanceData[studentId].idCardStatus || 'yes',
-        remarks: attendanceData[studentId].remarks
-      }));
+      const attendanceDataArray = Object.keys(attendanceData).map(studentId => {
+        const student = students.find(s => s._id === studentId);
+        const studentCode = student?.studentId || student?.student_id || '';
+        return {
+          studentId, // Mongo _id for teacher portal
+          studentCode, // Stable ID for admin sync
+          status: attendanceData[studentId].status,
+          uniformStatus: attendanceData[studentId].uniformStatus || 'yes',
+          idCardStatus: attendanceData[studentId].idCardStatus || 'yes',
+          remarks: attendanceData[studentId].remarks
+        };
+      });
 
       // Save attendance summary to localStorage for Dashboard (always runs)
       const presentCount = visibleAttendanceValues.filter(a => a.status === 'present').length;
@@ -196,13 +226,28 @@ const AttendanceManagement = ({ currentUser }) => {
       }));
 
       try {
-        await axios.post('http://localhost:5000/api/teacher/attendance', {
+        await axios.post(apiUrl('/api/attendance/bulk'), {
           classId: selectedClass,
           date: selectedDate,
-          attendanceData: attendanceDataArray
+          records: attendanceDataArray.map((record) => ({
+            person_id: record.studentCode || record.studentId,
+            student_id: record.studentCode || record.studentId,
+            studentId: record.studentId,
+            studentCode: record.studentCode,
+            status: record.status === 'absent' ? 'A' : record.status === 'leave' ? 'L' : 'P',
+            class: buildClassTargetId(
+              students.find((s) => s._id === record.studentId)?.className || '',
+              students.find((s) => s._id === record.studentId)?.section || ''
+            ),
+            section: students.find((s) => s._id === record.studentId)?.section || '',
+            remarks: record.remarks || ''
+          })),
+          person_type: 'student',
+          class: String(selectedClass || '').trim(),
+          section: String((classes.find((item) => item._id === selectedClass)?.section) || '').trim().toUpperCase()
         }, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            ...buildTeacherAuthHeaders(),
             'Content-Type': 'application/json'
           }
         });
@@ -372,56 +417,43 @@ const AttendanceManagement = ({ currentUser }) => {
       const absentStudents = visibleAttendanceEntries.filter(([, record]) => record.status === 'absent').map(([studentId]) => studentId);
 
       if (absentStudents.length > 0) {
-        const nowIso = new Date().toISOString();
         const selectedClassMeta = classes.find((item) => item._id === selectedClass) || null;
-        const classTargetId = buildClassTargetId(selectedClassMeta?.className, selectedClassMeta?.section);
-        const newParentNotifications = absentStudents.map((studentId, index) => {
-          const student = students.find((s) => s._id === studentId);
+        const absentParentIds = absentStudents
+          .map((studentId) => {
+            const student = students.find((s) => s._id === studentId);
+            return (
+              student?.studentId
+              || student?.student_id
+              || student?.grNo
+              || student?.gr_number
+              || student?.grNumber
+              || student?.admissionNumber
+              || student?.admission_number
+              || student?.rollNumber
+              || student?.roll_number
+              || student?._id
+              || studentId
+            );
+          })
+          .filter(Boolean);
 
-          return {
-            id: `attendance-absent-${studentId}-${Date.now()}-${index}`,
-            icon: '🚨',
-            text: `${student?.name || 'Student'} was absent on ${selectedDate}.`,
-            time: 'Just now',
-            bg: 'rgba(239,68,68,0.12)',
-            createdAt: nowIso,
-            type: 'attendance-absent',
-            studentId,
-            studentName: student?.name || '',
-            date: selectedDate,
-            classId: classTargetId,
-            className: selectedClassMeta?.className || '',
-            section: selectedClassMeta?.section || '',
-          };
-        });
+        localStorage.setItem(attendanceSmsDraftKey, JSON.stringify({
+          recipientType: 'parent',
+          recipientParentIds: absentParentIds,
+          className: selectedClassMeta?.className || '',
+          division: selectedClassMeta?.section || '',
+          subject: `Attendance alert - ${selectedDate}`,
+          message: `Students were marked absent on ${selectedDate}. Please review and send a message to the selected parents.`,
+        }));
 
-        const existingParentNotifications = (() => {
-          try {
-            const raw = localStorage.getItem('parent-notifications');
-            const parsed = raw ? JSON.parse(raw) : [];
-            return Array.isArray(parsed) ? parsed : [];
-          } catch {
-            return [];
-          }
-        })();
-
-        localStorage.setItem(
-          'parent-notifications',
-          JSON.stringify([...newParentNotifications, ...existingParentNotifications].slice(0, 100))
-        );
-
-        try {
-          await axios.post(apiUrl('/api/communication/parent-notifications'), {
-            items: newParentNotifications,
-          });
-        } catch (notificationError) {
-          console.warn('Failed to store parent notifications on backend:', notificationError?.message || notificationError);
-        }
-
-        setSuccess(`${absentStudents.length} message${absentStudents.length > 1 ? 's' : ''} sent to absent students' parents!`);
+        setSuccess(`Prepared message for ${absentStudents.length} absent student parent${absentStudents.length > 1 ? 's' : ''}.`);
         setTimeout(() => setSuccess(''), 3000);
+
+        if (typeof onNavigate === 'function') {
+          onNavigate('communication');
+        }
       } else {
-        setSuccess('No absent students to notify.');
+        setSuccess('No absent students to message.');
         setTimeout(() => setSuccess(''), 3000);
       }
       setLoading(false);
@@ -528,25 +560,25 @@ const AttendanceManagement = ({ currentUser }) => {
                   </div>
 
                   <div className="border rounded-xl overflow-hidden shadow-sm bg-white mb-6">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 border-b">
-                          <th className="px-6 py-4 font-semibold text-gray-600">Student ID</th>
-                          <th className="px-6 py-4 font-semibold text-gray-600">Student Name</th>
-                          <th className="px-6 py-4 font-semibold text-gray-600">Attendance Status</th>
-                          <th className="px-6 py-4 font-semibold text-gray-600">Uniform</th>
-                          <th className="px-6 py-4 font-semibold text-gray-600">I-Card</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {students.map(student => {
-                          const isAbsent = attendanceData[student._id]?.status === 'absent';
-                          return (
-                          <tr key={student._id} className={`border-b last:border-b-0 transition-colors ${isAbsent ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                            <td className="px-6 py-4 text-blue-600 font-medium">{student.studentId}</td>
-                            <td className="px-6 py-4 font-semibold text-gray-800">{student.name}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="px-6 py-4 font-semibold text-gray-600">Student ID</th>
+                            <th className="px-6 py-4 font-semibold text-gray-600">Student Name</th>
+                            <th className="px-6 py-4 font-semibold text-gray-600">Attendance Status</th>
+                            <th className="px-6 py-4 font-semibold text-gray-600">Uniform</th>
+                            <th className="px-6 py-4 font-semibold text-gray-600">I-Card</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {students.map(student => {
+                            const isAbsent = attendanceData[student._id]?.status === 'absent';
+                            return (
+                            <tr key={student._id} className={`border-b last:border-b-0 transition-colors ${isAbsent ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                              <td className="px-6 py-4 text-blue-600 font-medium">{student.studentId}</td>
+                              <td className="px-6 py-4 font-semibold text-gray-800">{student.name}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                   <input
                                     type="radio"
@@ -771,5 +803,3 @@ const AttendanceManagement = ({ currentUser }) => {
 };
 
 export default AttendanceManagement;
-
-

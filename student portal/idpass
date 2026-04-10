@@ -2,11 +2,11 @@
 
 These Student ID and password pairs are used for standard student login. The Parent Access Key is used for parent access.
 
-| Standard | Student ID | Password | Parent Access Key |
-|-------|------------|---------|------|
+| Std | Student ID | Password | Parent Access Key |
 | Std 1 | STU20240001 | Stu@001 | 0001 |
 | Std 2 | STU20240121 | Stu@121 | 0106 |
 | Std 3 | STU20240241 | Stu@241 | 0211 |
 | Std 4 | STU20240361 | Stu@361 | 0316 |
 | Std 5 | STU20240481 | Stu@481 | 0421 |
 | Std 6 | STU20240601 | Stu@601 | 0526 |
+

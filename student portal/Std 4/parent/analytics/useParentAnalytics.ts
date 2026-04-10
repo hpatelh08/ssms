@@ -110,7 +110,7 @@ export function useParentAnalytics(): StudentAnalytics {
   const { tree, overallGrowth } = useTree();
   const { user } = useAuth();
   const growth = useGrowthSystem();
-  const stats = useMemo(readStats, []);
+  const stats = readStats();
 
   return useMemo<StudentAnalytics>(() => {
     const doy = dayOfYear();

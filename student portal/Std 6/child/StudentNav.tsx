@@ -1,7 +1,7 @@
 ﻿/**
  * child/StudentNav.tsx
- * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- * Premium Sidebar + Mobile Bottom Bar â€” Production-Grade EdTech UI
+ * -------------------------------------------------------------
+ * Premium Sidebar + Mobile Bottom Bar -- Production-Grade EdTech UI
  *
  * Sidebar:
  *  Width: 240px, fixed 100vh, soft pastel gradient
@@ -18,7 +18,7 @@ import { motion } from 'framer-motion';
 import type { ChildScreen } from './ChildLayout';
 import { SidebarTimerPill } from './SidebarTimerPill';
 
-/* â”€â”€ Nav Items â”€â”€ */
+/* -- Nav Items -- */
 
 interface NavItem {
   key: ChildScreen;
@@ -43,32 +43,32 @@ const NAV_ITEMS: NavItem[] = [
     activeGlow: 'rgba(24,179,163,0.16)',
   },
   {
-    key: 'funfacts', label: 'Fun Facts', icon: '🌟',
+    key: 'funfacts', label: 'Fun Facts', icon: '\u{1F31F}',
     accentColor: '#47b4e8',
     activeBg: 'rgba(71,180,232,0.12)',
     activeGlow: 'rgba(71,180,232,0.18)',
   },
   {
-    key: 'puzzles', label: 'Brain Puzzles', icon: '🧩',
+    key: 'puzzles', label: 'Brain Puzzles', icon: '\u{1F9E9}',
     accentColor: '#6bc9d8',
     activeBg: 'rgba(107,201,216,0.12)',
     activeGlow: 'rgba(107,201,216,0.18)',
   },
   {
-    key: 'journey', label: 'Journey', icon: '🗺️',
+    key: 'journey', label: 'Journey', icon: '\u{1F5FA}\u{FE0F}',
     accentColor: '#1b78ab',
     activeBg: 'rgba(27,120,171,0.12)',
     activeGlow: 'rgba(27,120,171,0.18)',
   },
   {
-    key: 'fillblanks', label: 'Fill in the Blanks', icon: '✍️',
+    key: 'fillblanks', label: 'Fill in the Blanks', icon: '\u270D\uFE0F',
     accentColor: '#ffae68',
     activeBg: 'rgba(255,174,104,0.14)',
     activeGlow: 'rgba(255,174,104,0.20)',
   },
 ];
 
-/* â”€â”€ Sidebar Item (desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Sidebar Item (desktop) -- */
 
 const SidebarItem: React.FC<{
   item: NavItem;
@@ -109,7 +109,7 @@ const SidebarItem: React.FC<{
         />
       )}
 
-      {/* Icon â€” clean, no border, no stroke */}
+      {/* Icon -- clean, no border, no stroke */}
       <span style={{
         fontSize: 24,
         lineHeight: 1,
@@ -135,7 +135,7 @@ const SidebarItem: React.FC<{
 });
 SidebarItem.displayName = 'SidebarItem';
 
-/* â”€â”€ Bottom Tab (mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Bottom Tab (mobile) -- */
 
 const BottomTab: React.FC<{
   item: NavItem;
@@ -186,7 +186,7 @@ const BottomTab: React.FC<{
 });
 BottomTab.displayName = 'BottomTab';
 
-/* â”€â”€ Main StudentNav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Main StudentNav -- */
 
 interface Props {
   active: ChildScreen;
@@ -195,7 +195,7 @@ interface Props {
 
 export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => (
   <>
-    {/* â”€â”€ Desktop Sidebar (lg+) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+    {/* -- Desktop Sidebar (lg+) -- */}
     <motion.aside
       className="hidden lg:flex w-[240px] shrink-0 flex-col z-30 overflow-hidden"
       style={{
@@ -214,7 +214,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
       animate={{ x: 0 }}
       transition={{ type: 'spring', stiffness: 200, damping: 25 }}
     >
-      {/* â”€â”€ Brand Header â”€â”€ */}
+      {/* -- Brand Header -- */}
       <div style={{ padding: '0 8px', marginBottom: 36 }}>
         <div className="flex items-center gap-3">
           <motion.span
@@ -233,7 +233,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
         </div>
       </div>
 
-      {/* â”€â”€ Nav Items â”€â”€ */}
+      {/* -- Nav Items -- */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         {NAV_ITEMS.map(item => (
           <SidebarItem
@@ -245,7 +245,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
         ))}
       </nav>
 
-      {/* â”€â”€ Bottom decorative â”€â”€ */}
+      {/* -- Bottom decorative -- */}
       <div style={{
         marginTop: 'auto',
         padding: '16px 4px 0',
@@ -255,7 +255,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
       </div>
     </motion.aside>
 
-    {/* â”€â”€ Mobile Bottom Bar (<lg) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+    {/* -- Mobile Bottom Bar (<lg) -- */}
     <motion.nav
       className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
       style={{

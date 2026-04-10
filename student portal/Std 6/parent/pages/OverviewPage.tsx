@@ -1,4 +1,4 @@
-/**
+﻿/**
  * parent/pages/OverviewPage.tsx
  * ─────────────────────────────────────────────────────
  * PREMIUM Parent Analytics Overview — Government Pitch Ready
@@ -25,7 +25,6 @@ import { motion } from 'framer-motion';
 import { useParentAnalytics } from '../analytics/useParentAnalytics';
 import type { Alert, SubjectProgress } from '../analytics/types';
 import { useAuth } from '../../auth/AuthContext';
-import { loadStudentAnnouncements, type PortalAnnouncement } from '../../services/announcementFeed';
 
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
@@ -536,9 +535,6 @@ const FloatingParticle: React.FC<{ x: number; y: number; size: number; color: st
 export const OverviewPage: React.FC = () => {
   const analytics = useParentAnalytics();
   const { user } = useAuth();
-  const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([]);
-  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
-  const [announcementsError, setAnnouncementsError] = useState('');
 
   const greeting = useMemo(getTimeGreeting, []);
   const firstName = useMemo(() => analytics.studentName.split(' ')[0], [analytics.studentName]);
@@ -613,40 +609,6 @@ export const OverviewPage: React.FC = () => {
       minute: '2-digit',
     });
   }, [analytics.lastSessionAt]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const refreshAnnouncements = async () => {
-      try {
-        setAnnouncementsLoading(true);
-        setAnnouncementsError('');
-        const loaded = await loadStudentAnnouncements(user.grade, 'parent');
-        if (mounted) {
-          setAnnouncements(Array.isArray(loaded) ? loaded : []);
-        }
-      } catch {
-        if (mounted) {
-          setAnnouncements([]);
-          setAnnouncementsError('Announcements for your child will appear here once the class teacher posts them.');
-        }
-      } finally {
-        if (mounted) {
-          setAnnouncementsLoading(false);
-        }
-      }
-    };
-
-    refreshAnnouncements();
-    const intervalId = window.setInterval(refreshAnnouncements, 15000);
-
-    return () => {
-      mounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [user.grade]);
-
-  const visibleAnnouncements = useMemo(() => announcements.slice(0, 3), [announcements]);
 
   const getSubjectTag = (subject: string, progress: number) => {
     if (progress >= 80) return { tag: 'Strong', color: '#10B981' };
@@ -822,69 +784,6 @@ export const OverviewPage: React.FC = () => {
       {/* ═════════════════════════════════════════════
           2. ACADEMIC PERFORMANCE
           ═════════════════════════════════════════════ */}
-      <GlassCard delay={0.05}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: CLR.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Class updates</p>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: CLR.primary, margin: 0 }}>Teacher Announcements</h2>
-            <p style={{ fontSize: 12, fontWeight: 500, color: CLR.muted, marginTop: 4 }}>
-              Only announcements for your child&apos;s class appear here.
-            </p>
-          </div>
-          <div style={{ fontSize: 10, fontWeight: 700, padding: '5px 12px', borderRadius: 999, color: CLR.indigo, background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.14)' }}>
-            Std {user.grade}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
-          {announcementsLoading && (
-            <div style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(255,255,255,0.65)', color: CLR.muted, fontSize: 12, fontWeight: 500 }}>
-              Loading class announcements...
-            </div>
-          )}
-
-          {!announcementsLoading && visibleAnnouncements.length === 0 && (
-            <div style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.72)', border: '1px dashed rgba(124,58,237,0.18)', color: CLR.muted, fontSize: 12, fontWeight: 500 }}>
-              {announcementsError || 'No announcements for your child yet.'}
-            </div>
-          )}
-
-          {!announcementsLoading && visibleAnnouncements.map((announcement) => (
-            <div key={announcement.id} style={{ padding: '14px 16px', borderRadius: 18, background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.7)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ minWidth: 0 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 800, color: CLR.primary, margin: 0 }}>{announcement.title}</h3>
-                  <p style={{ fontSize: 12, fontWeight: 500, color: CLR.muted, marginTop: 6, lineHeight: '18px' }}>{announcement.content}</p>
-                </div>
-                <span style={{
-                  flexShrink: 0,
-                  fontSize: 9,
-                  fontWeight: 800,
-                  textTransform: 'capitalize',
-                  color: '#fff',
-                  background:
-                    announcement.priority === 'urgent'
-                      ? '#dc2626'
-                      : announcement.priority === 'high'
-                        ? '#f97316'
-                        : announcement.priority === 'medium'
-                          ? '#6366F1'
-                          : '#10B981',
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                }}>
-                  {announcement.priority || 'medium'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10, fontSize: 10, fontWeight: 700, color: CLR.soft }}>
-                <span>By {announcement.author || 'Teacher'}</span>
-                <span>{announcement.date ? new Date(announcement.date).toLocaleDateString('en-IN') : ''}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-
       <GlassCard delay={0.06}>
         <SectionTitle icon="📚" title="Academic Performance" subtitle="Subject-wise curriculum progress with chapters completed" />
 

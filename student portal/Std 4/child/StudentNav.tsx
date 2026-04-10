@@ -1,24 +1,12 @@
 /**
  * child/StudentNav.tsx
- * ─────────────────────────────────────────────────────
- * Premium Sidebar + Mobile Bottom Bar — Production-Grade EdTech UI
- *
- * Sidebar:
- *  Width: 240px, fixed 100vh, soft pastel gradient
- *  Rounded right corners, soft shadow
- *  Clean SVG-style icons (emoji), no black borders
- *  Active: soft bg highlight + left accent bar (4px) + subtle glow
- *  Items: 14px padding, 10px gap
- *
- * Mobile: Fixed bottom bar with 5 icon tabs.
+ * Premium Sidebar + Mobile Bottom Bar - Std 4
  */
 
 import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import type { ChildScreen } from './ChildLayout';
 import SidebarTimerPill from './SidebarTimerPill';
-
-/* ── Nav Items ── */
 
 interface NavItem {
   key: ChildScreen;
@@ -31,38 +19,46 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    key: 'home', label: 'Home', icon: '🏠',
+    key: 'home',
+    label: 'Home',
+    icon: 'H',
     accentColor: '#6366f1',
     activeBg: 'rgba(99,102,241,0.08)',
     activeGlow: 'rgba(99,102,241,0.15)',
   },
   {
-    key: 'play', label: 'Games', icon: '🎮',
+    key: 'play',
+    label: 'Games',
+    icon: 'G',
     accentColor: '#10b981',
     activeBg: 'rgba(16,185,129,0.08)',
     activeGlow: 'rgba(16,185,129,0.15)',
   },
   {
-    key: 'odd-one-out', label: 'Odd One Out', icon: '🚗',
+    key: 'odd-one-out',
+    label: 'Odd One Out',
+    icon: 'O',
     accentColor: '#fbbf24',
     activeBg: 'rgba(251,191,36,0.08)',
     activeGlow: 'rgba(251,191,36,0.15)',
   },
   {
-    key: 'word-builder', label: 'Word Builder', icon: '🔤',
+    key: 'word-builder',
+    label: 'Word Builder',
+    icon: 'W',
     accentColor: '#38bdf8',
     activeBg: 'rgba(56,189,248,0.08)',
     activeGlow: 'rgba(56,189,248,0.15)',
   },
   {
-    key: 'journey', label: 'Journey', icon: '🗺️',
-    accentColor: '#FFD700',
-    activeBg: 'rgba(255,215,0,0.08)',
-    activeGlow: 'rgba(255,215,0,0.2)',
+    key: 'journey',
+    label: 'Journey',
+    icon: 'J',
+    accentColor: '#8b5cf6',
+    activeBg: 'rgba(139,92,246,0.08)',
+    activeGlow: 'rgba(139,92,246,0.2)',
   },
 ];
-
-/* ── Sidebar Item (desktop) ─────────────────────── */
 
 const SidebarItem: React.FC<{
   item: NavItem;
@@ -74,6 +70,7 @@ const SidebarItem: React.FC<{
   return (
     <motion.button
       onClick={handleClick}
+      type="button"
       className="relative w-full flex items-center gap-4 rounded-2xl text-left cursor-pointer overflow-hidden"
       style={{
         padding: '14px 18px',
@@ -86,7 +83,6 @@ const SidebarItem: React.FC<{
       whileHover={isActive ? {} : { background: 'var(--sidebar-hover-bg)', x: 4, transition: { duration: 0.25 } }}
       whileTap={{ scale: 0.97 }}
     >
-      {/* Left accent bar (active) */}
       {isActive && (
         <motion.div
           style={{
@@ -103,33 +99,41 @@ const SidebarItem: React.FC<{
         />
       )}
 
-      {/* Icon — clean, no border, no stroke */}
-      <span style={{
-        fontSize: 24,
-        lineHeight: 1,
-        filter: isActive ? 'none' : 'grayscale(0.15)',
-        transition: 'filter 0.2s ease',
-      }}>
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 8,
+          background: isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.28)',
+          color: isActive ? item.accentColor : 'var(--sidebar-text)',
+          fontSize: 12,
+          fontWeight: 800,
+          lineHeight: 1,
+          transition: 'all 0.2s ease',
+        }}
+      >
         {item.icon}
       </span>
 
-      {/* Label */}
-      <span style={{
-        fontSize: 15,
-        fontWeight: isActive ? 800 : 600,
-        color: isActive ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
-        letterSpacing: '0.3px',
-        fontFamily: 'Nunito, sans-serif',
-        transition: 'color 0.25s ease, font-weight 0.25s ease',
-      }}>
+      <span
+        style={{
+          fontSize: 15,
+          fontWeight: isActive ? 800 : 600,
+          color: isActive ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
+          letterSpacing: '0.3px',
+          fontFamily: 'Nunito, sans-serif',
+          transition: 'color 0.25s ease, font-weight 0.25s ease',
+        }}
+      >
         {item.label}
       </span>
     </motion.button>
   );
 });
 SidebarItem.displayName = 'SidebarItem';
-
-/* ── Bottom Tab (mobile) ────────────────────────── */
 
 const BottomTab: React.FC<{
   item: NavItem;
@@ -141,16 +145,14 @@ const BottomTab: React.FC<{
   return (
     <motion.button
       onClick={handleClick}
+      type="button"
       className="relative flex flex-col items-center justify-center gap-0.5 py-1 flex-1 cursor-pointer"
       whileTap={{ scale: 0.88 }}
     >
       {isActive && (
         <motion.div
           className="absolute -top-0.5 rounded-2xl"
-          style={{
-            width: 44, height: 44,
-            background: item.activeBg,
-          }}
+          style={{ width: 44, height: 44, background: item.activeBg }}
           layoutId="mobile-tab-bg"
           transition={{ type: 'spring', stiffness: 350, damping: 30 }}
         />
@@ -164,23 +166,23 @@ const BottomTab: React.FC<{
         {item.icon}
       </motion.span>
 
-      <span style={{
-        fontSize: 10,
-        fontWeight: isActive ? 700 : 600,
-        color: isActive ? 'var(--sidebar-text-active)' : 'var(--sidebar-text-muted)',
-        position: 'relative',
-        zIndex: 10,
-        fontFamily: 'Nunito, sans-serif',
-        transition: 'color 0.2s ease',
-      }}>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: isActive ? 700 : 600,
+          color: isActive ? 'var(--sidebar-text-active)' : 'var(--sidebar-text-muted)',
+          position: 'relative',
+          zIndex: 10,
+          fontFamily: 'Nunito, sans-serif',
+          transition: 'color 0.2s ease',
+        }}
+      >
         {item.label}
       </span>
     </motion.button>
   );
 });
 BottomTab.displayName = 'BottomTab';
-
-/* ── Main StudentNav ────────────────────────────── */
 
 interface Props {
   active: ChildScreen;
@@ -189,9 +191,8 @@ interface Props {
 
 export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => (
   <>
-    {/* ── Desktop Sidebar (lg+) ──────────────────── */}
     <motion.aside
-      className="hidden lg:flex w-[240px] shrink-0 flex-col z-30 overflow-hidden"
+      className="hidden lg:flex w-[240px] shrink-0 flex-col z-30"
       style={{
         position: 'fixed',
         top: 0,
@@ -202,56 +203,85 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
         borderRadius: '0 30px 30px 0',
         boxShadow: '4px 0 32px rgba(200,180,255,0.14), 1px 0 0 rgba(255,255,255,0.6)',
         padding: '30px 20px',
-        overflow: 'hidden',
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
       }}
       initial={{ x: -260 }}
       animate={{ x: 0 }}
       transition={{ type: 'spring', stiffness: 200, damping: 25 }}
     >
-      {/* ── Brand Header ── */}
       <div style={{ padding: '0 8px', marginBottom: 36 }}>
         <div className="flex items-center gap-3">
           <motion.span
-            style={{ fontSize: 30 }}
-            animate={{ rotate: [0, 10, -10, 0] }}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(255,255,255,0.45)',
+              fontSize: 16,
+              fontWeight: 800,
+            }}
+            animate={{ y: [0, -2, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            🌟
+            S
           </motion.span>
           <div>
             <h2 className="sidebar-title" style={{ margin: 0 }}>
               My Playground
             </h2>
-            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--sidebar-text-muted)', marginTop: 3, fontFamily: 'Nunito, sans-serif', letterSpacing: '0.3px' }}>
-              Std 4 · Learning is fun!
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--sidebar-text-muted)',
+                marginTop: 3,
+                fontFamily: 'Nunito, sans-serif',
+                letterSpacing: '0.3px',
+              }}
+            >
+              Std 4 - Learning is fun!
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Nav Items ── */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+      <nav
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          paddingRight: 2,
+        }}
+        className="hide-scrollbar"
+      >
         {NAV_ITEMS.map(item => (
-          <SidebarItem
-            key={item.key}
-            item={item}
-            isActive={active === item.key}
-            onNavigate={onNavigate}
-          />
+          <SidebarItem key={item.key} item={item} isActive={active === item.key} onNavigate={onNavigate} />
         ))}
       </nav>
 
-      {/* ── Timer Pill (replaces Keep Learning card) ── */}
-      <div style={{
-        marginTop: 'auto',
-        padding: '16px 4px 0',
-        borderTop: '1px solid rgba(255,255,255,0.35)',
-      }}>
+      <div
+        style={{
+          marginTop: 'auto',
+          padding: '16px 4px 0',
+          borderTop: '1px solid rgba(255,255,255,0.35)',
+        }}
+      >
         <SidebarTimerPill />
       </div>
     </motion.aside>
 
-    {/* ── Mobile Bottom Bar (<lg) ────────────────── */}
     <motion.nav
       className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
       style={{
@@ -266,12 +296,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
       transition={{ type: 'spring', stiffness: 200, damping: 25 }}
     >
       {NAV_ITEMS.map(item => (
-        <BottomTab
-          key={item.key}
-          item={item}
-          isActive={active === item.key}
-          onNavigate={onNavigate}
-        />
+        <BottomTab key={item.key} item={item} isActive={active === item.key} onNavigate={onNavigate} />
       ))}
     </motion.nav>
   </>

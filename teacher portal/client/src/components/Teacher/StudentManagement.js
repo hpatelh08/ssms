@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { User, Heart, AlertTriangle, Calendar, FileText, Search, Eye, X } from 'lucide-react';
 import { getAssignedTeacherClassNumber, getAssignedTeacherSection } from '../../teacherIdentity';
 import { loadClassStudents, loadTeacherClasses } from '../../teacherAdminData';
+import { apiUrl } from '../../config/api';
 
 const StudentManagement = ({ currentUser }) => {
+  const MEETING_REQUEST_TIMEOUT = 15000;
   const [activeTab, setActiveTab] = useState('profiles');
   const [students, setStudents] = useState([]);
   const [profileStudents, setProfileStudents] = useState([]);
@@ -21,7 +24,7 @@ const StudentManagement = ({ currentUser }) => {
     purpose: ''
   });
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
-  const [ptmStatusFilter, setPtmStatusFilter] = useState('pending');
+  const [ptmStatusFilter, setPtmStatusFilter] = useState('scheduled');
   const [healthEditStudentId, setHealthEditStudentId] = useState('');
   const [healthForm, setHealthForm] = useState({
     studentId: '',
@@ -51,7 +54,7 @@ const StudentManagement = ({ currentUser }) => {
 
   useEffect(() => {
     if (activeTab === 'ptm') {
-      fetchUpcomingMeetings();
+      void fetchUpcomingMeetings();
     }
   }, [activeTab]);
 
@@ -175,13 +178,50 @@ const StudentManagement = ({ currentUser }) => {
     return 'No behavior remarks recorded';
   };
 
-  const getPtmStorageKey = () => `teacher-ptm-meetings-${currentUser?.email || 'default'}`;
+  const getTeacherAuthHeaders = () => {
+    const token = localStorage.getItem('token') || '';
+    const headers = {};
+    const user = currentUser || {};
+    const teacherIdentity = String(
+      user.teacherId ||
+      user.loginId ||
+      user.email ||
+      user.name ||
+      user.classTeacherOf ||
+      [user.assignedClass, user.division].filter(Boolean).join('-') ||
+      ''
+    ).trim();
+
+    const hasLikelyJwt = token.includes('.') && token.split('.').length === 3;
+    if (hasLikelyJwt) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (teacherIdentity) headers['X-Teacher-Id'] = teacherIdentity;
+    if (user.email) headers['X-Teacher-Email'] = String(user.email).trim();
+    if (user.name) headers['X-Teacher-Name'] = String(user.name).trim();
+    if (user.assignedClass || user.classTeacherStd) headers['X-Teacher-Class'] = String(user.assignedClass || user.classTeacherStd || '').trim();
+    if (user.division || user.classTeacherDiv) headers['X-Teacher-Division'] = String(user.division || user.classTeacherDiv || '').trim();
+    return headers;
+  };
 
   const getDashboardPendingTaskKey = () => `teacher-pending-tasks-${currentUser?.email || 'default'}`;
 
   const normalizeMeetingRecord = (meeting) => ({
     ...meeting,
-    status: meeting?.status === 'completed' ? 'completed' : 'pending'
+    _id: meeting?._id || meeting?.id || '',
+    student: meeting?.student || {
+      _id: meeting?.studentId || meeting?.student_id || '',
+      name: meeting?.studentName || meeting?.student_name || 'Student',
+      className: meeting?.standard || meeting?.className || '',
+      section: meeting?.division || meeting?.section || '',
+      rollNumber: meeting?.rollNumber || meeting?.roll_number || '',
+    },
+    meetingType: meeting?.meetingType || meeting?.meeting_type || '',
+    date: meeting?.meetingDate || meeting?.meeting_date || '',
+    time: meeting?.meetingTime || meeting?.meeting_time || '',
+    purpose: meeting?.purpose || meeting?.meetingPurpose || meeting?.meeting_purpose || '',
+    status: String(meeting?.status || 'Scheduled').toLowerCase()
   });
 
   const sortMeetingsByDateTime = (meetings) => [...meetings].sort((a, b) => {
@@ -201,7 +241,7 @@ const StudentManagement = ({ currentUser }) => {
   const syncPtmPendingTasksToDashboard = (meetings) => {
     const todayIso = getTodayIsoLocal();
     const todayPendingMeetings = meetings.filter((meeting) => (
-      meeting.status === 'pending' && meeting.date === todayIso
+      meeting.status === 'scheduled' && meeting.date === todayIso
     ));
 
     const dashboardPendingTasks = todayPendingMeetings.map((meeting) => ({
@@ -217,16 +257,17 @@ const StudentManagement = ({ currentUser }) => {
   const persistUpcomingMeetings = (meetings) => {
     const normalizedMeetings = sortMeetingsByDateTime(meetings.map(normalizeMeetingRecord));
     setUpcomingMeetings(normalizedMeetings);
-    localStorage.setItem(getPtmStorageKey(), JSON.stringify(normalizedMeetings));
     syncPtmPendingTasksToDashboard(normalizedMeetings);
   };
 
-  const fetchUpcomingMeetings = () => {
+  const fetchUpcomingMeetings = async () => {
     try {
-      const storedMeetings = localStorage.getItem(getPtmStorageKey());
-      const parsedMeetings = storedMeetings ? JSON.parse(storedMeetings) : [];
-      const safeMeetings = Array.isArray(parsedMeetings) ? parsedMeetings : [];
-      const normalizedMeetings = sortMeetingsByDateTime(safeMeetings.map(normalizeMeetingRecord));
+      const response = await axios.get(apiUrl('/api/teacher/meetings'), {
+        headers: getTeacherAuthHeaders(),
+        timeout: MEETING_REQUEST_TIMEOUT
+      });
+      const meetings = Array.isArray(response?.data?.data) ? response.data.data : [];
+      const normalizedMeetings = sortMeetingsByDateTime(meetings.map(normalizeMeetingRecord));
 
       setUpcomingMeetings(normalizedMeetings);
       syncPtmPendingTasksToDashboard(normalizedMeetings);
@@ -242,7 +283,7 @@ const StudentManagement = ({ currentUser }) => {
     const matchedStudentByRoll = ptmStudents.find(
       (student) => normalizeRollNumber(student.rollNumber) === normalizedInputRoll
     );
-    const selectedStudentId = ptmData.studentId || matchedStudentByRoll?._id || '';
+    const selectedStudentId = ptmData.studentId || matchedStudentByRoll?.studentId || matchedStudentByRoll?.studentDbId || matchedStudentByRoll?._id || '';
 
     if (!selectedStudentId) {
       alert('Please select a valid student or enter a correct roll number');
@@ -255,9 +296,28 @@ const StudentManagement = ({ currentUser }) => {
     }
 
     try {
-      const selectedStudent = ptmStudents.find((student) => student._id === selectedStudentId) || matchedStudentByRoll;
-      const newMeeting = {
-        _id: `ptm-${Date.now()}`,
+      const selectedStudent = ptmStudents.find((student) => (
+        String(student?._id || '') === String(selectedStudentId || '') ||
+        String(student?.studentId || '') === String(selectedStudentId || '') ||
+        String(student?.studentDbId || '') === String(selectedStudentId || '')
+      )) || matchedStudentByRoll;
+      const payload = {
+        student_id: selectedStudent?.studentId || selectedStudent?.studentDbId || selectedStudentId,
+        studentId: selectedStudent?.studentId || selectedStudent?.studentDbId || selectedStudentId,
+        studentDbId: selectedStudent?.studentDbId || '',
+        roll_number: normalizeRollNumber(ptmData.rollNumber) || selectedStudent?.rollNumber || '',
+        meeting_type: ptmData.meetingType === 'regular' ? 'Regular PTM' : ptmData.meetingType === 'concern' ? 'Concern Meeting' : String(ptmData.meetingType || '').trim() || 'Regular PTM',
+        meeting_date: ptmData.date,
+        meeting_time: ptmData.time,
+        meeting_purpose: ptmData.purpose.trim()
+      };
+
+      const response = await axios.post(apiUrl('/api/teacher/meetings'), payload, {
+        headers: getTeacherAuthHeaders(),
+        timeout: MEETING_REQUEST_TIMEOUT
+      });
+      const savedMeeting = normalizeMeetingRecord(response?.data?.data || {
+        ...payload,
         student: {
           _id: selectedStudent?._id,
           name: selectedStudent?.name || 'Student',
@@ -265,15 +325,10 @@ const StudentManagement = ({ currentUser }) => {
           section: selectedStudent?.section || '',
           rollNumber: selectedStudent?.rollNumber || ''
         },
-        meetingType: ptmData.meetingType,
-        date: ptmData.date,
-        time: ptmData.time,
-        purpose: ptmData.purpose.trim(),
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
+        status: 'scheduled'
+      });
 
-      persistUpcomingMeetings([...upcomingMeetings, newMeeting]);
+      persistUpcomingMeetings([...upcomingMeetings, savedMeeting]);
 
       // Reset form
       setPtmData({
@@ -288,7 +343,12 @@ const StudentManagement = ({ currentUser }) => {
       alert('Meeting scheduled successfully!');
     } catch (error) {
       console.error('Error scheduling meeting:', error);
-      alert('Error scheduling meeting');
+      alert(
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        error?.message ||
+        'Error scheduling meeting'
+      );
     }
   };
 
@@ -302,35 +362,59 @@ const StudentManagement = ({ currentUser }) => {
     const updatedTime = window.prompt('Enter new time (HH:MM)', meeting.time || '');
     if (!updatedTime) return;
 
-    const updatedMeetings = upcomingMeetings.map((item) => (
-      item._id === meetingId ? { ...item, date: updatedDate, time: updatedTime } : item
-    ));
-
-    persistUpcomingMeetings(updatedMeetings);
-    alert('Meeting rescheduled successfully!');
+    try {
+      const response = await axios.put(apiUrl(`/api/teacher/meetings/${meetingId}`), {
+        meeting_date: updatedDate,
+        meeting_time: updatedTime,
+        status: 'Rescheduled'
+      }, {
+        headers: getTeacherAuthHeaders(),
+        timeout: MEETING_REQUEST_TIMEOUT
+      });
+      const updatedMeeting = normalizeMeetingRecord(response?.data?.data || { ...meeting, date: updatedDate, time: updatedTime, status: 'rescheduled' });
+      persistUpcomingMeetings(upcomingMeetings.map((item) => (item._id === meetingId ? updatedMeeting : item)));
+      alert('Meeting rescheduled successfully!');
+    } catch (error) {
+      console.error('Error rescheduling meeting:', error);
+      alert(error?.response?.data?.error || 'Error rescheduling meeting');
+    }
   };
 
   const handleCancelMeeting = async (meetingId) => {
     if (window.confirm('Are you sure you want to cancel this meeting?')) {
       try {
-        const updatedMeetings = upcomingMeetings.filter((meeting) => meeting._id !== meetingId);
-        persistUpcomingMeetings(updatedMeetings);
+        const response = await axios.delete(apiUrl(`/api/teacher/meetings/${meetingId}`), {
+          headers: getTeacherAuthHeaders(),
+          timeout: MEETING_REQUEST_TIMEOUT
+        });
+        const cancelledMeeting = normalizeMeetingRecord(response?.data?.data || { _id: meetingId, status: 'cancelled' });
+        persistUpcomingMeetings(upcomingMeetings.map((meeting) => (
+          meeting._id === meetingId ? cancelledMeeting : meeting
+        )));
         alert('Meeting cancelled successfully!');
       } catch (error) {
         console.error('Error cancelling meeting:', error);
-        alert('Error cancelling meeting');
+        alert(error?.response?.data?.error || 'Error cancelling meeting');
       }
     }
   };
 
   const handleToggleMeetingStatus = (meetingId) => {
-    const updatedMeetings = upcomingMeetings.map((meeting) => (
-      meeting._id === meetingId
-        ? { ...meeting, status: meeting.status === 'completed' ? 'pending' : 'completed' }
-        : meeting
-    ));
+    const meeting = upcomingMeetings.find((item) => item._id === meetingId);
+    if (!meeting) return;
 
-    persistUpcomingMeetings(updatedMeetings);
+    const nextStatus = meeting.status === 'completed' ? 'Scheduled' : 'Completed';
+
+    axios.put(apiUrl(`/api/teacher/meetings/${meetingId}`), { status: nextStatus }, {
+      headers: getTeacherAuthHeaders(),
+      timeout: MEETING_REQUEST_TIMEOUT
+    }).then((response) => {
+      const updatedMeeting = normalizeMeetingRecord(response?.data?.data || { ...meeting, status: nextStatus.toLowerCase() });
+      persistUpcomingMeetings(upcomingMeetings.map((item) => (item._id === meetingId ? updatedMeeting : item)));
+    }).catch((error) => {
+      console.error('Error updating meeting status:', error);
+      alert(error?.response?.data?.error || 'Error updating meeting status');
+    });
   };
 
   const fetchStudents = async (classId) => {
@@ -400,11 +484,15 @@ const StudentManagement = ({ currentUser }) => {
   ));
 
   const handlePtmStudentChange = (studentId) => {
-    const selected = ptmStudents.find((student) => student._id === studentId);
+    const selected = ptmStudents.find((student) => (
+      student._id === studentId ||
+      student.studentId === studentId ||
+      String(student.studentDbId || '') === String(studentId || '')
+    ));
 
     setPtmData((prev) => ({
       ...prev,
-      studentId,
+      studentId: selected?.studentId || selected?.studentDbId || selected?._id || studentId,
       rollNumber: selected?.rollNumber || prev.rollNumber
     }));
   };
@@ -418,7 +506,7 @@ const StudentManagement = ({ currentUser }) => {
     setPtmData((prev) => ({
       ...prev,
       rollNumber,
-      studentId: exactMatch ? exactMatch._id : ''
+      studentId: exactMatch ? (exactMatch.studentId || exactMatch.studentDbId || exactMatch._id || '') : ''
     }));
   };
 
@@ -854,7 +942,7 @@ const StudentManagement = ({ currentUser }) => {
                       >
                         <option value="">Select a student</option>
                         {ptmStudents.map(student => (
-                          <option key={student._id} value={student._id}>
+                          <option key={student.studentId || student.studentDbId || student._id} value={student.studentId || student.studentDbId || student._id}>
                             {student.name} (Roll: {student.rollNumber}) - {student.className} {student.section}
                           </option>
                         ))}
@@ -938,13 +1026,13 @@ const StudentManagement = ({ currentUser }) => {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setPtmStatusFilter('pending')}
-                      className={`px-3 py-1 text-sm rounded-lg border ${ptmStatusFilter === 'pending'
+                      onClick={() => setPtmStatusFilter('scheduled')}
+                      className={`px-3 py-1 text-sm rounded-lg border ${ptmStatusFilter === 'scheduled'
                         ? 'bg-amber-100 text-amber-800 border-amber-300'
                         : 'bg-white text-gray-600 border-gray-300'
                         }`}
                     >
-                      Pending
+                      Scheduled
                     </button>
                     <button
                       type="button"
@@ -970,8 +1058,15 @@ const StudentManagement = ({ currentUser }) => {
                 </div>
                 <div className="space-y-4">
                   {filteredUpcomingMeetings.map((meeting) => {
-                    const meetingStatus = meeting.status === 'completed' ? 'completed' : 'pending';
+                    const meetingStatus = String(meeting.status || 'scheduled').toLowerCase();
                     const meetingType = String(meeting.meetingType || 'regular');
+                    const meetingStatusLabel = meetingStatus === 'completed'
+                      ? 'Completed'
+                      : meetingStatus === 'cancelled'
+                        ? 'Cancelled'
+                        : meetingStatus === 'rescheduled'
+                          ? 'Rescheduled'
+                          : 'Scheduled';
 
                     return (
                       <div key={meeting._id} className="border rounded-lg p-4 hover:bg-gray-50">
@@ -982,10 +1077,14 @@ const StudentManagement = ({ currentUser }) => {
                               <span
                                 className={`px-2.5 py-1 text-xs font-semibold rounded-full ${meetingStatus === 'completed'
                                   ? 'bg-emerald-100 text-emerald-700'
-                                  : 'bg-amber-100 text-amber-700'
+                                  : meetingStatus === 'cancelled'
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : meetingStatus === 'rescheduled'
+                                      ? 'bg-sky-100 text-sky-700'
+                                      : 'bg-amber-100 text-amber-700'
                                   }`}
                               >
-                                {meetingStatus === 'completed' ? 'Completed' : 'Pending'}
+                                {meetingStatusLabel}
                               </span>
                             </div>
                             <p className="text-sm text-gray-600">
@@ -1004,7 +1103,7 @@ const StudentManagement = ({ currentUser }) => {
                                 : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                                 }`}
                             >
-                              {meetingStatus === 'completed' ? 'Mark Pending' : 'Mark Complete'}
+                              {meetingStatus === 'completed' ? 'Mark Scheduled' : 'Mark Complete'}
                             </button>
                             <button
                               onClick={() => handleRescheduleMeeting(meeting._id)}

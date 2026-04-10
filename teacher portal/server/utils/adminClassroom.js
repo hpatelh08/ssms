@@ -449,6 +449,63 @@ export function findAdminStudentById(studentId) {
   return mapStudentRows([row], metrics, classId)[0] || null;
 }
 
+function getStudentRowByIdentifier(db, identifier) {
+  const raw = String(identifier || '').trim();
+  if (!raw) return null;
+
+  const numericIdMatch = raw.match(/(\d+)$/);
+  const normalized = raw.toLowerCase();
+
+  return db.prepare(`
+    SELECT
+      s.id,
+      s.gr_number,
+      s.student_id,
+      s.student_password,
+      s.name,
+      s.admission,
+      s.class,
+      s.section,
+      s.parent,
+      s.phone,
+      s.status,
+      s.fees,
+      s.dob,
+      s.gender,
+      s.address,
+      s.blood_group,
+      s.parent_access_key
+    FROM students s
+    WHERE LOWER(COALESCE(s.student_id, '')) = ?
+       OR LOWER(COALESCE(s.gr_number, '')) = ?
+       OR LOWER(COALESCE(s.admission, '')) = ?
+       OR LOWER(COALESCE(s.name, '')) = ?
+       OR ( ? IS NOT NULL AND s.id = ? )
+    LIMIT 1
+  `).get(
+    normalized,
+    normalized,
+    normalized,
+    normalized,
+    numericIdMatch ? parseInt(numericIdMatch[1], 10) : null,
+    numericIdMatch ? parseInt(numericIdMatch[1], 10) : null
+  ) || null;
+}
+
+export function findAdminStudentByAnyIdentifier(identifier) {
+  const db = getAdminDb();
+  const row = getStudentRowByIdentifier(db, identifier);
+  if (!row) return null;
+
+  const classId = buildAdminClassId(row.class, row.section);
+  const metrics = buildStudentMetrics(db, {
+    std: extractStandard(row.class),
+    section: normalizeSection(row.section || 'A'),
+  });
+
+  return mapStudentRows([row], metrics, classId)[0] || null;
+}
+
 export function getAdminNotifications(query = {}) {
   const db = getAdminDb();
   const std = extractStandard(query.std || query.className || query.class || '');

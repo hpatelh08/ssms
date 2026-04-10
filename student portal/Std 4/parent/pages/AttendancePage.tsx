@@ -25,11 +25,19 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { jsPDF } from 'jspdf';
+import { useAuth } from '../../auth/AuthContext';
 import { useParentAnalytics } from '../analytics/useParentAnalytics';
 import {
   MONTHLY_SUMMARY,
   ATTENDANCE_ALERTS,
 } from '../../data/mockParentAnalytics';
+import {
+  buildAttendanceCandidates,
+  buildAttendanceClassId,
+  buildDateKeyForAttendance,
+  fetchTeacherAttendanceMonth,
+  syncAttendanceToStorage,
+} from '../../services/attendanceSync';
 
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
@@ -90,8 +98,12 @@ interface CalendarDay {
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/* ── Generate deterministic attendance data ─────── */
-function generateMonthData(year: number, month: number): CalendarDay[] {
+/* ── Generate attendance data with teacher sync overlay ───── */
+function generateMonthData(
+  year: number,
+  month: number,
+  teacherByDate: Record<string, 'present' | 'absent'> = {},
+): CalendarDay[] {
   const today = new Date();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -145,12 +157,18 @@ function generateMonthData(year: number, month: number): CalendarDay[] {
   for (let d = 1; d <= daysInMonth; d++) {
     const dow = new Date(year, month, d).getDay();
     const isToday = isCurrentMonth && d === today.getDate();
+    const dateKey = buildDateKeyForAttendance(year, month, d);
+    const teacherStatus = teacherByDate[dateKey];
 
     if (isFuture || (isCurrentMonth && d > today.getDate())) {
       days.push({ date: d, status: 'future', isToday: false });
     } else if (dow === 0) {
       // All Sundays are holidays
       days.push({ date: d, status: 'holiday', isToday });
+    } else if (teacherStatus === 'present') {
+      days.push({ date: d, status: 'present', isToday });
+    } else if (teacherStatus === 'absent') {
+      days.push({ date: d, status: 'absent', isToday });
     } else if (holidaySet.has(d)) {
       days.push({ date: d, status: 'holiday', isToday });
     } else if (absentSet.has(d)) {
@@ -581,13 +599,37 @@ function buildAttendanceImage(present: number, absent: number, holidays: number)
 
 export const AttendancePage: React.FC = () => {
   const analytics = useParentAnalytics();
+  const { user, studentProfile } = useAuth();
 
   /* ── Calendar state ── */
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [teacherAttendanceByDate, setTeacherAttendanceByDate] = useState<Record<string, 'present' | 'absent'>>({});
+  const classId = useMemo(() => buildAttendanceClassId(studentProfile, user.grade), [studentProfile, user.grade]);
+  const attendanceCandidates = useMemo(() => buildAttendanceCandidates(studentProfile, user), [studentProfile, user]);
 
-  const calendarDays = useMemo(() => generateMonthData(viewYear, viewMonth), [viewYear, viewMonth]);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const synced = await fetchTeacherAttendanceMonth(viewYear, viewMonth, classId, attendanceCandidates);
+      if (cancelled) return;
+      setTeacherAttendanceByDate(synced.byDate);
+      syncAttendanceToStorage(synced.presentDates, viewYear, viewMonth);
+    })().catch(() => {
+      if (!cancelled) setTeacherAttendanceByDate({});
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewYear, viewMonth, classId, attendanceCandidates]);
+
+  const calendarDays = useMemo(
+    () => generateMonthData(viewYear, viewMonth, teacherAttendanceByDate),
+    [viewYear, viewMonth, teacherAttendanceByDate],
+  );
 
   /* ── Calendar stats ── */
   const calendarStats = useMemo(() => {

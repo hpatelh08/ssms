@@ -25,19 +25,19 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    key: 'home', label: 'Home', icon: '🏠',
+    key: 'home', label: 'Home', icon: '\u{1F3E0}',
     accentColor: '#6366f1',
     activeBg: 'rgba(99,102,241,0.08)',
     activeGlow: 'rgba(99,102,241,0.15)',
   },
   {
-    key: 'play', label: 'Games', icon: '🎮',
+    key: 'play', label: 'Games', icon: '\u{1F3AE}',
     accentColor: '#10b981',
     activeBg: 'rgba(16,185,129,0.08)',
     activeGlow: 'rgba(16,185,129,0.15)',
   },
   {
-    key: 'journey', label: 'Journey', icon: '🗺️',
+    key: 'journey', label: 'Journey', icon: '\u{1F5FA}\uFE0F',
     accentColor: '#8b5cf6',
     activeBg: 'rgba(139,92,246,0.08)',
     activeGlow: 'rgba(139,92,246,0.15)',
@@ -170,7 +170,7 @@ export const StudentNavGrade7: React.FC<Props> = React.memo(({ active, onNavigat
             animate={{ rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            🚀
+            {'\u{1F680}'}
           </motion.span>
           <div>
             <h2 className="sidebar-title" style={{ margin: 0 }}>
@@ -203,7 +203,7 @@ export const StudentNavGrade7: React.FC<Props> = React.memo(({ active, onNavigat
             animate={{ y: [0, -3, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           >
-            🌟
+            {'\u{1F31F}'}
           </motion.span>
           <div>
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--sidebar-text)' }}>Space Explorer!</p>

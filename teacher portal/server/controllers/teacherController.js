@@ -10,6 +10,8 @@ import Announcement from '../models/Announcement.js';
 import LeaveApplication from '../models/LeaveApplication.js';
 import Subject from '../models/Subject.js';
 import { isTeacher } from '../middleware/auth.js';
+import { findAdminStudentByAnyIdentifier, findAdminStudentById } from '../utils/adminClassroom.js';
+import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -20,12 +22,325 @@ const require = createRequire(import.meta.url);
 const adminDbPath = path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'database.sqlite');
 const BetterSqlite3 = require(path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'node_modules', 'better-sqlite3'));
 let adminDb = null;
+const fallbackDataDir = path.join(__dirname, '..', 'data');
+const fallbackAssignmentsFile = path.join(fallbackDataDir, 'fallback-assignments.json');
+const fallbackStudyMaterialsFile = path.join(fallbackDataDir, 'fallback-study-materials.json');
 
 function getAdminDb() {
   if (!adminDb) {
     adminDb = new BetterSqlite3(adminDbPath, { readonly: false, fileMustExist: true });
   }
   return adminDb;
+}
+
+function extractStandard(value) {
+  const match = String(value || '').match(/\d+/);
+  return match ? String(parseInt(match[0], 10)) : '';
+}
+
+function normalizeDivision(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function getTeacherIdentifier(req) {
+  return String(req.user?.teacherId || req.user?.teacher_id || req.user?._id || '').trim();
+}
+
+function buildFileMeta(file) {
+  if (!file) return null;
+  return {
+    filename: file.filename || '',
+    path: file.path || '',
+    originalName: file.originalname || file.originalName || '',
+    size: file.size || 0,
+    mimetype: file.mimetype || ''
+  };
+}
+
+function ensureFallbackDataDir() {
+  if (!fs.existsSync(fallbackDataDir)) {
+    fs.mkdirSync(fallbackDataDir, { recursive: true });
+  }
+}
+
+function readFallbackJson(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf8').trim();
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFallbackJson(filePath, data) {
+  ensureFallbackDataDir();
+  fs.writeFileSync(filePath, `${JSON.stringify(Array.isArray(data) ? data : [], null, 2)}\n`, 'utf8');
+}
+
+function loadFallbackAssignments() {
+  return readFallbackJson(fallbackAssignmentsFile);
+}
+
+function saveFallbackAssignments(items) {
+  writeFallbackJson(fallbackAssignmentsFile, items);
+}
+
+function loadFallbackStudyMaterials() {
+  return readFallbackJson(fallbackStudyMaterialsFile);
+}
+
+function saveFallbackStudyMaterials(items) {
+  writeFallbackJson(fallbackStudyMaterialsFile, items);
+}
+
+function normalizeRecordClassLabel(record) {
+  const classDoc = record?.class && typeof record.class === 'object' ? record.class : null;
+  const className = String(record?.standard || classDoc?.className || record?.className || '').trim();
+  const division = String(record?.division || classDoc?.section || record?.section || '').trim().toUpperCase();
+  return {
+    standard: String(record?.standard || className || '').replace(/[^\d]/g, '') || className,
+    division,
+  };
+}
+
+function matchesChildClass(record, childContext) {
+  if (!record || !childContext) return false;
+  const { standard, division } = normalizeRecordClassLabel(record);
+  if (!standard || !division) return false;
+  return String(standard) === String(childContext.standard) && String(division).toUpperCase() === String(childContext.division).toUpperCase();
+}
+
+function mergeById(primary = [], secondary = []) {
+  const map = new Map();
+  [...primary, ...secondary].forEach((item) => {
+    const id = String(item?._id || item?.id || '');
+    if (!id) return;
+    map.set(id, item);
+  });
+  return Array.from(map.values());
+}
+
+function sortByCreatedAtDesc(items = []) {
+  return [...items].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+}
+
+function normalizeSubjectPayload(subject, subjectNameFallback = '') {
+  const subjectId = String(subject?._id || subject?.id || subject || '').trim();
+  if (!subject) {
+    return {
+      _id: '',
+      subjectName: subjectNameFallback || 'N/A'
+    };
+  }
+
+  if (typeof subject === 'object') {
+    return {
+      _id: subjectId,
+      subjectName: String(subject.subjectName || subject.name || subjectNameFallback || 'N/A')
+    };
+  }
+
+  return {
+    _id: subjectId,
+    subjectName: String(subjectNameFallback || subjectId || 'N/A')
+  };
+}
+
+function normalizeClassPayload(classContext, fallbackClass = null) {
+  const classDoc = classContext?.classData || fallbackClass || null;
+  if (!classDoc) {
+    return null;
+  }
+
+  const standard = String(classContext?.standard || classDoc?.className || classDoc?.standard || '').trim();
+  const division = String(classContext?.division || classDoc?.section || classDoc?.division || '').trim().toUpperCase();
+
+  return {
+    _id: String(classDoc._id || classDoc.id || classDoc || ''),
+    className: standard,
+    section: division
+  };
+}
+
+async function resolveSubjectPayload(subjectId) {
+  const fallback = normalizeSubjectPayload(subjectId, subjectId);
+  if (!subjectId || mongoose.connection.readyState !== 1) {
+    return fallback;
+  }
+
+  try {
+    const subjectDoc = await Subject.findById(subjectId).select('_id subjectName');
+    if (!subjectDoc) return fallback;
+    return normalizeSubjectPayload(subjectDoc);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeAssignmentRecord(record) {
+  const plain = record?.toObject ? record.toObject() : { ...record };
+  const attachment = plain.attachment || plain.attachments?.[0] || null;
+  const classValue = normalizeClassPayload({
+    classData: plain.class,
+    standard: plain.standard,
+    division: plain.division
+  }, plain.class);
+  const subjectValue = normalizeSubjectPayload(plain.subject, plain.subject?.subjectName);
+  return {
+    ...plain,
+    class: classValue || plain.class,
+    subject: subjectValue || plain.subject,
+    attachment,
+    attachments: Array.isArray(plain.attachments) && plain.attachments.length > 0
+      ? plain.attachments
+      : attachment
+        ? [attachment]
+        : [],
+  };
+}
+
+function normalizeStudyMaterialRecord(record) {
+  const plain = record?.toObject ? record.toObject() : { ...record };
+  const classValue = normalizeClassPayload({
+    classData: plain.class,
+    standard: plain.standard,
+    division: plain.division
+  }, plain.class);
+  const subjectValue = normalizeSubjectPayload(plain.subject, plain.subject?.subjectName);
+  return {
+    ...plain,
+    class: classValue || plain.class,
+    subject: subjectValue || plain.subject,
+    fileUrl: plain.url || plain.file?.path || '',
+  };
+}
+
+function persistFallbackAssignment(record) {
+  const current = loadFallbackAssignments();
+  const next = mergeById([normalizeAssignmentRecord(record)], current);
+  saveFallbackAssignments(sortByCreatedAtDesc(next));
+}
+
+function persistFallbackStudyMaterial(record) {
+  const current = loadFallbackStudyMaterials();
+  const next = mergeById([normalizeStudyMaterialRecord(record)], current);
+  saveFallbackStudyMaterials(sortByCreatedAtDesc(next));
+}
+
+function queryFallbackAssignments({ teacherId = '', classId = '', subjectId = '' } = {}) {
+  let items = loadFallbackAssignments();
+  if (teacherId) {
+    items = items.filter((item) => String(item.teacher || '') === String(teacherId));
+  }
+  if (classId) {
+    items = items.filter((item) => String(item.class?._id || item.class || '') === String(classId));
+  }
+  if (subjectId) {
+    items = items.filter((item) => String(item.subject?._id || item.subject || '') === String(subjectId));
+  }
+  return sortByCreatedAtDesc(items);
+}
+
+function queryFallbackStudyMaterials({ teacherId = '', classId = '', subjectId = '' } = {}) {
+  let items = loadFallbackStudyMaterials();
+  if (teacherId) {
+    items = items.filter((item) => String(item.teacher || '') === String(teacherId));
+  }
+  if (classId) {
+    items = items.filter((item) => String(item.class?._id || item.class || '') === String(classId));
+  }
+  if (subjectId) {
+    items = items.filter((item) => String(item.subject?._id || item.subject || '') === String(subjectId));
+  }
+  return sortByCreatedAtDesc(items);
+}
+
+async function resolveClassContextById(classId) {
+  if (!classId) return null;
+  let classData = null;
+  if (mongoose.connection.readyState === 1) {
+    try {
+      classData = await Class.findById(classId).select('_id className section');
+    } catch {
+      classData = null;
+    }
+  }
+
+  if (!classData) {
+    const fallbackClassName = String(classId || '').trim();
+    const parsed = fallbackClassName.match(/(?:admin-class-|teacher-class-)?(\d+)(?:[-_ ]*([A-Za-z]))?/i);
+    const standard = parsed ? String(parseInt(parsed[1], 10)) : extractStandard(fallbackClassName);
+    const division = normalizeDivision(parsed?.[2] || '');
+    if (!standard) return null;
+    return {
+      classData: {
+        _id: String(classId),
+        className: fallbackClassName,
+        section: division,
+      },
+      standard,
+      division,
+    };
+  }
+
+  const standard = extractStandard(classData.className);
+  const division = normalizeDivision(classData.section);
+  if (!standard || !division) return null;
+
+  return {
+    classData,
+    standard,
+    division,
+  };
+}
+
+function buildCandidateIdentifiers(studentId, aliases = '') {
+  return [
+    studentId,
+    ...String(aliases || '').split(','),
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+}
+
+async function resolveParentChildContext(studentId, accessKey, aliases = '') {
+  const candidates = buildCandidateIdentifiers(studentId, aliases);
+  const student =
+    candidates.map((value) => findAdminStudentByAnyIdentifier(value)).find(Boolean) ||
+    findAdminStudentById(studentId);
+  if (!student) {
+    return { error: 'Student not found.' };
+  }
+
+  const storedAccessKey = String(student.parentAccessKey || '').trim();
+  const providedAccessKey = String(accessKey || '').trim();
+  if (storedAccessKey && providedAccessKey !== storedAccessKey) {
+    return { error: 'Invalid parent access key.' };
+  }
+
+  const standard = extractStandard(student.className || student.class || student.grade || '');
+  const division = normalizeDivision(student.section || student.division || '');
+
+  if (!standard || !division) {
+    return { error: 'Child class information is unavailable.' };
+  }
+
+  return {
+    student,
+    standard,
+    division,
+  };
+}
+
+function serializeAssignmentRecord(record) {
+  return normalizeAssignmentRecord(record);
+}
+
+function serializeStudyMaterialRecord(record) {
+  return normalizeStudyMaterialRecord(record);
 }
 
 function mapAttendanceStatus(status) {
@@ -48,26 +363,25 @@ function syncAttendanceToAdminDb({ classData, date, attendanceData, teacherId })
       subject = excluded.subject
   `);
 
-  const classLabel = String(classData?.className || '').trim();
-  const section = String(classData?.section || '').trim().toUpperCase();
+  const classLabel = String(classData?.className || classData?.class || '').trim();
+  const standard = extractStandard(classLabel || classData?.grade || classData?.standard || '');
+  const section = String(classData?.section || classData?.division || '').trim().toUpperCase();
 
   db.transaction((records) => {
     for (const record of records) {
-      const studentPersonId = String(record.studentId || '').trim();
+      const studentPersonId = String(record.studentCode || record.student_id || record.studentId || '').trim();
       if (!studentPersonId) continue;
       upsert.run(
         studentPersonId,
         date,
         mapAttendanceStatus(record.status),
-        classLabel,
+        standard || classLabel,
         section,
         null
       );
     }
   })(Array.isArray(attendanceData) ? attendanceData : []);
 }
-
-const fallbackStudyMaterials = [];
 
 // Get teacher dashboard data
 export const getDashboard = async (req, res) => {
@@ -271,19 +585,33 @@ export const getAssignments = async (req, res) => {
     const teacherId = req.user._id;
     const { classId, subjectId, status } = req.query;
 
-    let filter = { teacher: teacherId };
+    const filter = { teacher: teacherId };
     if (classId) filter.class = classId;
     if (subjectId) filter.subject = subjectId;
     if (status) filter.status = status;
 
-    const assignments = await Assignment.find(filter)
-      .populate('class', 'className section')
-      .populate('subject', 'subjectName')
-      .sort({ dueDate: -1 });
+    let assignments = [];
+    if (mongoose.connection.readyState === 1) {
+      assignments = await Assignment.find(filter)
+        .populate('class', 'className section')
+        .populate('subject', 'subjectName')
+        .sort({ dueDate: -1 });
+    }
+
+    const fallbackAssignments = queryFallbackAssignments({
+      teacherId,
+      classId,
+      subjectId
+    });
+
+    const mergedAssignments = mergeById(
+      assignments.map(serializeAssignmentRecord),
+      fallbackAssignments
+    );
 
     res.json({
       success: true,
-      data: assignments
+      data: sortByCreatedAtDesc(mergedAssignments)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -294,23 +622,89 @@ export const getAssignments = async (req, res) => {
 export const createAssignment = async (req, res) => {
   try {
     const { title, description, subject, class: classId, dueDate, totalMarks, assignmentType } = req.body;
+    const classContext = await resolveClassContextById(classId);
+    const subjectContext = await resolveSubjectPayload(subject);
+
+    if (!classContext) {
+      return res.status(400).json({ error: 'Valid class is required.' });
+    }
+
+    const createdAt = new Date();
+    const uploadedByTeacherId = getTeacherIdentifier(req);
+    const fileMeta = buildFileMeta(req.file);
+    const fallbackRecord = {
+      _id: `FB_ASG_${Date.now()}`,
+      title,
+      description,
+      subject: subjectContext,
+      class: normalizeClassPayload(classContext),
+      standard: classContext.standard,
+      division: classContext.division,
+      teacher: req.user._id,
+      uploadedByTeacherId,
+      dueDate,
+      totalMarks,
+      assignmentType,
+      attachment: fileMeta || undefined,
+      attachments: fileMeta ? [fileMeta] : [],
+      status: 'active',
+      createdAt: createdAt.toISOString(),
+      updatedAt: createdAt.toISOString(),
+      fallbackMode: true
+    };
 
     const assignment = new Assignment({
       title,
       description,
       subject,
-      class: classId,
+      class: classContext.classData._id,
+      standard: classContext.standard,
+      division: classContext.division,
       teacher: req.user._id,
+      uploadedByTeacherId,
       dueDate,
       totalMarks,
-      assignmentType
+      assignmentType,
+      attachment: fileMeta || undefined,
+      attachments: fileMeta ? [fileMeta] : []
     });
 
-    await assignment.save();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await assignment.save();
+        await assignment.populate([
+          { path: 'class', select: 'className section' },
+          { path: 'subject', select: 'subjectName' }
+        ]);
+        const savedRecord = serializeAssignmentRecord(assignment);
+        persistFallbackAssignment(savedRecord);
+
+        return res.status(201).json({
+          success: true,
+          data: savedRecord
+        });
+      } catch (saveError) {
+        const message = String(saveError?.message || '').toLowerCase();
+        const isConnectivityIssue =
+          mongoose.connection.readyState !== 1 ||
+          message.includes('buffering timed out') ||
+          message.includes('econnrefused') ||
+          message.includes('server selection') ||
+          message.includes('topology') ||
+          message.includes('mongo');
+
+        if (!isConnectivityIssue) {
+          throw saveError;
+        }
+      }
+    }
+
+    persistFallbackAssignment(fallbackRecord);
 
     res.status(201).json({
       success: true,
-      data: assignment
+      data: fallbackRecord,
+      message: 'Stored in fallback mode because MongoDB is not connected.'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -397,37 +791,32 @@ export const getStudyMaterials = async (req, res) => {
     const teacherId = req.user._id;
     const { classId, subjectId } = req.query;
 
-    if (mongoose.connection.readyState !== 1) {
-      let materials = fallbackStudyMaterials.filter(
-        (material) => String(material.teacher) === String(teacherId)
-      );
-
-      if (classId) {
-        materials = materials.filter((material) => String(material.class?._id || '') === String(classId));
-      }
-
-      if (subjectId) {
-        materials = materials.filter((material) => String(material.subject?._id || '') === String(subjectId));
-      }
-
-      return res.json({
-        success: true,
-        data: materials.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      });
-    }
-
-    let filter = { teacher: teacherId };
+    const filter = { teacher: teacherId };
     if (classId) filter.class = classId;
     if (subjectId) filter.subject = subjectId;
 
-    const materials = await StudyMaterial.find(filter)
-      .populate('class', 'className section')
-      .populate('subject', 'subjectName')
-      .sort({ createdAt: -1 });
+    let materials = [];
+    if (mongoose.connection.readyState === 1) {
+      materials = await StudyMaterial.find(filter)
+        .populate('class', 'className section')
+        .populate('subject', 'subjectName')
+        .sort({ createdAt: -1 });
+    }
+
+    const fallbackMaterials = queryFallbackStudyMaterials({
+      teacherId,
+      classId,
+      subjectId
+    });
+
+    const mergedMaterials = mergeById(
+      materials.map(serializeStudyMaterialRecord),
+      fallbackMaterials
+    );
 
     res.json({
       success: true,
-      data: materials
+      data: sortByCreatedAtDesc(mergedMaterials)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -438,6 +827,8 @@ export const getStudyMaterials = async (req, res) => {
 export const uploadStudyMaterial = async (req, res) => {
   try {
     const { title, description, subject, class: classId, materialType, url } = req.body;
+    const classContext = await resolveClassContextById(classId);
+    const subjectContext = await resolveSubjectPayload(subject);
 
     if (materialType === 'link' && !url) {
       return res.status(400).json({ error: 'URL is required for link type material' });
@@ -447,38 +838,41 @@ export const uploadStudyMaterial = async (req, res) => {
       return res.status(400).json({ error: 'File is required for this material type' });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      const fallbackMaterial = {
-        _id: `FB_MAT_${Date.now()}`,
-        title,
-        description,
-        teacher: req.user._id,
-        materialType,
-        class: {
-          _id: classId,
-          className: 'N/A',
-          section: 'N/A'
-        },
-        subject: {
-          _id: subject,
-          subjectName: 'N/A'
-        },
-        url: materialType === 'link' ? url : '',
-        file: req.file
-          ? {
-            filename: req.file.filename,
-            path: req.file.path,
-            originalName: req.file.originalname,
-            size: req.file.size
-          }
-          : undefined,
-        downloadCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        fallbackMode: true
-      };
+    if (!classContext) {
+      return res.status(400).json({ error: 'Valid class is required.' });
+    }
 
-      fallbackStudyMaterials.unshift(fallbackMaterial);
+    const createdAt = new Date();
+    const uploadedByTeacherId = getTeacherIdentifier(req);
+    const fallbackMaterial = {
+      _id: `FB_MAT_${Date.now()}`,
+      title,
+      description,
+      teacher: req.user._id,
+      uploadedByTeacherId,
+      materialType,
+      class: normalizeClassPayload(classContext),
+      standard: classContext.standard,
+      division: classContext.division,
+      subject: subjectContext,
+      url: materialType === 'link' ? url : '',
+      file: req.file
+        ? {
+          filename: req.file.filename,
+          path: req.file.path,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        }
+        : undefined,
+      downloadCount: 0,
+      createdAt: createdAt.toISOString(),
+      updatedAt: createdAt.toISOString(),
+      fallbackMode: true
+    };
+
+    if (mongoose.connection.readyState !== 1) {
+      persistFallbackStudyMaterial(fallbackMaterial);
 
       return res.status(201).json({
         success: true,
@@ -491,26 +885,175 @@ export const uploadStudyMaterial = async (req, res) => {
       title,
       description,
       subject,
-      class: classId,
+      class: classContext.classData._id,
+      standard: classContext.standard,
+      division: classContext.division,
       teacher: req.user._id,
+      uploadedByTeacherId,
       materialType,
       url: materialType === 'link' ? url : undefined,
       file: {
         filename: req.file?.filename,
         path: req.file?.path,
         originalName: req.file?.originalname,
-        size: req.file?.size
+        size: req.file?.size,
+        mimetype: req.file?.mimetype
       }
     });
 
-    await material.save();
+    try {
+      await material.save();
+      await material.populate([
+        { path: 'class', select: 'className section' },
+        { path: 'subject', select: 'subjectName' }
+      ]);
+      const savedRecord = serializeStudyMaterialRecord(material);
+      persistFallbackStudyMaterial(savedRecord);
 
-    res.status(201).json({
-      success: true,
-      data: material
-    });
+      return res.status(201).json({
+        success: true,
+        data: savedRecord
+      });
+    } catch (saveError) {
+      const message = String(saveError?.message || '').toLowerCase();
+      const isConnectivityIssue =
+        mongoose.connection.readyState !== 1 ||
+        message.includes('buffering timed out') ||
+        message.includes('econnrefused') ||
+        message.includes('server selection') ||
+        message.includes('topology') ||
+        message.includes('mongo');
+
+      if (!isConnectivityIssue) {
+        throw saveError;
+      }
+
+      persistFallbackStudyMaterial(fallbackMaterial);
+
+      return res.status(201).json({
+        success: true,
+        data: fallbackMaterial,
+        message: 'Stored in fallback mode because MongoDB is not connected.'
+      });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const getParentChildAssignments = async (req, res) => {
+  try {
+    const studentId = String(req.query.studentId || req.body?.studentId || '').trim();
+    const accessKey = String(req.query.accessKey || req.body?.accessKey || '').trim();
+    const aliases = String(req.query.aliases || req.body?.aliases || '').trim();
+    if (!studentId || !accessKey) {
+      return res.status(400).json({ success: false, error: 'Student ID and access key are required.' });
+    }
+
+    const childContext = await resolveParentChildContext(studentId, accessKey, aliases);
+    if (childContext.error) {
+      return res.status(401).json({ success: false, error: childContext.error });
+    }
+
+    const classDoc = mongoose.connection.readyState === 1
+      ? await Class.findOne({
+        className: childContext.standard,
+        section: childContext.division
+      }).select('_id className section')
+      : null;
+
+    const query = {
+      $or: [
+        { standard: childContext.standard, division: childContext.division },
+      ],
+    };
+
+    if (classDoc?._id) {
+      query.$or.push({ class: classDoc._id });
+    }
+
+    let assignments = [];
+    if (mongoose.connection.readyState === 1) {
+      assignments = await Assignment.find(query)
+        .populate('class', 'className section')
+        .populate('subject', 'subjectName')
+        .sort({ createdAt: -1, dueDate: -1 });
+    }
+
+    const fallbackAssignments = queryFallbackAssignments();
+    const classAssignments = mergeById(
+      assignments.map(serializeAssignmentRecord),
+      fallbackAssignments
+    ).filter((record) => matchesChildClass(record, childContext));
+
+    return res.json({
+      success: true,
+      data: sortByCreatedAtDesc(classAssignments),
+      child: {
+        standard: childContext.standard,
+        division: childContext.division,
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const getParentChildStudyMaterials = async (req, res) => {
+  try {
+    const studentId = String(req.query.studentId || req.body?.studentId || '').trim();
+    const accessKey = String(req.query.accessKey || req.body?.accessKey || '').trim();
+    const aliases = String(req.query.aliases || req.body?.aliases || '').trim();
+    if (!studentId || !accessKey) {
+      return res.status(400).json({ success: false, error: 'Student ID and access key are required.' });
+    }
+
+    const childContext = await resolveParentChildContext(studentId, accessKey, aliases);
+    if (childContext.error) {
+      return res.status(401).json({ success: false, error: childContext.error });
+    }
+
+    const classDoc = mongoose.connection.readyState === 1
+      ? await Class.findOne({
+        className: childContext.standard,
+        section: childContext.division
+      }).select('_id className section')
+      : null;
+
+    const query = {
+      $or: [
+        { standard: childContext.standard, division: childContext.division },
+      ],
+    };
+
+    if (classDoc?._id) {
+      query.$or.push({ class: classDoc._id });
+    }
+
+    let studyMaterials = [];
+    if (mongoose.connection.readyState === 1) {
+      studyMaterials = await StudyMaterial.find(query)
+        .populate('class', 'className section')
+        .populate('subject', 'subjectName')
+        .sort({ createdAt: -1 });
+    }
+
+    const fallbackMaterials = queryFallbackStudyMaterials();
+    const classMaterials = mergeById(
+      studyMaterials.map(serializeStudyMaterialRecord),
+      fallbackMaterials
+    ).filter((record) => matchesChildClass(record, childContext));
+
+    return res.json({
+      success: true,
+      data: sortByCreatedAtDesc(classMaterials),
+      child: {
+        standard: childContext.standard,
+        division: childContext.division,
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -749,10 +1292,12 @@ export const getPerformanceAnalytics = async (req, res) => {
     const classFilter = {};
     if (teacher.assignedClass && teacher.division) {
       // Find the actual Class model ID for filtering
-      const assignedClassObj = await Class.findOne({
-        className: teacher.assignedClass,
-        section: teacher.division
-      });
+      const assignedClassObj = mongoose.connection.readyState === 1
+        ? await Class.findOne({
+          className: teacher.assignedClass,
+          section: teacher.division
+        })
+        : null;
       if (assignedClassObj) {
         classFilter.class = assignedClassObj._id;
       }

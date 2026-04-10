@@ -1,6 +1,6 @@
-/**
+﻿/**
  * parent/ParentNav.tsx
- * ─────────────────────────────────────────────────────
+ * Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
  * Premium Parent Sidebar + Mobile Bottom Nav
  *
  * Sidebar: Glass blur, soft vertical gradient, active pastel glow,
@@ -12,11 +12,11 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-/* ── Screen type ── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Screen type Ã¢â€â‚¬Ã¢â€â‚¬ */
 
-export type ParentScreen = 'overview' | 'progress' | 'attendance' | 'ai-buddy' | 'books' | 'garden' | 'colors' | 'messages' | 'settings';
+export type ParentScreen = 'overview' | 'progress' | 'attendance' | 'ai-buddy' | 'books' | 'garden' | 'colors' | 'messages' | 'leave' | 'settings' | 'assignments' | 'study-materials';
 
-/* ── Nav Items ── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Nav Items Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 interface NavItem {
   key: ParentScreen;
@@ -30,7 +30,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'overview',    label: 'Overview',       sublabel: 'Dashboard',     icon: '📊', gradient: 'from-indigo-400 to-blue-500',    glowColor: 'rgba(99,102,241,0.20)',   accentColor: '#6366f1', iconBg: 'rgba(99,102,241,0.10)' },
+  { key: 'overview',    label: 'Overview',       sublabel: 'Dashboard',     icon: '🏠', gradient: 'from-indigo-400 to-blue-500',    glowColor: 'rgba(99,102,241,0.20)',   accentColor: '#6366f1', iconBg: 'rgba(99,102,241,0.10)' },
   { key: 'progress',    label: 'Progress',       sublabel: 'Academics',     icon: '📈', gradient: 'from-purple-400 to-indigo-500',  glowColor: 'rgba(168,85,247,0.20)',   accentColor: '#a855f7', iconBg: 'rgba(168,85,247,0.10)' },
   { key: 'attendance',  label: 'Attendance',     sublabel: 'Tracking',      icon: '📅', gradient: 'from-cyan-400 to-blue-500',     glowColor: 'rgba(6,182,212,0.20)',    accentColor: '#06b6d4', iconBg: 'rgba(6,182,212,0.10)' },
   { key: 'ai-buddy',   label: 'AI Insights',    sublabel: 'Smart Help',    icon: '🧠', gradient: 'from-amber-400 to-orange-500',  glowColor: 'rgba(245,158,11,0.20)',   accentColor: '#f59e0b', iconBg: 'rgba(245,158,11,0.10)' },
@@ -38,13 +38,41 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'garden',      label: 'Garden Growth',  sublabel: 'Responsibility', icon: '🌳', gradient: 'from-green-400 to-emerald-600', glowColor: 'rgba(34,197,94,0.20)',    accentColor: '#22c55e', iconBg: 'rgba(34,197,94,0.10)' },
   { key: 'colors',      label: 'Color Skills',   sublabel: 'Creative',      icon: '🎨', gradient: 'from-pink-400 to-orange-500',   glowColor: 'rgba(244,114,182,0.20)',  accentColor: '#f472b6', iconBg: 'rgba(244,114,182,0.10)' },
   { key: 'messages',    label: 'Messages',       sublabel: 'Parent Inbox',  icon: '💬', gradient: 'from-indigo-400 to-cyan-500',   glowColor: 'rgba(59,130,246,0.18)',   accentColor: '#3b82f6', iconBg: 'rgba(59,130,246,0.10)' },
+  { key: 'leave',       label: 'Leave',          sublabel: 'Applications',  icon: '📝', gradient: 'from-orange-400 to-rose-500',   glowColor: 'rgba(249,115,22,0.18)',   accentColor: '#f97316', iconBg: 'rgba(249,115,22,0.10)' },
   { key: 'settings',    label: 'Settings',       sublabel: 'Preferences',   icon: '⚙️', gradient: 'from-slate-400 to-gray-500',    glowColor: 'rgba(100,116,139,0.15)',  accentColor: '#64748b', iconBg: 'rgba(100,116,139,0.08)' },
+  { key: 'assignments',  label: 'Assignments',    sublabel: 'Class Work',    icon: '📝', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(168,85,247,0.20)',   accentColor: '#7c3aed', iconBg: 'rgba(168,85,247,0.10)' },
+  { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: '📁', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16,185,129,0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.10)' },
 ];
 
 /* Divider after these indices (0-based): After Attendance (idx 2) and after Books (idx 4) */
+function getNavIcon(key: ParentScreen) {
+  switch (key) {
+    case 'overview': return '\u{1F3E0}';
+    case 'progress': return '\u{1F4C8}';
+    case 'attendance': return '\u{1F4C5}';
+    case 'ai-buddy': return '\u{1F9E0}';
+    case 'books': return '\u{1F4DA}';
+    case 'garden': return '\u{1F333}';
+    case 'colors': return '\u{1F3A8}';
+    case 'messages': return '\u{1F4AC}';
+    case 'leave': return '\u{1F4DD}';
+    case 'settings': return '\u{2699}\u{FE0F}';
+    case 'assignments': return '\u{1F4DD}';
+    case 'study-materials': return '\u{1F4C1}';
+    case 'games': return '\u{1F3AE}';
+    case 'report': return '\u{1F4C4}';
+    case 'brain-boost': return '\u{1F331}';
+    case 'puzzle-zone': return '\u{1FA9C}';
+    case 'fillblanks': return '\u{1F9E9}';
+    case 'space-war': return '\u{1F680}';
+    case 'eco-system': return '\u{1F30D}';
+    default: return '\u2728';
+  }
+}
+
 const DIVIDER_AFTER = new Set([2, 4]);
 
-/* ── Sidebar Item (desktop) ─────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Sidebar Item (desktop) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 const SidebarItem: React.FC<{
   item: NavItem;
@@ -94,7 +122,7 @@ const SidebarItem: React.FC<{
         animate={isActive ? { scale: [1, 1.02, 1] } : {}}
         transition={isActive ? { duration: 3, repeat: Infinity, ease: 'easeInOut' } : {}}
       >
-        <span style={{ fontSize: isActive ? 18 : 16 }}>{item.icon}</span>
+        <span style={{ fontSize: isActive ? 18 : 16 }}>{getNavIcon(item.key)}</span>
       </motion.div>
 
       {/* Label + sublabel */}
@@ -119,7 +147,7 @@ const SidebarItem: React.FC<{
 });
 SidebarItem.displayName = 'ParentSidebarItem';
 
-/* ── Bottom Tab (mobile) ────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Bottom Tab (mobile) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 const BottomTab: React.FC<{
   item: NavItem;
@@ -146,7 +174,7 @@ const BottomTab: React.FC<{
         animate={isActive ? { scale: 1.18, y: -1 } : { scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       >
-        {item.icon}
+        {getNavIcon(item.key)}
       </motion.span>
       <span style={{
         fontSize: 10, fontWeight: isActive ? 700 : 600,
@@ -160,7 +188,7 @@ const BottomTab: React.FC<{
 });
 BottomTab.displayName = 'ParentBottomTab';
 
-/* ── Main ParentNav ─────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Main ParentNav Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 interface Props {
   active: ParentScreen;
@@ -168,7 +196,7 @@ interface Props {
 }
 
 export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
-  /* ── Real-time clock ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Real-time clock Ã¢â€â‚¬Ã¢â€â‚¬ */
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -177,7 +205,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
 
   return (
   <>
-    {/* ── Desktop Sidebar ── */}
+    {/* Ã¢â€â‚¬Ã¢â€â‚¬ Desktop Sidebar Ã¢â€â‚¬Ã¢â€â‚¬ */}
     <motion.aside
       className="hidden lg:flex fixed left-0 w-[240px] flex-col pb-4 px-3 z-30 overflow-hidden"
       style={{
@@ -201,21 +229,21 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
             animate={{ rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            🛡️
+            {"\u{1F6E1}\uFE0F"}
           </motion.span>
           <div>
             <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#3A3F9F' }}>
               Guardian Console
             </h2>
             <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#7A86C2', marginTop: 3, fontFamily: 'Nunito, sans-serif', letterSpacing: '0.3px' }}>
-              Std 1 · Analytics View
+              Std 1 - Analytics View
             </p>
           </div>
         </div>
       </div>
 
       {/* Nav Items with dividers */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+      <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 2, scrollbarWidth: 'thin' }}>
         {NAV_ITEMS.map((item, idx) => (
           <React.Fragment key={item.key}>
             <SidebarItem
@@ -260,7 +288,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
           background: 'rgba(99,102,241,0.05)', borderRadius: 14,
           padding: '10px 14px', marginTop: 8,
         }}>
-          <span style={{ fontSize: 14 }}>🕐</span>
+          <span style={{ fontSize: 14 }}>{"\u{1F550}"}</span>
           <div>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#3A3F9F', margin: 0 }}>Current Time</p>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
@@ -271,7 +299,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
       </div>
     </motion.aside>
 
-    {/* ── Mobile Bottom Bar ── */}
+    {/* Ã¢â€â‚¬Ã¢â€â‚¬ Mobile Bottom Bar Ã¢â€â‚¬Ã¢â€â‚¬ */}
     <motion.nav
       className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
       style={{
@@ -299,3 +327,10 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
 });
 
 ParentNav.displayName = 'ParentNav';
+
+
+
+
+
+
+

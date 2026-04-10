@@ -2116,7 +2116,7 @@ def student_dashboard_compat(uid: str):
 
 @app.route('/parent-portal')
 def parent_portal_redirect():
-    return redirect(url_for('index'))
+    return redirect(url_for('student_portal', grade=4) + '?role=parent')
 
 
 def _serve_admin_portal_index():
@@ -2246,18 +2246,18 @@ def student_portal(grade: int, path: str = ''):
         f'STD{grade}',
     )
 
-    if session.get('role') != 'student':
-        if grade in STUDENT_LOGIN_PAGE_GRADES:
-            return redirect(url_for('student_login_grade', grade=grade))
-        return redirect(url_for('student_login'))
+    wants_parent_portal = grade == 4 and (
+        session.get('role') == 'parent'
+        or (request.args.get('role') or '').lower() == 'parent'
+    )
 
-    if session.get('role') != 'student':
+    if session.get('role') != 'student' and not wants_parent_portal:
         if grade in STUDENT_LOGIN_PAGE_GRADES:
             return redirect(url_for('student_login_grade', grade=grade))
         return redirect(url_for('student_login'))
 
     session_grade = session.get('student_grade')
-    if session_grade and int(session_grade) != grade:
+    if session_grade and int(session_grade) != grade and not wants_parent_portal:
         session.clear()
         return redirect(url_for('student_login_grade', grade=grade))
 
@@ -2348,7 +2348,7 @@ def student_portal(grade: int, path: str = ''):
         std4_payload = {
             'isAuthenticated': True,
             'user': {
-                'role': 'student',
+                'role': 'parent' if wants_parent_portal else 'student',
                 'grade': grade,
                 'name': student_profile_payload.get('studentName') if student_profile_payload else student_id,
                 'username': student_id,
@@ -2426,7 +2426,7 @@ def student_dashboard_portal(path: str = ''):
 @app.route('/assets/<path:filename>')
 def shared_assets(filename):
     # Student Portal (Std 1-7)
-    if session.get('role') == 'student' and session.get('student_app') == 'portal':
+    if session.get('role') in ('student', 'parent') and session.get('student_app') == 'portal':
         try:
             grade = int(session.get('student_grade') or 0)
         except Exception:

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../config/db');
+const { isSupportedStandard, parseStandard } = require('../config/standards');
 
 const TEACHER_MASTER_FILE = path.join(__dirname, '..', 'teacher_master_data.json');
 let watchStarted = false;
@@ -16,6 +17,30 @@ function normalizeNullableText(value) {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
   return text === '' ? null : text;
+}
+
+function normalizeTeacherClassAssignment(input = {}) {
+  const rawClass = String(input.class || '').trim();
+  const rawDivision = String(input.division || '').trim().toUpperCase();
+
+  if (!rawClass && !rawDivision) {
+    return { classValue: null, divisionValue: null, key: null };
+  }
+
+  const classNumber = parseStandard(rawClass);
+  if (!Number.isInteger(classNumber) || !isSupportedStandard(classNumber)) {
+    return { error: 'Teacher class assignment must be between 1 and 6.' };
+  }
+
+  const suffixDivision = String(rawClass).match(/([A-Za-z])$/)?.[1]?.toUpperCase() || '';
+  const divisionValue = rawDivision || suffixDivision || null;
+  const classValue = String(classNumber);
+
+  return {
+    classValue,
+    divisionValue,
+    key: divisionValue ? `${classValue}-${divisionValue}` : classValue,
+  };
 }
 
 function mapTeacherRow(row) {
@@ -79,6 +104,69 @@ function exportTeachersToFile() {
 
   writeTeacherMasterFile(teachers);
   return teachers.length;
+}
+
+function cleanupTeacherClassAssignments() {
+  const activeRows = db.prepare(`
+    SELECT id, name, class, division, status, created_at
+    FROM teachers
+    WHERE status = 'Active'
+      AND TRIM(COALESCE(class, '')) != ''
+    ORDER BY COALESCE(datetime(created_at), datetime('1970-01-01 00:00:00')), id
+  `).all();
+
+  const inactiveRows = db.prepare(`
+    SELECT id
+    FROM teachers
+    WHERE status != 'Active'
+      AND TRIM(COALESCE(class, '')) != ''
+  `).all();
+
+  const clearTeacherClass = db.prepare('UPDATE teachers SET class = NULL, division = NULL WHERE id = ?');
+  const normalizeTeacherClass = db.prepare('UPDATE teachers SET class = ?, division = ? WHERE id = ?');
+  const resetMappings = db.prepare('DELETE FROM class_teacher_mapping');
+  const upsertMapping = db.prepare(`
+    INSERT INTO class_teacher_mapping (class, section, teacher_id, teacher_name)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(class, section) DO UPDATE SET
+      teacher_id = excluded.teacher_id,
+      teacher_name = excluded.teacher_name
+  `);
+
+  const tx = db.transaction(() => {
+    resetMappings.run();
+
+    const seen = new Set();
+    for (const row of activeRows) {
+      const normalized = normalizeTeacherClassAssignment(row);
+      if (normalized.error || !normalized.key || !normalized.classValue) {
+        clearTeacherClass.run(row.id);
+        continue;
+      }
+
+      if (seen.has(normalized.key)) {
+        clearTeacherClass.run(row.id);
+        continue;
+      }
+
+      seen.add(normalized.key);
+      normalizeTeacherClass.run(normalized.classValue, normalized.divisionValue, row.id);
+
+      if (normalized.divisionValue) {
+        upsertMapping.run(Number(normalized.classValue), normalized.divisionValue, row.id, row.name || '');
+      }
+    }
+
+    inactiveRows.forEach((row) => {
+      clearTeacherClass.run(row.id);
+    });
+  });
+
+  tx();
+  return {
+    activeAssignments: activeRows.length,
+    cleanedInactiveAssignments: inactiveRows.length,
+  };
 }
 
 function upsertTeacherRow(row) {
@@ -176,6 +264,7 @@ function importTeachersFromFile() {
     normalized.forEach(upsertTeacherRow);
   });
   tx();
+  cleanupTeacherClassAssignments();
   return normalized.length;
 }
 
@@ -213,8 +302,10 @@ function startTeacherMasterWatch() {
 
 module.exports = {
   TEACHER_MASTER_FILE,
+  cleanupTeacherClassAssignments,
   exportTeachersToFile,
   importTeachersFromFile,
+  normalizeTeacherClassAssignment,
   syncTeacherMasterDbFromFile,
   syncTeacherMasterFileFromDb,
   startTeacherMasterWatch,

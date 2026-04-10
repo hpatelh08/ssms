@@ -18,6 +18,9 @@ import { ParentNav, type ParentScreen } from './ParentNav';
 import { OverviewPage } from './pages/OverviewPage';
 import { ProgressPage } from './pages/ProgressPage';
 import { AttendancePage } from './pages/AttendancePage';
+import { ExamsMarksPage } from './pages/ExamsMarksPage';
+import { MessagesPage } from './pages/MessagesPage';
+import LeavePage from './pages/LeavePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NCERTAssistantPage } from './pages/NCERTAssistantPage';
 import { AiBuddyLearningZone } from './pages/AiBuddyLearningZone';
@@ -26,6 +29,8 @@ import { AiWeeklyReportEngine } from './pages/AiWeeklyReportEngine';
 import { LessonVideoPlayer } from './pages/LessonVideoPlayer';
 import { VideoListingPage } from './pages/VideoListingPage';
 import { BooksPage } from './pages/BooksPage';
+import { AssignmentsPage } from './pages/AssignmentsPage';
+import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
 import { FloatingWorld } from '../components/background/FloatingWorld';
 import { pageTransition } from '../styles/theme';
 import { type BookEntry } from '../data/bookConfig';
@@ -99,6 +104,9 @@ const ParentShell: React.FC = () => {
       case 'overview':    return <OverviewPage />;
       case 'progress':    return <ProgressPage />;
       case 'attendance':  return <AttendancePage />;
+      case 'exams':       return <ExamsMarksPage />;
+      case 'messages':    return <MessagesPage />;
+      case 'leave':       return <LeavePage />;
       case 'ai-buddy':
         if (aiSubScreen === 'video' && videoState) return <LessonVideoPlayer video={videoState.video} subject={videoState.subject} onBack={() => setAiSubScreen('videos')} onPlayVideo={handlePlayVideo} onAskAI={handleAskAIBuddy} />;
         if (aiSubScreen === 'videos') return <VideoListingPage onBack={() => setAiSubScreen('hub')} onPlayVideo={handlePlayVideo} />;
@@ -112,6 +120,8 @@ const ParentShell: React.FC = () => {
           onOpenWeeklyReport={() => setAiSubScreen('weekly-report')}
         />;
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
+      case 'assignments': return <AssignmentsPage />;
+      case 'study-materials': return <StudyMaterialsPage />;
       case 'settings':    return <SettingsPage />;
       default:            return null;
     }

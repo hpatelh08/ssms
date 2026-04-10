@@ -1,0 +1,136 @@
+[
+  {
+    "id": "7b53a843-5ae2-45dd-8f93-e03baf3b0a2d",
+    "messageId": "b789dabc-36e2-43a2-82db-6e758dcbd534",
+    "parentId": "0001",
+    "parentAliases": [
+      "0001",
+      "STU20240001",
+      "GR-001",
+      "ADM-2024-001"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-08T13:58:18.412Z",
+    "createdAt": "2026-04-08T13:58:18.412Z",
+    "updatedAt": "2026-04-08T13:58:18.412Z"
+  },
+  {
+    "id": "5f67cbee-420e-4261-8221-cae99d65d1bb",
+    "messageId": "55120b8a-a0ed-44ca-9447-36eff69f3383",
+    "parentId": "0001",
+    "parentAliases": [
+      "0001",
+      "STU20240001",
+      "GR-001",
+      "ADM-2024-001"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-08T13:58:17.357Z",
+    "createdAt": "2026-04-08T13:58:17.357Z",
+    "updatedAt": "2026-04-08T13:58:17.357Z"
+  },
+  {
+    "id": "68daa38e-d78d-4897-8bda-283608b155f2",
+    "messageId": "caeba5ca-2396-48b0-95f0-34bad8328517",
+    "parentId": "0001",
+    "parentAliases": [
+      "0001",
+      "STU20240001",
+      "GR-001",
+      "ADM-2024-001"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-08T13:58:15.905Z",
+    "createdAt": "2026-04-08T13:58:15.905Z",
+    "updatedAt": "2026-04-08T13:58:15.905Z"
+  },
+  {
+    "id": "0432e853-5079-42db-b81c-cb69f340304c",
+    "messageId": "4cbd2e5c-eef8-4bad-87e8-25da0a35715a",
+    "parentId": "0316",
+    "parentAliases": [
+      "0316",
+      "STU20240361",
+      "GR-361",
+      "ADM-2024-361"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-05T16:31:03.194Z",
+    "createdAt": "2026-04-05T16:31:03.194Z",
+    "updatedAt": "2026-04-05T16:31:03.194Z"
+  },
+  {
+    "id": "1078df73-c4fe-47bb-a6ac-b37fb20f9cfd",
+    "messageId": "8eaba795-8ec4-4785-bff0-0dce449457a2",
+    "parentId": "0316",
+    "parentAliases": [
+      "0316",
+      "STU20240361",
+      "GR-361",
+      "ADM-2024-361"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-05T16:31:01.730Z",
+    "createdAt": "2026-04-05T16:31:01.730Z",
+    "updatedAt": "2026-04-05T16:31:01.730Z"
+  },
+  {
+    "id": "3ebf2f34-4635-4177-bb44-4fbf0e794985",
+    "messageId": "b98d8e6f-04c8-42b7-8cd6-25a5f4cf573b",
+    "parentId": "0316",
+    "parentAliases": [
+      "0316",
+      "STU20240361",
+      "GR-361",
+      "ADM-2024-361"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-05T16:31:00.961Z",
+    "createdAt": "2026-04-05T16:31:00.961Z",
+    "updatedAt": "2026-04-05T16:31:00.961Z"
+  },
+  {
+    "id": "de10d0a5-b1b1-4297-886a-ea166e174061",
+    "messageId": "b98d8e6f-04c8-42b7-8cd6-25a5f4cf573b",
+    "parentId": "STU20240362",
+    "parentAliases": [
+      "STU20240362",
+      "GR-362",
+      "ADM-2024-362"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-05T15:58:21.730Z",
+    "createdAt": "2026-04-05T15:58:21.730Z",
+    "updatedAt": "2026-04-05T15:58:21.730Z"
+  },
+  {
+    "id": "9790ded4-f3f9-4a43-b86f-085092591cdd",
+    "messageId": "29047583-e7d8-470f-a435-1e4a396c5f84",
+    "parentId": "STU20240361",
+    "parentAliases": [
+      "STU20240361",
+      "GR-3021",
+      "ADM-2024-211"
+    ],
+    "studentId": "",
+    "studentAliases": [],
+    "isRead": true,
+    "readAt": "2026-04-05T15:49:14.652Z",
+    "createdAt": "2026-04-05T15:49:14.652Z",
+    "updatedAt": "2026-04-05T15:49:14.652Z"
+  }
+]

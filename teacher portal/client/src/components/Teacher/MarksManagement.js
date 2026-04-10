@@ -41,6 +41,7 @@ const MarksManagement = ({ currentUser }) => {
   const [selectedExam, setSelectedExam] = useState('');
   const [students, setStudents] = useState([]);
   const [marks, setMarks] = useState({});
+  const [remarks, setRemarks] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
 
@@ -125,7 +126,40 @@ const MarksManagement = ({ currentUser }) => {
       });
     });
     setMarks(consolidatedMarks);
+
+    const remarksKey = `marks-remarks-${selectedClass}-${selectedExam}`;
+    try {
+      const savedRemarks = localStorage.getItem(remarksKey);
+      setRemarks(savedRemarks ? JSON.parse(savedRemarks) : {});
+    } catch {
+      setRemarks({});
+    }
     setLoading(false);
+  };
+
+  const saveRemarks = (nextRemarks) => {
+    const remarksKey = `marks-remarks-${selectedClass}-${selectedExam}`;
+    localStorage.setItem(remarksKey, JSON.stringify(nextRemarks));
+  };
+
+  const handleRemarkChange = (studentId, value) => {
+    setRemarks((prev) => {
+      const updated = {
+        ...prev,
+        [studentId]: value
+      };
+      saveRemarks(updated);
+      return updated;
+    });
+  };
+
+  const handleMarkAllGood = () => {
+    const updated = {};
+    students.forEach((student) => {
+      updated[student._id] = 'Good';
+    });
+    setRemarks(updated);
+    saveRemarks(updated);
   };
 
   const calculateTotal = (studentId) => {
@@ -199,6 +233,16 @@ const MarksManagement = ({ currentUser }) => {
           </p>
         </div>
         <div className="flex gap-3">
+          {selectedExam && (
+            <button
+              onClick={handleMarkAllGood}
+              className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-lg text-emerald-700 hover:bg-emerald-100 transition shadow-sm font-semibold"
+              title="Mark all remarks as Good"
+            >
+              <span className="text-base leading-none">🙂</span>
+              All Good
+            </button>
+          )}
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-50 transition shadow-sm"
@@ -253,6 +297,7 @@ const MarksManagement = ({ currentUser }) => {
                   <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50 border-l border-blue-100">Total</th>
                   <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50">Avg %</th>
                   <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50 rounded-tr-2xl">Grade</th>
+                  <th className="px-6 py-5 font-bold text-blue-500 text-[10px] uppercase tracking-widest text-center bg-blue-50/50">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -292,6 +337,15 @@ const MarksManagement = ({ currentUser }) => {
                           }`}>
                           {grade}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-center bg-blue-50/20">
+                        <input
+                          type="text"
+                          value={remarks[student._id] || ''}
+                          onChange={(e) => handleRemarkChange(student._id, e.target.value)}
+                          placeholder="Good"
+                          className="w-full max-w-[180px] p-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        />
                       </td>
                     </tr>
                   );

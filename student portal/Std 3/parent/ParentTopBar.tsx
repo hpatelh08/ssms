@@ -27,10 +27,10 @@ interface ParentNotificationItem {
 const PARENT_NOTIFICATIONS_STORAGE_KEY = 'parent-notifications';
 
 const DEFAULT_PARENT_NOTIFICATIONS: ParentNotificationItem[] = [
-  { id: 'default-1', icon: '✅', text: 'Daily streak maintained!', time: '2 min ago', bg: 'rgba(16,185,129,0.08)' },
-  { id: 'default-2', icon: '📊', text: 'Weekly report ready', time: '1 hour ago', bg: 'rgba(99,102,241,0.08)' },
-  { id: 'default-3', icon: '📚', text: 'Reading goal completed', time: 'Today', bg: 'rgba(34,197,94,0.08)' },
-  { id: 'default-4', icon: '📖', text: 'English Chapter 4 unlocked', time: 'Yesterday', bg: 'rgba(167,139,250,0.08)' },
+  { id: 'default-1', icon: '\u2705', text: 'Daily streak maintained!', time: '2 min ago', bg: 'rgba(16,185,129,0.08)' },
+  { id: 'default-2', icon: '\u{1F4CA}', text: 'Weekly report ready', time: '1 hour ago', bg: 'rgba(99,102,241,0.08)' },
+  { id: 'default-3', icon: '\u{1F4DA}', text: 'Reading goal completed', time: 'Today', bg: 'rgba(34,197,94,0.08)' },
+  { id: 'default-4', icon: '\u{1F4D6}', text: 'English Chapter 4 unlocked', time: 'Yesterday', bg: 'rgba(167,139,250,0.08)' },
 ];
 
 function loadParentNotifications(): ParentNotificationItem[] {
@@ -45,7 +45,7 @@ function loadParentNotifications(): ParentNotificationItem[] {
 
     return parsed.map((item, index) => ({
       id: String(item?.id || `parent-notif-${index}`),
-      icon: String(item?.icon || '🔔'),
+      icon: String(item?.icon || '\u{1F514}'),
       text: String(item?.text || 'Notification'),
       time: String(item?.time || 'Just now'),
       bg: String(item?.bg || 'rgba(99,102,241,0.08)'),
@@ -72,7 +72,7 @@ async function loadRemoteParentNotifications(classId: string): Promise<ParentNot
     const rows = Array.isArray(data?.data) ? data.data : [];
     return rows.map((item: any, index: number) => ({
       id: String(item?.id || `remote-parent-notif-${index}`),
-      icon: String(item?.icon || '🔔'),
+      icon: String(item?.icon || '\u{1F514}'),
       text: String(item?.text || 'Notification'),
       time: String(item?.time || 'Just now'),
       bg: String(item?.bg || 'rgba(99,102,241,0.08)'),
@@ -310,12 +310,12 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
                     width: 44,
                     height: 44,
                     borderRadius: 30,
-                    background: 'rgba(15,23,42,0.82)',
+                    background: 'linear-gradient(135deg, #312e81 0%, #7c3aed 100%)',
                     boxShadow: 'var(--shadow-soft)',
-                    border: '1px solid rgba(148,163,184,0.18)',
+                    border: '1px solid rgba(255,255,255,0.20)',
                     transition: 'all 0.25s ease',
                   }}
-                  whileHover={{ scale: 1.08, boxShadow: 'var(--shadow-glow-purple)' }}
+                  whileHover={{ scale: 1.08, boxShadow: '0 14px 28px rgba(124,58,237,0.28)' }}
                   whileTap={{ scale: 0.92 }}
                   aria-label="Notifications"
                 >
@@ -330,9 +330,9 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, var(--pastel-pink-deep), #ef6b6b)',
-                    boxShadow: '0 0 8px rgba(255,140,180,0.5)',
-                    border: '2px solid #0f172a',
+                    background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                    boxShadow: '0 0 8px rgba(168,85,247,0.5)',
+                    border: '2px solid rgba(255,255,255,0.78)',
                   }}
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}

@@ -10,8 +10,8 @@ interface Props {
 const TABS: { key: ChildScreen; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: '\u{1F3E0}' },
   { key: 'play', label: 'Games', icon: '\u{1F3AE}' },
-  { key: 'english', label: 'English', icon: '📘' },
-  { key: 'maths', label: 'Maths', icon: '📐' },
+  { key: 'english', label: 'English', icon: '\u{1F4D8}' },
+  { key: 'maths', label: 'Maths', icon: '\u{1F4D0}' },
 ];
 
 /** Individual tab â€” memo'd to avoid re-render when sibling tabs change. */

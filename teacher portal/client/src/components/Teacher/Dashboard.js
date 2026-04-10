@@ -119,12 +119,6 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     { id: 2, type: 'event', message: 'Annual Sports Day planning at 4 PM', icon: <Calendar className="w-5 h-5 text-blue-500" /> }
   ];
 
-  const lecturePlanBySubject = {
-    Mathematics: 'Teach linear equations with board examples and class practice worksheet.',
-    Physics: 'Cover force and motion concepts with one real-life demo activity.',
-    'Science Lab': 'Run acid-base indicator practical and record observations in lab notebook.'
-  };
-
   const teacherDisplayName = activeTeacher?.name || 'Teacher';
   const teacherIdentifier = activeTeacher?.teacherId || activeTeacher?.email || '';
   const teacherAssignedClass = activeTeacher?.assignedClass || '';
@@ -175,6 +169,8 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const [teacherNotifications, setTeacherNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [syllabusSyncTick, setSyllabusSyncTick] = useState(0);
+  const [teachingNotes, setTeachingNotes] = useState({});
+  const [selectedLectureKey, setSelectedLectureKey] = useState('');
 
   // Attendance summary from localStorage
   const [attendanceSummary, setAttendanceSummary] = useState({ present: 0, absent: 0, total: 0, uniformYes: 0, uniformNo: 0, idCardYes: 0, idCardNo: 0 });
@@ -473,6 +469,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   }, [teacherIdentifier]);
 
   const todayName = currentTime.toLocaleDateString('en-US', { weekday: 'long' });
+  const todayIso = currentTime.toLocaleDateString('en-CA');
   const todaysClasses = weeklyTimetable.find((daySchedule) => daySchedule.day === todayName)?.lectures || [];
 
   const todaysClassesWithStatus = todaysClasses.map((lecture) => {
@@ -485,12 +482,62 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
     };
   });
 
-  const todaysLecturePlan = todaysClassesWithStatus.map((lecture) => ({
-    ...lecture,
-    topic:
-      lecturePlanBySubject[lecture.subject] ||
-      'Revision plus doubt-solving session for key concepts.'
-  }));
+  const todaysLecturePlan = todaysClassesWithStatus;
+  const teachingNotesStorageKey = `teacher-teaching-notes-${teacherIdentifier || 'default'}`;
+
+  const buildLectureNoteKey = (lecture) => [
+    lecture.subject || '',
+    lecture.class || '',
+    lecture.time || '',
+    lecture.startTime || '',
+    lecture.room || ''
+  ].join('|');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(teachingNotesStorageKey);
+      const parsed = stored ? JSON.parse(stored) : {};
+      setTeachingNotes(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {});
+    } catch {
+      setTeachingNotes({});
+    }
+  }, [teachingNotesStorageKey]);
+
+  const handleTeachingNoteChange = (lecture, value) => {
+    const lectureKey = buildLectureNoteKey(lecture);
+    setTeachingNotes((prev) => {
+      const nextNotes = {
+        ...prev,
+        [todayIso]: {
+          ...(prev[todayIso] || {}),
+          [lectureKey]: value
+        }
+      };
+      localStorage.setItem(teachingNotesStorageKey, JSON.stringify(nextNotes));
+      return nextNotes;
+    });
+  };
+
+  const getTeachingNoteValue = (lecture) => {
+    const lectureKey = buildLectureNoteKey(lecture);
+    return teachingNotes?.[todayIso]?.[lectureKey] || '';
+  };
+
+  const isLectureSelected = (lecture) => selectedLectureKey === buildLectureNoteKey(lecture);
+
+  const getTeachingNotePreview = (lecture) => {
+    const note = getTeachingNoteValue(lecture).trim();
+    if (!note) return '';
+    return note.length > 140 ? `${note.slice(0, 140)}...` : note;
+  };
+
+  const handleAddTeachingNote = (lecture) => {
+    if (lecture) {
+      const note = getTeachingNoteValue(lecture).trim();
+      if (!note) return;
+    }
+    setSelectedLectureKey('');
+  };
 
   const pendingTasks = [...defaultPendingTasks, ...ptmPendingTasks];
   const highPriorityTaskCount = pendingTasks.filter((task) => task.priority === 'high').length;
@@ -1335,11 +1382,76 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
                       </p>
                     )}
                     {todaysLecturePlan.map((lecture) => (
-                      <div key={`plan-${lecture.id}`} className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3.5">
-                        <p className="text-sm font-bold text-indigo-700 mb-1">
-                          {lecture.subject} - Class {lecture.class}
-                        </p>
-                        <p className="text-sm text-gray-700 leading-relaxed">{lecture.topic}</p>
+                      <div
+                        key={`plan-${lecture.id}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedLectureKey(buildLectureNoteKey(lecture))}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedLectureKey(buildLectureNoteKey(lecture));
+                          }
+                        }}
+                        className={`rounded-lg border p-3.5 transition-colors cursor-pointer ${isLectureSelected(lecture)
+                          ? 'border-indigo-300 bg-indigo-50'
+                          : 'border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50'
+                          }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-sm font-bold text-indigo-700 mb-1">
+                              {lecture.subject} - Class {lecture.class}
+                            </p>
+                            <p className="text-xs text-gray-500">{lecture.time}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${getLectureStatusStyle(lecture.status)}`}>
+                              {lecture.status}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedLectureKey(buildLectureNoteKey(lecture));
+                              }}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-indigo-200 bg-white text-indigo-600 transition-colors hover:bg-indigo-600 hover:text-white"
+                              aria-label="Add teaching note"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        {isLectureSelected(lecture) ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={getTeachingNoteValue(lecture)}
+                              onChange={(event) => handleTeachingNoteChange(lecture, event.target.value)}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              placeholder="Write what you want to teach today..."
+                              rows={4}
+                              className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 resize-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleAddTeachingNote(lecture);
+                              }}
+                              className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        ) : (
+                          getTeachingNotePreview(lecture) ? (
+                            <p className="rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-gray-700">
+                              {getTeachingNotePreview(lecture)}
+                            </p>
+                          ) : null
+                        )}
                       </div>
                     ))}
                   </div>

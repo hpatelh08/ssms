@@ -20,6 +20,29 @@ const StudyMaterials = ({ currentUser }) => {
     file: null,
     externalLink: ''
   });
+  const buildTeacherAuthHeaders = () => {
+    const token = localStorage.getItem('token') || '';
+    const headers = {};
+    const teacherIdentity = String(
+      currentUser?.teacherId
+      || currentUser?.loginId
+      || currentUser?.email
+      || currentUser?.name
+      || currentUser?.classTeacherOf
+      || [currentUser?.assignedClass, currentUser?.division].filter(Boolean).join('-')
+      || ''
+    ).trim();
+
+    if (token.includes('.') && token.split('.').length === 3) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (teacherIdentity) headers['X-Teacher-Id'] = teacherIdentity;
+    if (currentUser?.email) headers['X-Teacher-Email'] = String(currentUser.email).trim();
+    if (currentUser?.name) headers['X-Teacher-Name'] = String(currentUser.name).trim();
+    if (currentUser?.assignedClass || currentUser?.classTeacherStd) headers['X-Teacher-Class'] = String(currentUser.assignedClass || currentUser.classTeacherStd || '').trim();
+    if (currentUser?.division || currentUser?.classTeacherDiv) headers['X-Teacher-Division'] = String(currentUser.division || currentUser.classTeacherDiv || '').trim();
+    return headers;
+  };
 
   const getLocalMaterialsKey = () => {
     const teacherKey = String(currentUser?.teacherId || currentUser?.email || currentUser?.name || 'default').trim();
@@ -30,6 +53,39 @@ const StudyMaterials = ({ currentUser }) => {
     localStorage.setItem(getLocalMaterialsKey(), JSON.stringify(items));
   };
 
+  const getTeacherPortalBaseUrl = () => `${window.location.protocol}//${window.location.hostname}:5002`.replace(/\/+$/, '');
+
+  const toTeacherFileUrl = (filePath) => {
+    const path = String(filePath || '').trim();
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const normalized = path.replace(/\\/g, '/');
+    const uploadsMatch = normalized.match(/\/uploads\/(.+)$/i);
+    if (uploadsMatch) {
+      return `${getTeacherPortalBaseUrl()}/uploads/${uploadsMatch[1]}`;
+    }
+
+    if (normalized.startsWith('/')) {
+      return `${getTeacherPortalBaseUrl()}${normalized}`;
+    }
+
+    return `${getTeacherPortalBaseUrl()}/${normalized}`;
+  };
+
+  const getMaterialResourceUrl = (material) => {
+    return toTeacherFileUrl(material?.file?.path || material?.fileUrl || material?.url || '');
+  };
+
+  const openMaterial = (material) => {
+    const resourceUrl = getMaterialResourceUrl(material);
+    if (!resourceUrl) {
+      alert('No file or link is available for this material');
+      return;
+    }
+    window.open(resourceUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const loadLocalMaterials = () => {
     try {
       const saved = localStorage.getItem(getLocalMaterialsKey());
@@ -38,6 +94,16 @@ const StudyMaterials = ({ currentUser }) => {
     } catch {
       return [];
     }
+  };
+
+  const mergeMaterials = (serverItems = [], localItems = []) => {
+    const map = new Map();
+    [...serverItems, ...localItems].forEach((item) => {
+      const id = String(item?._id || item?.id || '').trim();
+      if (!id) return;
+      map.set(id, item);
+    });
+    return Array.from(map.values());
   };
 
   const isAuthFailure = (error) => {
@@ -140,23 +206,22 @@ const StudyMaterials = ({ currentUser }) => {
   };
 
   const fetchStudyMaterials = async () => {
+    const localMaterials = loadLocalMaterials();
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get(apiUrl('/api/teacher/study-materials'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 10000
+        headers: buildTeacherAuthHeaders(),
+        timeout: 5000
       });
       const serverMaterials = Array.isArray(response.data.data) ? response.data.data : [];
-      const localMaterials = loadLocalMaterials();
-      setMaterials([...localMaterials, ...serverMaterials]);
+      const mergedMaterials = mergeMaterials(serverMaterials, localMaterials);
+      setMaterials(mergedMaterials);
+      saveLocalMaterials(mergedMaterials);
     } catch (error) {
       console.error('Error fetching study materials:', error);
       if (isAuthFailure(error)) {
         localStorage.removeItem('token');
       }
-      setMaterials(loadLocalMaterials());
+      setMaterials(localMaterials);
     }
   };
 
@@ -188,8 +253,6 @@ const StudyMaterials = ({ currentUser }) => {
 
     try {
       setUploading(true);
-      const token = localStorage.getItem('token');
-
       const formDataToSend = new FormData();
       formDataToSend.append('title', formData.title);
       formDataToSend.append('description', formData.description);
@@ -205,7 +268,7 @@ const StudyMaterials = ({ currentUser }) => {
 
       await axios.post(apiUrl('/api/teacher/study-materials'), formDataToSend, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...buildTeacherAuthHeaders(),
           'Content-Type': 'multipart/form-data'
         }
       });
@@ -226,59 +289,7 @@ const StudyMaterials = ({ currentUser }) => {
       setUploading(false);
     } catch (error) {
       console.error('Error uploading study material:', error);
-      const selectedClass = classes.find((cls) => cls._id === formData.class);
-      const selectedSubject = subjects.find((subject) => subject._id === formData.subject);
-      const canUseLocalFallback = !error?.response || error?.response?.status >= 500 || isAuthFailure(error);
-
-      if (canUseLocalFallback) {
-        if (isAuthFailure(error)) {
-          localStorage.removeItem('token');
-        }
-        const localMaterial = {
-          _id: `LOCAL_MATERIAL_${Date.now()}`,
-          title: formData.title,
-          description: formData.description,
-          materialType: formData.materialType,
-          class: {
-            _id: selectedClass?._id || formData.class || '',
-            className: selectedClass?.className || 'N/A',
-            section: selectedClass?.section || 'N/A'
-          },
-          subject: {
-            _id: selectedSubject?._id || formData.subject || '',
-            subjectName: selectedSubject?.subjectName || 'N/A'
-          },
-          file: formData.file
-            ? {
-              originalName: formData.file.name,
-              size: formData.file.size
-            }
-            : undefined,
-          url: formData.materialType === 'link' ? formData.externalLink : '',
-          downloadCount: 0,
-          createdAt: new Date().toISOString(),
-          isLocalFallback: true
-        };
-
-        const updatedLocalMaterials = [localMaterial, ...loadLocalMaterials()];
-        saveLocalMaterials(updatedLocalMaterials);
-        setMaterials((prev) => [localMaterial, ...prev]);
-        setFormData({
-          title: '',
-          description: '',
-          subject: '',
-          class: '',
-          materialType: 'pdf',
-          file: null,
-          externalLink: ''
-        });
-        setShowForm(false);
-        setUploading(false);
-        return;
-      }
-
-      const message = error?.response?.data?.error || 'Failed to upload study material';
-      alert(message);
+      alert(error?.response?.data?.error || error?.message || 'Failed to upload study material');
       setUploading(false);
     }
   };
@@ -306,8 +317,20 @@ const StudyMaterials = ({ currentUser }) => {
   };
 
   const downloadFile = (filePath, fileName) => {
-    // In a real application, this would trigger file download
-    alert(`File would be downloaded: ${fileName}`);
+    const resourceUrl = toTeacherFileUrl(filePath);
+    if (!resourceUrl) {
+      alert('No file is available to download');
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = resourceUrl;
+    link.download = fileName || 'study-material';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -508,13 +531,22 @@ const StudyMaterials = ({ currentUser }) => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap justify-end gap-1">
                       <button
-                        onClick={() => downloadFile(material.file?.path, material.file?.originalName)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                        onClick={() => openMaterial(material)}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-100 transition-colors"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => downloadFile(material.file?.path || material.fileUrl || material.url, material.file?.originalName || material.title)}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-100 transition-colors"
                         title="Download"
                       >
                         <Download className="h-4 w-4" />
+                        Download
                       </button>
                       <button className="p-2 text-green-600 hover:bg-green-100 rounded-lg" title="Edit">
                         <Edit className="h-4 w-4" />

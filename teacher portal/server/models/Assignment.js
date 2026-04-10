@@ -9,6 +9,16 @@ const assignmentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  standard: {
+    type: String,
+    required: true
+  },
+  division: {
+    type: String,
+    required: true,
+    uppercase: true,
+    trim: true
+  },
   subject: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject',
@@ -24,14 +34,27 @@ const assignmentSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  uploadedByTeacherId: {
+    type: String,
+    required: true
+  },
   dueDate: {
     type: Date,
     required: true
   },
+  attachment: {
+    filename: String,
+    path: String,
+    originalName: String,
+    size: Number,
+    mimetype: String
+  },
   attachments: [{
     filename: String,
     path: String,
-    originalName: String
+    originalName: String,
+    size: Number,
+    mimetype: String
   }],
   totalMarks: {
     type: Number,

@@ -22,6 +22,13 @@ function normalizeSection(sectionRaw) {
   return ['A', 'B', 'C'].includes(section) ? section : null;
 }
 
+function normalizeClassStandard(classRaw) {
+  const match = String(classRaw || '').match(/\d+/);
+  if (!match) return '';
+  const value = String(parseInt(match[0], 10));
+  return isSupportedStandard(value) ? value : '';
+}
+
 // ─── Helper: check if date is a holiday ───
 function isHolidayDate(dateStr) {
   return !!db.prepare('SELECT id FROM holidays WHERE holiday_date = ?').get(dateStr);
@@ -58,6 +65,7 @@ router.get('/', (req, res) => {
 // ─── GET /api/attendance/people — get students or teachers for marking ───
 router.get('/people', (req, res) => {
   const { person_type = 'student', class: cls, section: sectionRaw } = req.query;
+  const standard = normalizeClassStandard(cls);
   const section = normalizeSection(sectionRaw);
 
   if (sectionRaw && !section) {
@@ -65,16 +73,20 @@ router.get('/people', (req, res) => {
   }
 
   if (person_type === 'student') {
-    if (cls && !isSupportedStandard(cls)) {
+      if (cls && !standard) {
       return res.json({ data: [], person_type: 'student' });
-    }
-    let q = `SELECT id, name, gr_number as roll, class, section, student_id FROM students WHERE status = 'Active' AND CAST(class AS INTEGER) BETWEEN ? AND ?`;
+      }
+    let q = `SELECT id, name, gr_number as roll, class, section, student_id FROM students WHERE LOWER(COALESCE(status, 'active')) = 'active' AND CAST(class AS INTEGER) BETWEEN ? AND ?`;
     const p = [MIN_STANDARD, MAX_STANDARD];
-    if (cls) { q += ' AND class = ?'; p.push(cls); }
-    if (section) { q += " AND UPPER(COALESCE(section, '')) = ?"; p.push(section); }
-    q += ' ORDER BY CAST(class AS INTEGER), UPPER(COALESCE(section, \'\')), name';
-    return res.json({ data: db.prepare(q).all(...p), person_type: 'student' });
-  }
+      if (standard) { q += ' AND class = ?'; p.push(standard); }
+      if (section) { q += " AND UPPER(COALESCE(section, '')) = ?"; p.push(section); }
+      q += ` ORDER BY
+        CAST(REPLACE(COALESCE(gr_number, ''), 'GR-', '') AS INTEGER),
+        CAST(class AS INTEGER),
+        UPPER(COALESCE(section, '')),
+        name`;
+      return res.json({ data: db.prepare(q).all(...p), person_type: 'student' });
+    }
   if (person_type === 'teacher') {
     return res.json({
       data: db.prepare(`
@@ -93,6 +105,7 @@ router.get('/people', (req, res) => {
 // ─── POST /api/attendance/bulk — save attendance (duplicate prevention + validation) ───
 router.post('/bulk', authorize('super_admin', 'admin', 'teacher'), (req, res) => {
   const { records, date, person_type, class: cls, section: sectionRaw } = req.body;
+  const standard = normalizeClassStandard(cls);
   const section = normalizeSection(sectionRaw);
 
   if (!records || !Array.isArray(records) || !records.length)
@@ -103,7 +116,7 @@ router.post('/bulk', authorize('super_admin', 'admin', 'teacher'), (req, res) =>
     return res.status(400).json({ error: 'Valid person_type (student/teacher) is required.' });
   if (person_type === 'student' && !String(cls || '').trim())
     return res.status(400).json({ error: 'Class is required when saving student attendance.' });
-  if (person_type === 'student' && !isSupportedStandard(cls))
+  if (person_type === 'student' && !standard)
     return res.status(400).json({ error: 'Only classes 1 to 6 are allowed for student attendance.' });
   if (person_type === 'student' && sectionRaw && !section)
     return res.status(400).json({ error: 'Section must be A, B, or C.' });
@@ -125,7 +138,7 @@ router.post('/bulk', authorize('super_admin', 'admin', 'teacher'), (req, res) =>
     return {
       person_id: pid,
       status,
-      class: person_type === 'student' ? String(cls || r?.class || '').trim() || null : null,
+      class: person_type === 'student' ? String(standard || r?.class || '').trim() || null : null,
       section: person_type === 'student' ? (section || normalizeSection(r?.section) || null) : null,
       subject: person_type === 'teacher' ? String(r?.subject || '').trim() || null : null,
     };
@@ -356,9 +369,11 @@ router.get('/export', (req, res) => {
   let rows;
   if (personType === 'student') {
     rows = db.prepare(`
-      SELECT a.person_id, a.date, a.status, a.class, s.name, s.gr_number as roll
-      FROM attendance a LEFT JOIN students s ON s.student_id = a.person_id OR CAST(s.id AS TEXT) = a.person_id
-      WHERE a.date BETWEEN ? AND ? AND a.person_type = 'student' ORDER BY s.name, a.date
+      SELECT a.person_id, a.date, a.status, a.class, COALESCE(s.name, s1.name) AS name, COALESCE(s.gr_number, s1.gr_number) as roll
+      FROM attendance a
+      LEFT JOIN students s ON s.student_id = a.person_id
+      LEFT JOIN students s1 ON CAST(s1.id AS TEXT) = a.person_id
+      WHERE a.date BETWEEN ? AND ? AND a.person_type = 'student' ORDER BY COALESCE(s.name, s1.name), a.date
     `).all(`${year}-${mm}-01`, `${year}-${mm}-${daysInMonth}`);
   } else {
     rows = db.prepare(`

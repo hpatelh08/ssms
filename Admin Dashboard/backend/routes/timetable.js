@@ -72,6 +72,16 @@ function getClassTeacherForClass(std, section) {
   const division = String(section || '').trim().toUpperCase();
   if (!classNumber || !division) return null;
 
+  const mapped = db.prepare(`
+    SELECT teacher_name AS name
+    FROM class_teacher_mapping
+    WHERE class = ? AND section = ?
+    LIMIT 1
+  `).get(Number(classNumber), division);
+  if (mapped?.name) {
+    return { name: mapped.name, subject: getTeacherSubjectForName(mapped.name) };
+  }
+
   const exact = db.prepare(`
     SELECT name, subject
     FROM teachers
@@ -79,6 +89,14 @@ function getClassTeacherForClass(std, section) {
     LIMIT 1
   `).get(classNumber, division);
   if (exact?.name) return { name: exact.name, subject: exact.subject };
+
+  const generic = db.prepare(`
+    SELECT name, subject
+    FROM teachers
+    WHERE CAST(class AS TEXT) = ? AND COALESCE(TRIM(division), '') = '' AND status = 'Active'
+    LIMIT 1
+  `).get(classNumber);
+  if (generic?.name) return { name: generic.name, subject: generic.subject };
 
   const compact = db.prepare(`
     SELECT name, subject

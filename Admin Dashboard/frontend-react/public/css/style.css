@@ -2292,9 +2292,9 @@ select.form-control { cursor: pointer; }
   margin-top: 1.75rem;
   padding: 1rem 1rem 0.9rem;
   border-radius: 1rem;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.16);
-  box-shadow: 0 0.75rem 1.75rem rgba(0,0,0,0.2);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.45));
+  border: 1px solid rgba(191, 219, 254, 0.14);
+  box-shadow: 0 0.9rem 2rem rgba(0,0,0,0.24);
   backdrop-filter: blur(8px);
 }
 .visitor-title {
@@ -2355,15 +2355,62 @@ select.form-control { cursor: pointer; }
   align-items: center;
   gap: 0.65rem;
   padding: 0.55rem 0.7rem;
-  border-radius: 0.75rem;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 0.95rem;
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+  border: 1px solid rgba(196, 181, 253, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0.35rem 0.95rem rgba(15, 23, 42, 0.14);
+}
+.visitor-card:nth-child(2n) {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card:nth-child(3n) {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--welcome {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92)) !important;
+  border-color: rgba(196, 181, 253, 0.4);
+}
+.visitor-card--curriculum {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--admissions {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--facilities {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--parent-connect {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92)) !important;
+  border-color: rgba(196, 181, 253, 0.4);
+}
+.visitor-card--achievements {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--announcements {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92)) !important;
+  border-color: rgba(196, 181, 253, 0.4);
+}
+.visitor-card--faculty {
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.95), rgba(67, 56, 202, 0.92));
+}
+.visitor-card--welcome .visitor-name {
+  color: #f8fafc !important;
+}
+.visitor-card--welcome .visitor-desc {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+.visitor-card--welcome .visitor-icon {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.12)) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
 }
 .visitor-icon {
   width: 2rem;
   height: 2rem;
   border-radius: 0.6rem;
-  background: rgba(255,255,255,0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2374,12 +2421,25 @@ select.form-control { cursor: pointer; }
 .visitor-name {
   font-size: 0.84rem;
   font-weight: 700;
-  color: #fff;
+  color: #f8fafc;
 }
 .visitor-desc {
   font-size: 0.72rem;
-  color: #e0e7ff;
+  color: rgba(255, 255, 255, 0.82);
   line-height: 1.35;
+}
+.visitor-card--parent-connect .visitor-name,
+.visitor-card--announcements .visitor-name {
+  color: #f8fafc !important;
+}
+.visitor-card--parent-connect .visitor-desc,
+.visitor-card--announcements .visitor-desc {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+.visitor-card--parent-connect .visitor-icon,
+.visitor-card--announcements .visitor-icon {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.12)) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
 }
 @keyframes visitorScroll {
   from { transform: translateY(0); }

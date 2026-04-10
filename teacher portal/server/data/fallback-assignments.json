@@ -1,0 +1,43 @@
+[
+  {
+    "_id": "FB_ASG_1775657925860",
+    "title": "assignment 4",
+    "description": "math ch 4",
+    "subject": {
+      "_id": "Mathematics",
+      "subjectName": "Mathematics"
+    },
+    "class": {
+      "_id": "admin-class-1-A",
+      "className": "1",
+      "section": "A"
+    },
+    "standard": "1",
+    "division": "A",
+    "teacher": "teacher101@teacher.com",
+    "uploadedByTeacherId": "teacher101@teacher.com",
+    "dueDate": "2026-04-11",
+    "totalMarks": "20",
+    "assignmentType": "homework",
+    "attachment": {
+      "filename": "1775657925853-monthly-report-2026-04.pdf",
+      "path": "D:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775657925853-monthly-report-2026-04.pdf",
+      "originalName": "monthly-report-2026-04.pdf",
+      "size": 166185,
+      "mimetype": "application/pdf"
+    },
+    "attachments": [
+      {
+        "filename": "1775657925853-monthly-report-2026-04.pdf",
+        "path": "D:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775657925853-monthly-report-2026-04.pdf",
+        "originalName": "monthly-report-2026-04.pdf",
+        "size": 166185,
+        "mimetype": "application/pdf"
+      }
+    ],
+    "status": "active",
+    "createdAt": "2026-04-08T14:18:45.860Z",
+    "updatedAt": "2026-04-08T14:18:45.860Z",
+    "fallbackMode": true
+  }
+]

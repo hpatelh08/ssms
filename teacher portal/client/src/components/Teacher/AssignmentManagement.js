@@ -29,6 +29,29 @@ const AssignmentManagement = ({ currentUser }) => {
   const [gradingSubjectFilter, setGradingSubjectFilter] = useState('');
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [studentStatusMap, setStudentStatusMap] = useState({});
+  const buildTeacherAuthHeaders = () => {
+    const token = localStorage.getItem('token') || '';
+    const headers = {};
+    const teacherIdentity = String(
+      currentUser?.teacherId
+      || currentUser?.loginId
+      || currentUser?.email
+      || currentUser?.name
+      || currentUser?.classTeacherOf
+      || [currentUser?.assignedClass, currentUser?.division].filter(Boolean).join('-')
+      || ''
+    ).trim();
+
+    if (token.includes('.') && token.split('.').length === 3) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (teacherIdentity) headers['X-Teacher-Id'] = teacherIdentity;
+    if (currentUser?.email) headers['X-Teacher-Email'] = String(currentUser.email).trim();
+    if (currentUser?.name) headers['X-Teacher-Name'] = String(currentUser.name).trim();
+    if (currentUser?.assignedClass || currentUser?.classTeacherStd) headers['X-Teacher-Class'] = String(currentUser.assignedClass || currentUser.classTeacherStd || '').trim();
+    if (currentUser?.division || currentUser?.classTeacherDiv) headers['X-Teacher-Division'] = String(currentUser.division || currentUser.classTeacherDiv || '').trim();
+    return headers;
+  };
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -261,33 +284,46 @@ const AssignmentManagement = ({ currentUser }) => {
     localStorage.setItem(`grading-data-${assignmentId}`, JSON.stringify(data));
   };
 
+  const mergeAssignments = (serverItems = [], localItems = []) => {
+    const map = new Map();
+    [...serverItems, ...localItems].forEach((item) => {
+      const id = String(item?._id || item?.id || '').trim();
+      if (!id) return;
+      map.set(id, item);
+    });
+    return Array.from(map.values());
+  };
+
   const fetchAssignments = async () => {
-    // Load from localStorage first
+    let localAssignments = [];
     const saved = localStorage.getItem(getAssignmentStorageKey());
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.length > 0) {
-          setAssignments(parsed);
-          return;
+        if (Array.isArray(parsed)) {
+          localAssignments = parsed;
         }
       } catch { /* ignore parse errors */ }
     }
 
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get(apiUrl('/api/teacher/assignments'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
+        headers: buildTeacherAuthHeaders(),
+        timeout: 5000
       });
-      setAssignments(response.data.data);
-      saveAssignmentsToStorage(response.data.data);
+      const serverAssignments = Array.isArray(response.data.data) ? response.data.data : [];
+      const mergedAssignments = mergeAssignments(serverAssignments, localAssignments);
+      setAssignments(mergedAssignments);
+      saveAssignmentsToStorage(mergedAssignments);
     } catch (error) {
       console.error('Error fetching assignments:', error);
-      setAssignments([]);
-      saveAssignmentsToStorage([]);
+      if (localAssignments.length > 0) {
+        setAssignments(localAssignments);
+        saveAssignmentsToStorage(localAssignments);
+      } else {
+        setAssignments([]);
+        saveAssignmentsToStorage([]);
+      }
     }
   };
 
@@ -417,8 +453,6 @@ const AssignmentManagement = ({ currentUser }) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-
       const formDataToSend = new FormData();
       formDataToSend.append('title', formData.title);
       formDataToSend.append('description', formData.description);
@@ -435,7 +469,7 @@ const AssignmentManagement = ({ currentUser }) => {
         // Update existing assignment
         await axios.put(apiUrl(`/api/teacher/assignments/${formData._id}`), formDataToSend, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            ...buildTeacherAuthHeaders(),
             'Content-Type': 'multipart/form-data'
           }
         });
@@ -443,7 +477,7 @@ const AssignmentManagement = ({ currentUser }) => {
         // Create new assignment
         await axios.post(apiUrl('/api/teacher/assignments'), formDataToSend, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            ...buildTeacherAuthHeaders(),
             'Content-Type': 'multipart/form-data'
           }
         });
@@ -460,50 +494,18 @@ const AssignmentManagement = ({ currentUser }) => {
         file: null
       });
       setShowForm(false);
-
-      // Since there's often no real backend in this testing env, we manually push to our local state so the user sees it immediately
-      const mockNewAssignment = {
-        _id: 'new_mock_' + Date.now(),
-        title: formData.title,
-        description: formData.description,
-        subject: subjects.find(s => s._id === formData.subject) || { subjectName: formData.subject || 'Unknown Subject' },
-        class: classes.find(c => c._id === formData.class) || getLoggedInTeacherClass(),
-        dueDate: formData.dueDate,
-        status: 'active',
-        totalMarks: formData.totalMarks,
-        assignmentType: formData.assignmentType,
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedAssignments = [mockNewAssignment, ...assignments];
-      setAssignments(updatedAssignments);
-      saveAssignmentsToStorage(updatedAssignments);
+      await fetchAssignments();
 
       setLoading(false);
     } catch (error) {
       console.error('Error creating/updating assignment:', error);
-      const mockNewAssignment = {
-        _id: 'new_mock_' + Date.now(),
-        title: formData.title,
-        description: formData.description,
-        subject: subjects.find(s => s._id === formData.subject) || { subjectName: formData.subject || 'Unknown Subject' },
-        class: classes.find(c => c._id === formData.class) || getLoggedInTeacherClass(),
-        dueDate: formData.dueDate,
-        status: 'active',
-        totalMarks: formData.totalMarks,
-        assignmentType: formData.assignmentType,
-        createdAt: new Date().toISOString()
-      };
-      const updatedAssignments = [mockNewAssignment, ...assignments];
-      setAssignments(updatedAssignments);
-      saveAssignmentsToStorage(updatedAssignments);
-      setShowForm(false);
+      alert(error?.response?.data?.error || error?.message || 'Failed to save assignment');
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this assignment?')) {
+      if (window.confirm('Are you sure you want to delete this assignment?')) {
       const updatedAssignments = assignments.filter(a => a._id !== id);
       setAssignments(updatedAssignments);
       saveAssignmentsToStorage(updatedAssignments);
@@ -512,11 +514,8 @@ const AssignmentManagement = ({ currentUser }) => {
       localStorage.removeItem(`grading-data-${id}`);
 
       try {
-        const token = localStorage.getItem('token');
         await axios.delete(apiUrl(`/api/teacher/assignments/${id}`), {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: buildTeacherAuthHeaders()
         });
       } catch (error) {
         console.error('Error deleting assignment:', error);
@@ -597,6 +596,23 @@ const AssignmentManagement = ({ currentUser }) => {
       if (selectedAssignment) {
         saveGradingToStorage(selectedAssignment._id, updated);
       }
+      return updated;
+    });
+  };
+
+  const handleMarkAllGood = () => {
+    if (!selectedAssignment) return;
+
+    setGradingData((prev) => {
+      const updated = { ...prev };
+      submissions.forEach((submission) => {
+        updated[submission._id] = {
+          ...(updated[submission._id] || { marks: '', remarks: '' }),
+          remarks: 'Good'
+        };
+      });
+
+      saveGradingToStorage(selectedAssignment._id, updated);
       return updated;
     });
   };
@@ -1243,22 +1259,32 @@ const AssignmentManagement = ({ currentUser }) => {
                     <div className="bg-white rounded-xl shadow-md overflow-hidden">
                       <div className="p-4 border-b flex justify-between items-center">
                         <h4 className="font-medium">Student Submissions</h4>
-                        <button
-                          onClick={async () => {
-                            setLoading(true);
-                            if (selectedAssignment) {
-                              saveGradingToStorage(selectedAssignment._id, gradingData);
-                              saveSubmissionsToStorage(selectedAssignment._id, submissions);
-                            }
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                            alert('All grades saved successfully!');
-                            setLoading(false);
-                          }}
-                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
-                        >
-                          <Save className="h-4 w-4" />
-                          Save All Grades
-                        </button>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <button
+                            onClick={handleMarkAllGood}
+                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-2 text-sm font-semibold"
+                            title="Mark all remarks as Good"
+                          >
+                            <span className="text-base leading-none">🙂</span>
+                            All Good
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setLoading(true);
+                              if (selectedAssignment) {
+                                saveGradingToStorage(selectedAssignment._id, gradingData);
+                                saveSubmissionsToStorage(selectedAssignment._id, submissions);
+                              }
+                              await new Promise(resolve => setTimeout(resolve, 500));
+                              alert('All grades saved successfully!');
+                              setLoading(false);
+                            }}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                          >
+                            <Save className="h-4 w-4" />
+                            Save All Grades
+                          </button>
+                        </div>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full">

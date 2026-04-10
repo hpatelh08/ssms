@@ -46,7 +46,7 @@ const quickCards = [
     border: 'border-emerald-100'
   },
   {
-    title: 'Events & News',
+    title: 'School Updates',
     description: 'Stay updated with notices, celebrations, and school activities.',
     icon: Megaphone,
     tone: 'from-violet-100 to-fuchsia-50 text-violet-700',
@@ -75,13 +75,6 @@ const facilities = [
   { name: 'Playground', icon: Users, detail: 'Safe areas for sports and activities.' },
   { name: 'Science Lab', icon: Microscope, detail: 'Practical experiments and discovery.' },
   { name: 'Transport', icon: Bus, detail: 'Reliable school transport support.' }
-];
-
-const announcements = [
-  'Admission forms for the new session are now available.',
-  'PTM and exam schedule updates will be posted weekly.',
-  'Holiday notices and event reminders appear here first.',
-  'Annual day rehearsal and club activities are in progress.'
 ];
 
 const initialForm = {
@@ -207,7 +200,7 @@ const VisitorPage = () => {
                     </h2>
                     <p className="text-base leading-8 text-slate-600 sm:text-lg">
                       This visitor page helps parents, students, and guests discover school information,
-                      admissions details, facilities, announcements, and contact options in one clean place.
+                      admissions details, facilities, school updates, and contact options in one clean place.
                     </p>
                   </div>
 
@@ -511,25 +504,6 @@ const VisitorPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-[2rem] border border-white/80 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8 text-white shadow-lg shadow-slate-200">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-white/10 p-3">
-                    <Megaphone className="h-5 w-5 text-sky-300" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">Latest News</p>
-                    <h3 className="text-2xl font-extrabold">Announcements</h3>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  {announcements.map((item) => (
-                    <div key={item} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-100">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </section>

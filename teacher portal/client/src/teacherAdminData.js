@@ -65,6 +65,8 @@ function mapStudent(student = {}, index = 0) {
     adminId: student.id || student.adminId || index + 1,
     studentDbId: student.id || student.studentDbId || index + 1,
     grNumber: String(student.gr_number || student.grNumber || '').trim(),
+    grNo: String(student.gr_number || student.grNumber || '').trim(),
+    admissionNumber: admission,
     rollNumber,
     studentId,
     studentPassword: String(student.student_password || student.studentPassword || '').trim(),

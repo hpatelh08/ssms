@@ -6,7 +6,7 @@ const QUICK_CARDS = [
   { title: 'Admission Open', description: 'Check eligibility, age criteria, and application deadlines.', icon: '🎓', tone: 'tone-admission', href: '#inquiry' },
   { title: 'School Facilities', description: 'Smart classrooms, labs, library, transport, and play areas.', icon: '🏫', tone: 'tone-facilities', href: '#facilities' },
   { title: 'Academic Programs', description: 'Structured learning across primary and middle school levels.', icon: '📚', tone: 'tone-academic', href: '#about' },
-  { title: 'Events & News', description: 'Stay updated with notices, celebrations, and school activities.', icon: '📣', tone: 'tone-news', href: '#news' },
+  { title: 'School Updates', description: 'Stay updated with notices, celebrations, and school activities.', icon: '📣', tone: 'tone-news', href: '#contact' },
   { title: 'Contact Information', description: 'Quick access to office hours, phone, email, and location.', icon: '☎️', tone: 'tone-contact', href: '#contact' },
   { title: 'Visitor Inquiry', description: 'Send a message and our team will respond promptly.', icon: '✉️', tone: 'tone-inquiry', href: '#inquiry' },
 ];
@@ -102,13 +102,6 @@ const FACILITIES = [
       '/images_for_visitor_page/transport/8.jpg',
     ],
   },
-];
-
-const ANNOUNCEMENTS = [
-  'Admission forms for the new session are now available.',
-  'Exam and PTM schedules will be updated every week.',
-  'Holiday notices and circulars are shared in advance.',
-  'Annual day rehearsals and club activities are in progress.',
 ];
 
 const INITIAL_FORM = {
@@ -316,7 +309,7 @@ export default function Visitor() {
               <h2>Learn, grow, and explore in a warm school community.</h2>
               <p>
                 This visitor page helps parents, students, and guests quickly find admissions
-                details, facilities, announcements, and school contact information.
+                details, facilities, school updates, and school contact information.
               </p>
 
               <div className="visitor-hero__buttons">
@@ -358,7 +351,7 @@ export default function Visitor() {
                 <ul>
                   <li><span className="visitor-check">✓</span> Admission information</li>
                   <li><span className="visitor-check">✓</span> School timings and contact</li>
-                  <li><span className="visitor-check">✓</span> Facilities and announcements</li>
+                  <li><span className="visitor-check">✓</span> Facilities and school updates</li>
                   <li><span className="visitor-check">✓</span> Visitor inquiry form</li>
                 </ul>
               </div>
@@ -493,17 +486,6 @@ export default function Visitor() {
                 </div>
               </div>
 
-              <div id="news" className="visitor-news-card">
-                <p className="visitor-section__eyebrow visitor-section__eyebrow--light">Latest News</p>
-                <h3>Announcements</h3>
-                <div className="visitor-news-list">
-                  {ANNOUNCEMENTS.map((item) => (
-                    <div key={item} className="visitor-news-item">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </section>

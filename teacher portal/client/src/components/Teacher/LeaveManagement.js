@@ -1,537 +1,462 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Calendar, Clock, CheckCircle, XCircle, User, Plus, Edit, Trash2, Mail, Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { apiUrl } from '../../config/api';
+import {
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Search,
+  ShieldAlert,
+  User,
+  XCircle,
+} from 'lucide-react';
 
-const LeaveManagement = () => {
-  const [leaveApplications, setLeaveApplications] = useState([]);
-  const [showApplyForm, setShowApplyForm] = useState(false);
+function getStatusTone(status = '') {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'approved') {
+    return { bg: 'bg-green-100', fg: 'text-green-700', border: 'border-green-200', label: 'Approved' };
+  }
+  if (normalized === 'rejected') {
+    return { bg: 'bg-red-100', fg: 'text-red-700', border: 'border-red-200', label: 'Rejected' };
+  }
+  return { bg: 'bg-amber-100', fg: 'text-amber-700', border: 'border-amber-200', label: 'Pending' };
+}
+
+function formatDateRange(fromDate, toDate) {
+  if (!fromDate || !toDate) return 'N/A';
+  const start = new Date(fromDate);
+  const end = new Date(toDate);
+  return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+}
+
+function isNotFoundError(error) {
+  const message = String(error?.response?.data?.error || error?.message || '').toLowerCase();
+  const status = Number(error?.response?.status || 0);
+  return status === 404 && message.includes('not found');
+}
+
+export default function LeaveManagement({ currentUser }) {
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [formData, setFormData] = useState({
-    leaveType: 'casual',
-    startDate: '',
-    endDate: '',
-    reason: ''
-  });
+  const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
-  const [parentLeaves, setParentLeaves] = useState([]);
+  const [success, setSuccess] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
-  useEffect(() => {
-    fetchLeaveApplications();
-    loadParentLeaves();
-  }, []);
+  const token = useMemo(() => localStorage.getItem('token') || '', []);
+  const authHeaders = useMemo(() => {
+    const headers = {};
+    const user = currentUser || {};
+    const teacherIdentity = String(
+      user.teacherId ||
+      user.loginId ||
+      user.email ||
+      user.name ||
+      user.classTeacherOf ||
+      [user.assignedClass, user.division].filter(Boolean).join('-') ||
+      ''
+    ).trim();
 
-  const loadParentLeaves = () => {
-    const saved = localStorage.getItem('parent-leave-applications');
-    if (saved) {
-      try { setParentLeaves(JSON.parse(saved)); return; } catch { /* ignore */ }
-    }
-    const mockParentLeaves = [
-      { _id: 'pl_1', studentName: 'Aarav Sharma', parentName: 'Mr. Sharma', leaveType: 'sick', startDate: '2026-03-07', endDate: '2026-03-08', reason: 'Child is having fever and needs rest', status: 'pending', appliedDate: '2026-03-05' },
-      { _id: 'pl_2', studentName: 'Diya Patel', parentName: 'Mr. Patel', leaveType: 'casual', startDate: '2026-03-10', endDate: '2026-03-10', reason: 'Family function - wedding ceremony', status: 'pending', appliedDate: '2026-03-04' },
-      { _id: 'pl_3', studentName: 'Vivaan Patel', parentName: 'Mrs. Patel', leaveType: 'sick', startDate: '2026-03-06', endDate: '2026-03-07', reason: 'Doctor appointment and medical checkup', status: 'approved', appliedDate: '2026-03-03' },
-      { _id: 'pl_4', studentName: 'Arjun Gupta', parentName: 'Mr. Gupta', leaveType: 'casual', startDate: '2026-03-12', endDate: '2026-03-12', reason: 'Out of station for personal work', status: 'pending', appliedDate: '2026-03-05' },
-      { _id: 'pl_5', studentName: 'Ananya Singh', parentName: 'Mrs. Singh', leaveType: 'sick', startDate: '2026-03-04', endDate: '2026-03-05', reason: 'Child had food poisoning', status: 'rejected', appliedDate: '2026-03-03' },
-    ];
-    setParentLeaves(mockParentLeaves);
-    localStorage.setItem('parent-leave-applications', JSON.stringify(mockParentLeaves));
-  };
-
-  const handleParentLeaveAction = (leaveId, action) => {
-    const updated = parentLeaves.map(leave =>
-      leave._id === leaveId ? { ...leave, status: action } : leave
-    );
-    setParentLeaves(updated);
-    localStorage.setItem('parent-leave-applications', JSON.stringify(updated));
-  };
-
-  const fetchLeaveApplications = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(apiUrl('/api/teacher/leaves'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 1000
-      });
-      setLeaveApplications(response.data.data);
-    } catch (error) {
-      console.error('Error fetching leave applications:', error);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    // Calculate leave duration
-    const start = new Date(formData.startDate);
-    const end = new Date(formData.endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    if (diffDays > 2) {
-      const msg = 'Leave application can only be for a maximum of 2 days.';
-      setError(msg);
-      alert(msg);
-      return;
+    const hasLikelyJwt = token.includes('.') && token.split('.').length === 3;
+    if (hasLikelyJwt) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
+    if (teacherIdentity) headers['X-Teacher-Id'] = teacherIdentity;
+    if (user.email) headers['X-Teacher-Email'] = String(user.email).trim();
+    if (user.name) headers['X-Teacher-Name'] = String(user.name).trim();
+    if (user.assignedClass || user.classTeacherStd) headers['X-Teacher-Class'] = String(user.assignedClass || user.classTeacherStd || '').trim();
+    if (user.division || user.classTeacherDiv) headers['X-Teacher-Division'] = String(user.division || user.classTeacherDiv || '').trim();
+    return headers;
+  }, [currentUser, token]);
+  const teacherId = useMemo(() => {
+    const value = String(
+      currentUser?.teacherId ||
+      currentUser?.loginId ||
+      currentUser?.email ||
+      currentUser?.name ||
+      currentUser?.classTeacherOf ||
+      [currentUser?.assignedClass, currentUser?.division].filter(Boolean).join('-') ||
+      ''
+    ).trim();
+    return value;
+  }, [currentUser]);
+
+  const teacherLabel = useMemo(() => {
+    const classLabel = [currentUser?.assignedClass || currentUser?.classTeacherStd || '', currentUser?.division || currentUser?.classTeacherDiv || '']
+      .filter(Boolean)
+      .join('');
+    return classLabel ? `${classLabel}` : 'your class';
+  }, [currentUser]);
+
+  const fetchApplications = async () => {
+    if (!teacherId) return;
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-
-      const response = await axios.post(apiUrl('/api/teacher/leaves'), formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      setError('');
+      const response = await axios.get(apiUrl(`/api/teacher/leave/teacher/${encodeURIComponent(teacherId)}`), {
+        headers: authHeaders,
+        timeout: 8000,
+        params: statusFilter !== 'all' ? { status: statusFilter } : {},
       });
-
-      if (response.data.success) {
-        setFormData({
-          leaveType: 'casual',
-          startDate: '',
-          endDate: '',
-          reason: ''
-        });
-        setShowApplyForm(false);
-        setSuccess('Leave application submitted successfully!');
-        setTimeout(() => setSuccess(''), 3000);
-        fetchLeaveApplications();
-      } else {
-        throw new Error('Server returned unsuccessful status');
+      setApplications(Array.isArray(response?.data?.data) ? response.data.data : []);
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        setApplications([]);
+        setError('');
+        return;
       }
-    } catch (error) {
-      console.error('Error submitting leave application:', error);
-
-      // MOCK FALLBACK: If server fails, add a mock record locally for demonstration
-      const mockLeave = {
-        _id: 'mock_' + Date.now(),
-        leaveType: formData.leaveType,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        reason: formData.reason,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
-
-      setLeaveApplications([mockLeave, ...leaveApplications]);
-
-      setFormData({
-        leaveType: 'casual',
-        startDate: '',
-        endDate: '',
-        reason: ''
-      });
-      setShowApplyForm(false);
-      setSuccess('Leave (Offline Mode) submitted successfully!');
-      setTimeout(() => setSuccess(''), 3000);
-
-      alert('Application submitted (Development Mode). Note: Server connection was unavailable.');
+      const message = err?.response?.data?.error || err?.message || 'Failed to load leave applications.';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'rejected':
-        return 'bg-red-100 text-red-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  useEffect(() => {
+    void fetchApplications();
+    const interval = window.setInterval(() => {
+      void fetchApplications();
+    }, 20000);
+    return () => window.clearInterval(interval);
+  }, [teacherId, statusFilter]);
+
+  const approveLeave = async (applicationId) => {
+    try {
+      setActionLoading(applicationId);
+      setError('');
+      await axios.patch(
+        apiUrl(`/api/teacher/leave/teacher/${encodeURIComponent(applicationId)}/approve`),
+        {},
+        { headers: authHeaders }
+      );
+      setSuccess('Leave request approved.');
+      await fetchApplications();
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        setSuccess('Leave request is no longer available.');
+        await fetchApplications();
+        return;
+      }
+      setError(err?.response?.data?.error || err?.message || 'Failed to approve leave request.');
+    } finally {
+      setActionLoading('');
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />;
+  const openReject = (applicationId) => {
+    setRejectTarget(applicationId);
+    setRejectReason('');
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTarget) return;
+    if (!rejectReason.trim()) {
+      setError('Rejection reason is required.');
+      return;
+    }
+
+    try {
+      setActionLoading(rejectTarget);
+      setError('');
+      await axios.patch(
+        apiUrl(`/api/teacher/leave/teacher/${encodeURIComponent(rejectTarget)}/reject`),
+        { teacherResponseReason: rejectReason.trim() },
+        { headers: authHeaders }
+      );
+      setSuccess('Leave request rejected.');
+      setRejectTarget(null);
+      setRejectReason('');
+      await fetchApplications();
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        setRejectTarget(null);
+        setRejectReason('');
+        setSuccess('Leave request is no longer available.');
+        await fetchApplications();
+        return;
+      }
+      setError(err?.response?.data?.error || err?.message || 'Failed to reject leave request.');
+    } finally {
+      setActionLoading('');
     }
   };
+
+  const filteredApplications = applications.filter((item) => {
+    const matchesQuery = !query.trim() || [
+      item.studentName,
+      item.parentName,
+      item.leaveType,
+      item.reason,
+      item.className,
+      item.division,
+    ].some((value) => String(value || '').toLowerCase().includes(query.trim().toLowerCase()));
+    const matchesStatus = statusFilter === 'all' || String(item.status || '').toLowerCase() === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
+
+  const counts = applications.reduce((acc, item) => {
+    const status = String(item.status || 'pending').toLowerCase();
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center bg-white/80 backdrop-blur-sm p-5 rounded-2xl shadow-soft border border-gray-100/80">
-        <div>
-          <h2 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Leave Management</h2>
-          <p className="text-sm text-gray-500 mt-0.5 font-medium">Apply for leave & manage requests</p>
+      <div className="rounded-3xl p-6 md:p-7 text-white shadow-[0_16px_40px_rgba(79,70,229,0.18)] bg-gradient-to-r from-indigo-700 via-violet-700 to-fuchsia-600">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold tracking-[0.25em] uppercase">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Parent Leave Requests
+            </div>
+            <h2 className="text-3xl font-black">Leave Applications for {teacherLabel}</h2>
+            <p className="text-white/80 max-w-2xl">
+              Review parent leave requests, approve valid applications, and reject with a clear reason when needed.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.24em] text-white/70">Pending</p>
+              <p className="text-2xl font-black">{counts.pending || 0}</p>
+            </div>
+            <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.24em] text-white/70">Approved</p>
+              <p className="text-2xl font-black">{counts.approved || 0}</p>
+            </div>
+            <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.24em] text-white/70">Rejected</p>
+              <p className="text-2xl font-black">{counts.rejected || 0}</p>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => setShowApplyForm(!showApplyForm)}
-          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-2.5 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5 font-semibold"
-        >
-          <Plus className="h-4 w-4" />
-          Apply Leave
-        </button>
+      </div>
+
+      <div className="rounded-3xl bg-white/90 backdrop-blur border border-indigo-100 shadow-lg p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3 text-slate-600">
+          <Search className="h-4 w-4" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by student, parent, class, type, or reason"
+            className="w-full md:w-[380px] bg-transparent outline-none text-sm placeholder:text-slate-400"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['all', 'pending', 'approved', 'rejected'].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition ${
+                statusFilter === value
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-          <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-green-700">
           {success}
         </div>
       )}
 
-      {showApplyForm && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Apply for Leave</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Leave Type *</label>
-                <select
-                  name="leaveType"
-                  value={formData.leaveType}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="casual">Casual Leave</option>
-                  <option value="sick">Sick Leave</option>
-                  <option value="earned">Earned Leave</option>
-                  <option value="maternity">Maternity Leave</option>
-                  <option value="paternity">Paternity Leave</option>
-                  <option value="bereavement">Bereavement Leave</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
-                <input
-                  type="text"
-                  name="reason"
-                  value={formData.reason}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Reason for leave"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleInputChange}
-                  required
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleInputChange}
-                  required
-                  min={formData.startDate || new Date().toISOString().split('T')[0]}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className={`px-6 py-3 rounded-lg text-white font-medium ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-              >
-                {loading ? 'Submitting...' : 'Submit Application'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowApplyForm(false)}
-                className="px-6 py-3 rounded-lg bg-gray-300 text-gray-700 font-medium hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Parent Leave Applications */}
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-orange-100 p-2 rounded-lg">
-              <Mail className="h-5 w-5 text-orange-600" />
-            </div>
-            <h3 className="text-lg font-semibold">Parent Leave Applications</h3>
-            <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-1 rounded-full">
-              {parentLeaves.filter(l => l.status === 'pending').length} Pending
-            </span>
+      <div className="rounded-3xl bg-white/90 backdrop-blur border border-indigo-100 shadow-lg overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-indigo-100">
+          <div>
+            <h3 className="text-lg font-extrabold text-slate-800">Parent Leave Applications</h3>
+            <p className="text-sm text-slate-500">Only requests for your assigned class are visible here.</p>
           </div>
-          {parentLeaves.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left">Student</th>
-                    <th className="px-4 py-3 text-left">Parent</th>
-                    <th className="px-4 py-3 text-left">Type</th>
-                    <th className="px-4 py-3 text-left">Dates</th>
-                    <th className="px-4 py-3 text-left">Reason</th>
-                    <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parentLeaves.map(leave => (
-                    <tr key={leave._id} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span className="font-medium">{leave.studentName}</span>
+          <button
+            type="button"
+            onClick={() => void fetchApplications()}
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+          >
+            <Clock className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-slate-500">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            Loading leave requests...
+          </div>
+        ) : filteredApplications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+            <MessageSquare className="h-12 w-12 mb-3 text-slate-300" />
+            <p className="font-semibold text-slate-600">No leave requests found</p>
+            <p className="text-sm text-slate-400">Requests from parents of {teacherLabel} will appear here.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-[0.12em] text-xs">
+                <tr>
+                  <th className="px-5 py-3 text-left">Student</th>
+                  <th className="px-5 py-3 text-left">Parent</th>
+                  <th className="px-5 py-3 text-left">Class</th>
+                  <th className="px-5 py-3 text-left">Type</th>
+                  <th className="px-5 py-3 text-left">Dates</th>
+                  <th className="px-5 py-3 text-left">Reason</th>
+                  <th className="px-5 py-3 text-left">Status</th>
+                  <th className="px-5 py-3 text-left">Attachment</th>
+                  <th className="px-5 py-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredApplications.map((application) => {
+                  const tone = getStatusTone(application.status);
+                  const canAct = String(application.status || '').toLowerCase() === 'pending';
+                  return (
+                    <tr key={application.id} className="align-top hover:bg-indigo-50/40 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                            <User className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">{application.studentName}</p>
+                            <p className="text-xs text-slate-500">{application.studentId}</p>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{leave.parentName}</td>
-                      <td className="px-4 py-3">
-                        <span className="capitalize px-2 py-1 bg-gray-100 rounded text-xs">{leave.leaveType}</span>
+                      <td className="px-5 py-4 text-slate-600">
+                        <div className="font-medium">{application.parentName || 'Parent'}</div>
+                        <div className="text-xs text-slate-400">{application.parentId}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div>{new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-500">
-                          {Math.ceil((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} day(s)
-                        </div>
+                      <td className="px-5 py-4 text-slate-700">
+                        <div className="font-semibold">{application.className}{application.division || ''}</div>
+                        <div className="text-xs text-slate-400">{application.classId}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px]">{leave.reason}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(leave.status)}
-                          <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(leave.status)}`}>
-                            {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
-                          </span>
-                        </div>
+                      <td className="px-5 py-4 capitalize text-slate-700">{application.leaveType}</td>
+                      <td className="px-5 py-4 text-slate-700">
+                        <div>{formatDateRange(application.fromDate, application.toDate)}</div>
+                        <div className="text-xs text-slate-400">{application.totalDays} day(s)</div>
                       </td>
-                      <td className="px-4 py-3">
-                        {leave.status === 'pending' ? (
-                          <div className="flex gap-2">
+                      <td className="px-5 py-4 text-slate-600 max-w-[260px]">
+                        <p className="line-clamp-3">{application.reason}</p>
+                        {application.teacherResponseReason ? (
+                          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                            Teacher note: {application.teacherResponseReason}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold ${tone.bg} ${tone.fg} ${tone.border}`}>
+                          {String(application.status || 'Pending')}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        {application.attachmentUrl ? (
+                          <a
+                            href={application.attachmentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            {application.attachmentName || 'View'}
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">None</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        {canAct ? (
+                          <div className="flex flex-wrap gap-2">
                             <button
-                              onClick={() => handleParentLeaveAction(leave._id, 'approved')}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-colors"
+                              type="button"
+                              disabled={actionLoading === application.id}
+                              onClick={() => void approveLeave(application.id)}
+                              className="inline-flex items-center gap-2 rounded-full bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-60"
                             >
-                              <CheckCircle className="h-3.5 w-3.5" />
+                              {actionLoading === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                               Approve
                             </button>
                             <button
-                              onClick={() => handleParentLeaveAction(leave._id, 'rejected')}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-colors"
+                              type="button"
+                              disabled={actionLoading === application.id}
+                              onClick={() => openReject(application.id)}
+                              className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60"
                             >
                               <XCircle className="h-3.5 w-3.5" />
                               Reject
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-400 italic">Action taken</span>
+                          <span className="text-xs font-semibold text-slate-400">Action taken</span>
                         )}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No parent leave applications</p>
-            </div>
-          )}
-        </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4">My Leave Applications</h3>
-          {leaveApplications.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left">Leave Type</th>
-                    <th className="px-4 py-3 text-left">Dates</th>
-                    <th className="px-4 py-3 text-left">Reason</th>
-                    <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Applied Date</th>
-                    <th className="px-4 py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaveApplications.map(application => (
-                    <tr key={application._id} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-gray-400" />
-                          <span className="capitalize">{application.leaveType.replace('_', ' ')}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          {new Date(application.startDate).toLocaleDateString()} -
-                          {new Date(application.endDate).toLocaleDateString()}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {(new Date(application.endDate) - new Date(application.startDate)) / (1000 * 60 * 60 * 24) + 1} days
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {application.reason}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(application.status)}
-                          <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(application.status)}`}>
-                            {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {new Date(application.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="p-2 text-red-600 hover:bg-red-100 rounded-lg">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-extrabold text-slate-800">Reject Leave Request</h4>
+              <button
+                type="button"
+                onClick={() => setRejectTarget(null)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No leave applications found</p>
-              <p className="text-gray-400 text-sm mt-2">Apply for leave using the button above</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Please add a clear rejection reason. The parent will see this reason in their Leave History.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={4}
+              className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              placeholder="Enter rejection reason..."
+            />
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setRejectTarget(null)}
+                className="rounded-full bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmReject()}
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700"
+              >
+                <XCircle className="h-4 w-4" />
+                Reject Request
+              </button>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Leave Balance Card */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <Calendar className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-600">Total Leave Days</p>
-                <p className="text-2xl font-bold">24</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                const doc = new jsPDF();
-                doc.setFontSize(18);
-                doc.text('Total Leave Days Report', 14, 22);
-                doc.setFontSize(11);
-                doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 32);
-                autoTable(doc, {
-                  startY: 40,
-                  head: [['Leave Type', 'Start Date', 'End Date', 'Days', 'Status']],
-                  body: leaveApplications.map(app => [
-                    app.leaveType.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()),
-                    new Date(app.startDate).toLocaleDateString(),
-                    new Date(app.endDate).toLocaleDateString(),
-                    Math.ceil((new Date(app.endDate) - new Date(app.startDate)) / (1000 * 60 * 60 * 24)) + 1,
-                    app.status.charAt(0).toUpperCase() + app.status.slice(1)
-                  ]),
-                });
-                doc.text(`Total Leave Days: 24`, 14, doc.lastAutoTable.finalY + 12);
-                doc.save('Total_Leave_Days_Report.pdf');
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              PDF
-            </button>
           </div>
         </div>
-
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="bg-green-100 p-3 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-600">Present Days</p>
-                <p className="text-2xl font-bold">8</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                const doc = new jsPDF();
-                doc.setFontSize(18);
-                doc.text('Present Days Report', 14, 22);
-                doc.setFontSize(11);
-                doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 32);
-                autoTable(doc, {
-                  startY: 40,
-                  head: [['#', 'Date', 'Status']],
-                  body: Array.from({ length: 8 }, (_, i) => [
-                    i + 1,
-                    new Date(2026, 2, i + 1).toLocaleDateString(),
-                    'Present'
-                  ]),
-                });
-                doc.text(`Total Present Days: 8`, 14, doc.lastAutoTable.finalY + 12);
-                doc.save('Present_Days_Report.pdf');
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              PDF
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
-};
-
-export default LeaveManagement;
+}

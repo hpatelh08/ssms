@@ -31,31 +31,31 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    key: 'home', label: 'Home', icon: '🏠',
+    key: 'home', label: 'Home', icon: '\u{1F3E0}',
     accentColor: '#60a5fa',
     activeBg: 'rgba(96,165,250,0.16)',
     activeGlow: 'rgba(96,165,250,0.3)',
   },
   {
-    key: 'play', label: 'Games', icon: '🎮',
+    key: 'play', label: 'Games', icon: '\u{1F3AE}',
     accentColor: '#22d3ee',
     activeBg: 'rgba(34,211,238,0.16)',
     activeGlow: 'rgba(34,211,238,0.26)',
   },
   {
-    key: 'space-war', label: 'Space War', icon: '🚀',
+    key: 'space-war', label: 'Space War', icon: '\u{1F680}',
     accentColor: '#f97316',
     activeBg: 'rgba(249,115,22,0.16)',
     activeGlow: 'rgba(249,115,22,0.24)',
   },
   {
-    key: 'solar-system', label: 'Eco System', icon: '🪐',
+    key: 'solar-system', label: 'Eco System', icon: '\u{1FAB0}',
     accentColor: '#fbbf24',
     activeBg: 'rgba(251,191,36,0.16)',
     activeGlow: 'rgba(251,191,36,0.24)',
   },
   {
-    key: 'journey', label: 'Journey', icon: '🗺️',
+    key: 'journey', label: 'Journey', icon: '\u{1F5FA}\uFE0F',
     accentColor: '#a78bfa',
     activeBg: 'rgba(167,139,250,0.16)',
     activeGlow: 'rgba(167,139,250,0.26)',
@@ -217,7 +217,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
             animate={{ rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            🚀
+            {'\u{1F680}'}
           </motion.span>
           <div>
             <h2 className="sidebar-title" style={{ margin: 0 }}>
