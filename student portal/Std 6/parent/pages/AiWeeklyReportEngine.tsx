@@ -38,7 +38,11 @@ const glass: React.CSSProperties = {
 
 /* ── Groq AI ──────────────────────────────────────── */
 
-const GROQ_API_KEY = (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) || '';
+const GROQ_API_KEY = (
+  (import.meta as any)?.env?.VITE_GROQ_API_KEY ||
+  (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) ||
+  ''
+).trim();
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 /* ── Data helpers ─────────────────────────────────── */

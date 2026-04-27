@@ -7,6 +7,8 @@ import { getAssignedTeacherClassNumber, getAssignedTeacherSection, matchesAssign
 import { loadClassStudents, loadTeacherClasses } from '../../services/teacherBackendData';
 
 const ExamManagement = ({ currentUser }) => {
+  const TEACHER_SYNC_URL = apiUrl('/api/teacher/exams/public-sync');
+  const ADMIN_SYNC_URL = 'http://127.0.0.1:5000/api/exams/public-sync';
   const isSubmissionComplete = (status) => {
     if (!status) return true;
     const normalized = String(status).toLowerCase();
@@ -30,6 +32,18 @@ const ExamManagement = ({ currentUser }) => {
     const totalMarks = String(exam?.totalMarks || '').trim();
     const passingMarks = String(exam?.passingMarks || '').trim();
     return [classId, examName, examType, date, startTime, endTime, totalMarks, passingMarks].join('|');
+  };
+  const normalizeExamType = (value) => {
+    const raw = String(value || '').trim();
+    return raw ? raw.toLowerCase() : 'general';
+  };
+  const formatExamType = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return 'General';
+    return raw
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\b\w/g, (match) => match.toUpperCase());
   };
   const formatDate = (value) => {
     if (!value) return 'TBA';
@@ -60,6 +74,37 @@ const ExamManagement = ({ currentUser }) => {
     const key = getExamStorageKey();
     localStorage.setItem(key, JSON.stringify(list));
   };
+  const buildPublicExamPayload = (exam) => {
+    const classNumber = String(exam?.class?.className || exam?.class?.name || exam?.class || '').match(/\d+/)?.[0] || '';
+    return {
+      id: String(exam?._id || exam?.id || '').trim(),
+      name: String(exam?.examName || exam?.name || 'Exam').trim(),
+      class: classNumber,
+      subject: String(exam?.subject?.subjectName || exam?.subject || '').trim(),
+      date: String(exam?.date || exam?.examDate || '').trim(),
+      duration: `${String(exam?.startTime || '').trim()} - ${String(exam?.endTime || '').trim()}`.trim(),
+      maxMarks: Number(exam?.totalMarks || exam?.maxMarks || 100) || 100,
+      status: String(exam?.status || 'Scheduled').trim(),
+      examType: String(exam?.examType || '').trim(),
+      startTime: String(exam?.startTime || '').trim(),
+      endTime: String(exam?.endTime || '').trim(),
+      passingMarks: Number(exam?.passingMarks || 0) || 0,
+      description: String(exam?.description || '').trim(),
+      source: 'teacher-portal',
+    };
+  };
+  const syncExamsToAdmin = async (list) => {
+    const payload = (Array.isArray(list) ? list : []).map(buildPublicExamPayload).filter((exam) => exam.id);
+    if (!payload.length) return;
+    try {
+      await Promise.allSettled([
+        axios.post(TEACHER_SYNC_URL, { exams: payload }, { timeout: 1500 }),
+        axios.post(ADMIN_SYNC_URL, { exams: payload }, { timeout: 1500 }),
+      ]);
+    } catch {
+      // Best-effort sync only.
+    }
+  };
   const mergeExams = (remoteList, localList) => {
     const remoteKeys = new Set(remoteList.map(buildExamKey));
     const merged = [...remoteList];
@@ -85,6 +130,7 @@ const ExamManagement = ({ currentUser }) => {
   const [marksExams, setMarksExams] = useState([]);
   const [marksSubjects, setMarksSubjects] = useState([]);
   const [marksSelectedExamGroup, setMarksSelectedExamGroup] = useState('');
+  const [marksSelectedExamType, setMarksSelectedExamType] = useState('');
   const [marksExamData, setMarksExamData] = useState({});
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [subjectChapters, setSubjectChapters] = useState({});
@@ -207,6 +253,8 @@ const ExamManagement = ({ currentUser }) => {
         groups.set(key, {
           key,
           examName: String(exam.examName || 'Exam').trim(),
+          examType: String(exam.examType || '').trim(),
+          examTypeKey: normalizeExamType(exam.examType),
           className: exam.class?.className || exam.class?.name || exam.class || '',
           section: exam.class?.section || exam.class?.division || '',
           date: exam.date || exam.examDate || exam.startDate || '',
@@ -237,10 +285,26 @@ const ExamManagement = ({ currentUser }) => {
       }));
   }, [marksExams, exams, marksSelectedClass]);
 
+  const marksExamTypeOptions = React.useMemo(() => {
+    const types = new Map();
+    marksExamGroups.forEach((group) => {
+      const key = group.examTypeKey || normalizeExamType(group.examType);
+      if (!types.has(key)) {
+        types.set(key, formatExamType(group.examType));
+      }
+    });
+    return Array.from(types.entries()).map(([value, label]) => ({ value, label }));
+  }, [marksExamGroups]);
+
+  const filteredMarksExamGroups = React.useMemo(() => {
+    if (!marksSelectedExamType) return marksExamGroups;
+    return marksExamGroups.filter((group) => (group.examTypeKey || normalizeExamType(group.examType)) === marksSelectedExamType);
+  }, [marksExamGroups, marksSelectedExamType]);
+
   const selectedMarksExamGroup = React.useMemo(() => {
-    if (!marksExamGroups.length) return null;
-    return marksExamGroups.find((group) => group.key === marksSelectedExamGroup) || marksExamGroups[0];
-  }, [marksExamGroups, marksSelectedExamGroup]);
+    if (!filteredMarksExamGroups.length || !marksSelectedExamGroup) return null;
+    return filteredMarksExamGroups.find((group) => group.key === marksSelectedExamGroup) || null;
+  }, [filteredMarksExamGroups, marksSelectedExamGroup]);
 
   const selectedMarksGroupExams = selectedMarksExamGroup?.exams || [];
   const selectedMarksGroupColumns = selectedMarksGroupExams.map((exam) => ({
@@ -380,22 +444,41 @@ const ExamManagement = ({ currentUser }) => {
   }, [marksSelectedClass, marksSelectedExamGroup, marksStudents.length, marksExamGroups]);
 
   useEffect(() => {
-    if (!marksExamGroups.length) {
+    if (!marksExamTypeOptions.length) {
+      setMarksSelectedExamType('');
+      setMarksSelectedExamGroup('');
+      return;
+    }
+    setMarksSelectedExamType((current) => {
+      if (!current) return '';
+      if (marksExamTypeOptions.some((option) => option.value === current)) {
+        return current;
+      }
+      return '';
+    });
+  }, [marksExamTypeOptions]);
+
+  useEffect(() => {
+    if (!filteredMarksExamGroups.length) {
       setMarksSelectedExamGroup('');
       return;
     }
     setMarksSelectedExamGroup((current) => {
-      if (current && marksExamGroups.some((group) => group.key === current)) {
+      if (!current) return '';
+      if (filteredMarksExamGroups.some((group) => group.key === current)) {
         return current;
       }
-      return marksExamGroups[0].key;
+      return '';
     });
-  }, [marksExamGroups]);
+  }, [filteredMarksExamGroups]);
 
   useEffect(() => {
     const matchedGroup = findMarksGroupForExam(selectedExam);
     if (matchedGroup?.key) {
       setMarksSelectedExamGroup(matchedGroup.key);
+      if (matchedGroup.examTypeKey) {
+        setMarksSelectedExamType(matchedGroup.examTypeKey);
+      }
     }
   }, [selectedExam, marksExamGroups]);
 
@@ -427,19 +510,20 @@ const ExamManagement = ({ currentUser }) => {
 
   const fetchExams = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get(apiUrl('/api/teacher/exams'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: buildTeacherHeaders(),
         timeout: 1000
       });
       const remoteExams = response.data.data || [];
       const localExams = loadLocalExams();
-      setExams(mergeExams(remoteExams, localExams));
+      const merged = mergeExams(remoteExams, localExams);
+      setExams(merged);
+      syncExamsToAdmin(merged);
     } catch (error) {
       console.error('Error fetching exams:', error);
-      setExams(loadLocalExams());
+      const localExams = loadLocalExams();
+      setExams(localExams);
+      syncExamsToAdmin(localExams);
     }
   };
 
@@ -563,6 +647,23 @@ const ExamManagement = ({ currentUser }) => {
     }));
   };
 
+  const buildTeacherHeaders = () => {
+    const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+      return headers;
+    }
+
+    const teacherId = currentUser?._id || currentUser?.teacherId || currentUser?.id || currentUser?.email || '';
+    headers['X-Teacher-Id'] = String(teacherId || '');
+    headers['X-Teacher-Email'] = String(currentUser?.email || '');
+    headers['X-Teacher-Name'] = String(currentUser?.name || currentUser?.fullName || '');
+    headers['X-Teacher-Class'] = String(getAssignedTeacherClassNumber(currentUser) || currentUser?.assignedClass || '');
+    headers['X-Teacher-Division'] = String(getAssignedTeacherSection(currentUser) || currentUser?.division || '');
+    return headers;
+  };
+
   const handleChapterChange = (subjectId, value) => {
     setSubjectChapters((prev) => ({
       ...prev,
@@ -596,7 +697,6 @@ const ExamManagement = ({ currentUser }) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
 
       const chapterSubjects = Object.keys(subjectChapters || {}).filter((subjectId) => subjectChapters[subjectId]);
       const datedSubjects = Object.keys(subjectDates || {}).filter((subjectId) => subjectDates[subjectId]);
@@ -618,10 +718,7 @@ const ExamManagement = ({ currentUser }) => {
           chapter: subjectChapters[subjectIds[0]] || '',
           date: subjectDates[subjectIds[0]] || formData.date
         }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+          headers: buildTeacherHeaders()
         });
         await fetchExams();
       } else {
@@ -634,10 +731,7 @@ const ExamManagement = ({ currentUser }) => {
             chapter: subjectChapters[subjectId] || '',
             date: subjectDates[subjectId] || formData.date
           }, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+            headers: buildTeacherHeaders()
           });
           const createdExam = response?.data?.data;
           if (createdExam) {
@@ -649,7 +743,9 @@ const ExamManagement = ({ currentUser }) => {
           const localExams = loadLocalExams();
           const filtered = localExams.filter((exam) => !createdExams.some((created) => buildExamKey(created) === buildExamKey(exam)));
           saveLocalExams(filtered);
-          setExams(prev => [...createdExams, ...prev.filter((exam) => !createdExams.some((created) => buildExamKey(created) === buildExamKey(exam)))]);
+          const merged = mergeExams(createdExams, exams);
+          setExams(merged);
+          syncExamsToAdmin(merged);
         } else {
           await fetchExams();
         }
@@ -697,7 +793,9 @@ const ExamManagement = ({ currentUser }) => {
       }));
       const localExams = loadLocalExams();
       saveLocalExams([...mockExams, ...localExams]);
-      setExams(prev => [...mockExams, ...prev]);
+      const merged = mergeExams(mockExams, exams);
+      setExams(merged);
+      syncExamsToAdmin(merged);
       setShowForm(false);
       setLoading(false);
     }
@@ -710,15 +808,15 @@ const ExamManagement = ({ currentUser }) => {
           const localExams = loadLocalExams();
           const filtered = localExams.filter((exam) => exam._id !== id);
           saveLocalExams(filtered);
-          setExams(prev => prev.filter((exam) => exam._id !== id));
+          const merged = exams.filter((exam) => exam._id !== id);
+          setExams(merged);
+          syncExamsToAdmin(merged);
           return;
         }
-        const token = localStorage.getItem('token');
         await axios.delete(apiUrl(`/api/teacher/exams/${id}`), {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: buildTeacherHeaders()
         });
+        syncExamsToAdmin(exams.filter((exam) => exam._id !== id));
         fetchExams();
       } catch (error) {
         console.error('Error deleting exam:', error);
@@ -1542,32 +1640,63 @@ const ExamManagement = ({ currentUser }) => {
                 </div>
 
                 <div className="p-5 border-b border-gray-100">
-                  <div className="max-w-xl">
-                    <label className="block text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400 mb-2">
-                      Select Exam
-                    </label>
-                    <select
-                      value={marksSelectedExamGroup}
-                      onChange={(e) => setMarksSelectedExamGroup(e.target.value)}
-                      disabled={marksExamGroups.length === 0}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
-                    >
-                      {marksExamGroups.length === 0 ? (
-                        <option value="">No exams available for this class</option>
-                      ) : (
-                        marksExamGroups.map((group) => (
-                          <option key={group.key} value={group.key}>
-                            {(group.subjects && group.subjects.length ? group.subjects.join(' / ') : 'Subject')}
-                            {group.examName ? ` - ${group.examName}` : ''}
-                            {group.date ? ` - ${formatDate(group.date)}` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    {marksExamGroups.length === 0 && (
-                      <p className="mt-2 text-sm text-gray-400">Exam ka data abhi load nahi hua ya is class ke liye exam publish nahi hua.</p>
-                    )}
+                  <div className="max-w-3xl grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400 mb-2">
+                        Select Exam Type
+                      </label>
+                      <select
+                        value={marksSelectedExamType}
+                        onChange={(e) => setMarksSelectedExamType(e.target.value)}
+                        disabled={marksExamTypeOptions.length === 0}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        {marksExamTypeOptions.length === 0 ? (
+                          <option value="">No exam types</option>
+                        ) : (
+                          <>
+                            <option value="">Select Exam Type</option>
+                            {marksExamTypeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400 mb-2">
+                        Select Exam Name
+                      </label>
+                      <select
+                        value={marksSelectedExamGroup}
+                        onChange={(e) => setMarksSelectedExamGroup(e.target.value)}
+                        disabled={filteredMarksExamGroups.length === 0}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        {filteredMarksExamGroups.length === 0 ? (
+                          <option value="">No exams for this type</option>
+                        ) : (
+                          <>
+                            <option value="">Select Exam</option>
+                            {filteredMarksExamGroups.map((group) => (
+                              <option key={group.key} value={group.key}>
+                                {(() => {
+                                  const examName = group.examName || 'Exam';
+                                  const subjects = group.subjects && group.subjects.length
+                                    ? group.subjects
+                                    : ['Subject'];
+                                  return [examName, ...subjects].join('\n');
+                                })()}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </div>
                   </div>
+                  {marksExamGroups.length === 0 && (
+                    <p className="mt-3 text-sm text-gray-400">Exam ka data abhi load nahi hua ya is class ke liye exam publish nahi hua.</p>
+                  )}
                 </div>
               </div>
 

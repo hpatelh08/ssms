@@ -153,6 +153,24 @@ const AIHelperContainer: React.FC<AIHelperContainerProps> = ({
     }, 300);
   }, [selectedSubject, selectedChapter, isChapterLocked, onActionComplete]);
 
+  const finalizeFallbackResponse = useCallback((trimmed: string) => {
+    const fallback: RAGResponse = {
+      explanation: `Let's answer "${trimmed}" in a simple way. Use the main idea from the chapter, then add one detail and one example.`,
+      simplified_explanation: 'Use the main idea and one detail.',
+      book: selectedSubject || 'N/A',
+      page_reference: selectedChapter || 'N/A',
+      sources: [],
+      retrieved_chunks: [],
+      searchMethod: 'offline-fallback',
+      confidence: 0,
+      mode: userMode,
+    };
+
+    setStreamingText('');
+    setStreamPhase('idle');
+    finalizeResponse(fallback, trimmed);
+  }, [finalizeResponse, selectedChapter, selectedSubject, userMode]);
+
   // ── Submit query ────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
@@ -200,6 +218,11 @@ const AIHelperContainer: React.FC<AIHelperContainerProps> = ({
             setStreamingText(text);
           },
           onComplete: (fullText, searchResults) => {
+            if (!fullText.trim()) {
+              finalizeFallbackResponse(trimmed);
+              return;
+            }
+
             // Parse streaming output into RAGResponse
             const relevantChunks = searchResults.map(r => r.chunk);
             const avgScore = searchResults.length > 0
@@ -253,20 +276,20 @@ const AIHelperContainer: React.FC<AIHelperContainerProps> = ({
             setStreamPhase('idle');
             finalizeResponse(response, trimmed);
           },
-          onError: (err) => {
-            throw err;
+          onError: () => {
+            finalizeFallbackResponse(trimmed);
           },
         });
       }
     } catch (err) {
       console.error('[AIHelper] Error:', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      finalizeFallbackResponse(trimmed);
       logAction('ai_query_error', 'ai', { query: trimmed, error: String(err) });
     } finally {
       setLoading(false);
       setStreamPhase('idle');
     }
-  }, [query, loading, knowledgeBase, onActionComplete, selectedSubject, selectedChapter, isChapterLocked, userMode, finalizeResponse]);
+  }, [query, loading, knowledgeBase, onActionComplete, selectedSubject, selectedChapter, isChapterLocked, userMode, finalizeResponse, finalizeFallbackResponse]);
 
   // ── Follow-up question ─────────────────────────────────
 

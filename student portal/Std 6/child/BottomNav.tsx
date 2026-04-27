@@ -9,6 +9,7 @@ interface Props {
 
 const TABS: { key: ChildScreen; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: '\u{1F3E0}' },
+  { key: 'books', label: 'Books', icon: '\u{1F4DA}' },
   { key: 'play', label: 'Games', icon: '\u{1F3AE}' },
   { key: 'english', label: 'English', icon: '\u{1F4D8}' },
   { key: 'maths', label: 'Maths', icon: '\u{1F4D0}' },

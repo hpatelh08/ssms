@@ -89,19 +89,19 @@ const STUDY_THEME_MAP: Record<string, Theme> = {
     accent: 'text-cyan-300',
   },
   '4': {
-    hero: 'linear-gradient(135deg, rgba(249,115,22,0.96), rgba(239,68,68,0.96), rgba(236,72,153,0.92))',
-    heroShadow: '0 22px 50px rgba(249,115,22,0.22)',
+    hero: 'linear-gradient(135deg, rgba(120,53,15,0.98), rgba(245,158,11,0.96), rgba(217,119,6,0.94))',
+    heroShadow: '0 22px 50px rgba(245,158,11,0.24)',
     panelBg: 'rgba(255,255,255,0.16)',
     panelBorder: 'rgba(255,255,255,0.15)',
     label: 'text-white/75',
-    chipBg: 'bg-rose-50',
-    chipText: 'text-rose-700',
-    buttonFrom: 'from-orange-500',
-    buttonTo: 'to-pink-500',
-    buttonShadow: 'shadow-[0_12px_28px_rgba(249,115,22,0.24)]',
+    chipBg: 'bg-amber-50',
+    chipText: 'text-amber-800',
+    buttonFrom: 'from-amber-600',
+    buttonTo: 'to-yellow-600',
+    buttonShadow: 'shadow-[0_12px_28px_rgba(245,158,11,0.24)]',
     cardBorder: 'border-white/70',
-    cardShadow: 'shadow-[0_16px_40px_rgba(249,115,22,0.10)]',
-    accent: 'text-orange-500',
+    cardShadow: 'shadow-[0_16px_40px_rgba(245,158,11,0.10)]',
+    accent: 'text-amber-700',
   },
   '5': {
     hero: 'linear-gradient(135deg, rgba(34,197,94,0.96), rgba(16,185,129,0.96), rgba(14,165,233,0.92))',
@@ -148,6 +148,41 @@ function getClassLabel(item: MaterialRecord, student?: StudentLike | null) {
 
 function getMaterialLink(item: MaterialRecord) {
   return toTeacherFileUrl(item.file?.path || item.fileUrl || item.url || '');
+}
+
+function getMaterialDownloadName(item: MaterialRecord, fallbackLink: string) {
+  const candidate =
+    item.file?.originalName ||
+    item.file?.filename ||
+    (fallbackLink ? (() => {
+      try {
+        const parsed = new URL(fallbackLink);
+        return decodeURIComponent(parsed.pathname.split('/').pop() || '');
+      } catch {
+        return '';
+      }
+    })() : '') ||
+    item.title ||
+    'study-material';
+  return String(candidate)
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim() || 'study-material';
+}
+
+function buildTeacherFileActionUrl(source: string, disposition: 'inline' | 'attachment', filename: string) {
+  const url = String(source || '').trim();
+  if (!url) return '';
+  const teacherPortalBase = `${window.location.protocol}//${window.location.hostname}:5002`;
+  if (/^https?:\/\//i.test(url) && !url.startsWith(teacherPortalBase)) {
+    return url;
+  }
+  const params = new URLSearchParams({
+    url,
+    disposition,
+  });
+  if (filename) params.set('filename', filename);
+  return `/teacher-file?${params.toString()}`;
 }
 
 export const ClassStudyMaterialsPage: React.FC<{ studentProfile: StudentLike | null }> = ({ studentProfile }) => {
@@ -230,7 +265,7 @@ export const ClassStudyMaterialsPage: React.FC<{ studentProfile: StudentLike | n
           <p className="font-semibold text-slate-500">Loading study materials...</p>
         </div>
       ) : error ? (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 font-semibold text-rose-700">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 font-semibold text-amber-800">
           {error}
         </div>
       ) : items.length === 0 ? (
@@ -242,6 +277,9 @@ export const ClassStudyMaterialsPage: React.FC<{ studentProfile: StudentLike | n
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {items.map((item) => {
             const link = getMaterialLink(item);
+            const downloadName = getMaterialDownloadName(item, link);
+            const viewLink = buildTeacherFileActionUrl(link, 'inline', downloadName);
+            const downloadLink = buildTeacherFileActionUrl(link, 'attachment', downloadName);
             const subject = typeof item.subject === 'object' ? item.subject?.subjectName : item.subject;
             return (
               <article
@@ -271,14 +309,23 @@ export const ClassStudyMaterialsPage: React.FC<{ studentProfile: StudentLike | n
                     Uploaded {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN') : 'recently'}
                   </p>
                   {link ? (
-                    <a
-                      href={link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
-                    >
-                      View / Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={viewLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        View
+                      </a>
+                      <a
+                        href={downloadLink}
+                        download={downloadName}
+                        className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
+                      >
+                        Download
+                      </a>
+                    </div>
                   ) : (
                     <span className="text-xs font-semibold text-slate-400">No file</span>
                   )}

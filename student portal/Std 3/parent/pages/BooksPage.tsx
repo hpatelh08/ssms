@@ -440,16 +440,13 @@ export const BooksPage: React.FC<BooksPageProps> = ({ onOpenBook }) => {
     logBookUsage(book.id);
     setLastOpened(book.id);
     // Launch immersive full-screen reader via parent layout
-    if (onOpenBook) {
-      onOpenBook(book);
-    } else {
-      setReaderBook(book);
-    }
+    setReaderBook(book);
+    if (onOpenBook) onOpenBook(book);
   }, [onOpenBook]);
 
   // ─── Render ─────────────────────────────────────
 
-  if (readerBook && !onOpenBook) {
+  if (readerBook) {
     return <BookReaderPage book={readerBook} onBack={() => setReaderBook(null)} />;
   }
 

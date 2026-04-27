@@ -18,7 +18,69 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 function getGroqApiKey(): string {
-  return process.env.GROQ_API_KEY || '';
+  const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
+  return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
+}
+
+function buildOfflineGroqFallback(userPrompt: string): string {
+  const prompt = userPrompt.toLowerCase();
+
+  if (prompt.includes('create a summary')) {
+    return JSON.stringify({
+      summary: 'This chapter has an important idea to learn.',
+      keyPoints: [],
+      vocabulary: [],
+    });
+  }
+
+  if (prompt.includes('extract keywords')) {
+    return JSON.stringify({ keywords: [] });
+  }
+
+  if (prompt.includes('create practice questions')) {
+    return JSON.stringify({ questions: [] });
+  }
+
+  if (prompt.includes('create a quiz')) {
+    return JSON.stringify({ questions: [] });
+  }
+
+  if (prompt.includes('create an engaging lesson')) {
+    return JSON.stringify({
+      sections: [{
+        type: 'introduction',
+        title: 'Chapter',
+        content: 'This chapter has an important idea to learn.',
+        emoji: '📘',
+      }],
+      funFacts: [],
+    });
+  }
+
+  if (prompt.includes('create exercises')) {
+    return JSON.stringify({ exercises: [] });
+  }
+
+  if (prompt.includes('create adaptive quiz')) {
+    return JSON.stringify({ questions: [] });
+  }
+
+  if (prompt.includes('create mini games')) {
+    return JSON.stringify({ games: [] });
+  }
+
+  if (prompt.includes('create flashcards')) {
+    return JSON.stringify({ flashcards: [] });
+  }
+
+  if (prompt.includes('question:')) {
+    return JSON.stringify({
+      answer: 'Look at the chapter clues and answer simply.',
+      sources: [],
+    });
+  }
+
+  return JSON.stringify({});
 }
 
 // ─── Types ────────────────────────────────────────────────
@@ -120,7 +182,7 @@ function buildContextString(chunks: TextbookChunk[]): string {
 
 async function callGroq(systemPrompt: string, userPrompt: string): Promise<string> {
   const apiKey = getGroqApiKey();
-  if (!apiKey) throw new Error('No Groq API key configured');
+  if (!apiKey) return buildOfflineGroqFallback(userPrompt);
 
   const response = await fetch(GROQ_API_URL, {
     method: 'POST',
@@ -140,9 +202,7 @@ async function callGroq(systemPrompt: string, userPrompt: string): Promise<strin
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(`Groq API error: ${response.status}`);
-  }
+  if (!response.ok) return buildOfflineGroqFallback(userPrompt);
 
   const data = await response.json();
   return data.choices?.[0]?.message?.content || '{}';

@@ -181,7 +181,38 @@ export const UnifiedGameShell: React.FC<UnifiedGameShellProps> = ({
   }, [gameId, sessionXP, onGameWin]);
 
   // ─── Guard ──────────────────────────────────────────────
-  if (!config) return null;
+  if (!config) {
+    return (
+      <div className="max-w-md mx-auto">
+        <div
+          className="rounded-3xl p-8 text-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(240,245,255,0.98), rgba(226,255,251,0.98))',
+            border: '1px solid rgba(148,163,184,0.18)',
+            boxShadow: '0 20px 50px rgba(79,70,229,0.12)',
+          }}
+        >
+          <p className="text-[11px] font-black tracking-[0.28em] uppercase text-indigo-500">
+            Game Unavailable
+          </p>
+          <h2 className="mt-3 text-2xl font-black text-slate-800">
+            This game cannot be loaded.
+          </h2>
+          <p className="mt-2 text-sm font-medium text-slate-500">
+            Please go back and try another game.
+          </p>
+          <button
+            type="button"
+            onClick={onExit}
+            className="mt-6 rounded-2xl px-5 py-3 text-sm font-extrabold text-white"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const meta = DIFF_META[difficulty];
 

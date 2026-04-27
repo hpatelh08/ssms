@@ -19,6 +19,7 @@ import {
   startReadingSession,
   endReadingSession,
   recordPageView,
+  recordBookTotalPages,
   recordAIQuestion,
   recordQuizResult,
 } from '../../../services/readingInsights';
@@ -79,14 +80,27 @@ export function useReadingTracker(bookId: string, bookTitle: string) {
 
   const trackPageView = useCallback(
     (pageNum: number, totalPages?: number) => {
-      if (!pagesSeenRef.current.has(pageNum)) {
-        pagesSeenRef.current.add(pageNum);
-        recordPageView(pageNum, totalPages);
+      const cleanPage = Math.round(pageNum);
+      const cleanTotal = typeof totalPages === 'number' ? Math.round(totalPages) : undefined;
+      if (cleanPage <= 0) return;
+      if (!pagesSeenRef.current.has(cleanPage)) {
+        pagesSeenRef.current.add(cleanPage);
+        recordPageView(cleanPage, cleanTotal);
+        if (cleanTotal && cleanTotal > 0) {
+          recordBookTotalPages(cleanTotal);
+        }
         setStats((s) => ({ ...s, pagesRead: pagesSeenRef.current.size }));
       }
     },
     [],
   );
+
+  const trackBookTotalPages = useCallback((pages: number) => {
+    const cleanTotal = Math.round(pages);
+    if (cleanTotal > 0) {
+      recordBookTotalPages(cleanTotal);
+    }
+  }, []);
 
   const trackWordClick = useCallback(() => {
     setStats((s) => ({ ...s, wordsClicked: s.wordsClicked + 1 }));
@@ -131,6 +145,7 @@ export function useReadingTracker(bookId: string, bookTitle: string) {
   return {
     stats,
     trackPageView,
+    trackBookTotalPages,
     trackWordClick,
     trackAIQuestion,
     trackQuizResult,

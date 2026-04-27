@@ -148,7 +148,7 @@ export const WordPopover: React.FC<WordPopoverProps> = ({
           <div
             style={{
               padding: '12px 16px 10px',
-              background: 'linear-gradient(135deg, #EDE9FE, #FEF3C7)',
+              background: 'linear-gradient(135deg, #FDE7F3, #DCFCE7)',
               borderBottom: '1px solid rgba(0,0,0,0.05)',
             }}
           >
@@ -184,21 +184,21 @@ export const WordPopover: React.FC<WordPopoverProps> = ({
               emoji="🔊"
               label="Hear Pronunciation"
               onClick={handlePronounce}
-              color="#6366F1"
+              color="#10B981"
             />
             <PopoverBtn
               emoji="💡"
               label="Explain Word"
               onClick={handleExplain}
               active={activeTab === 'explain'}
-              color="#8B5CF6"
+              color="#EC4899"
             />
             <PopoverBtn
               emoji="📝"
               label="Show Example"
               onClick={handleExample}
               active={activeTab === 'example'}
-              color="#EC4899"
+              color="#84CC16"
             />
             {onAskAI && (
               <PopoverBtn
@@ -208,7 +208,7 @@ export const WordPopover: React.FC<WordPopoverProps> = ({
                   onAskAI(`What does "${word}" mean? Explain for a child.`);
                   onClose();
                 }}
-                color="#10B981"
+                color="#22C55E"
               />
             )}
           </div>

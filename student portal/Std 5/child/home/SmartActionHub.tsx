@@ -34,6 +34,18 @@ interface TileDef {
 
 const TILES: TileDef[] = [
   {
+    icon: '📚',
+    watermark: '📖',
+    label: 'Books',
+    desc: 'Open your lessons!',
+    xp: '+12 XP',
+    screen: 'books',
+    gradient: 'linear-gradient(135deg, #ffe9cc 0%, #ffd6a3 100%)',
+    iconBg: 'rgba(249,115,22,0.14)',
+    accentColor: '#f97316',
+    shineTint: 'rgba(255,255,255,0.35)',
+  },
+  {
     icon: '🦊',
     watermark: '🌲',
     label: 'Play Games',

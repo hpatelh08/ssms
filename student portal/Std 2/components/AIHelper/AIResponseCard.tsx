@@ -28,7 +28,72 @@ export const AIResponseCard: React.FC<AIResponseCardProps> = React.memo(({
   const [isTyping, setIsTyping] = useState(true);
   const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const displayText = isStudentMode ? response.explanation : (viewMode === 'parent' ? response.explanation : response.simplified_explanation);
+  function normalizeText(text: string): string {
+    return (text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function firstSentence(text: string): string {
+    const clean = normalizeText(text);
+    if (!clean) return '';
+    const match = clean.match(/[^.!?]+[.!?]?/);
+    return (match?.[0] || clean).trim();
+  }
+
+  function buildFallbackAnswer(question: string): string {
+    const source = response.sources?.[0];
+    const chapter = source?.chapter || response.book || '';
+    const topic = firstSentence(source?.content || source?.chapter || '')
+      .replace(/^(story about|this chapter is about|it is about)\s+/i, '')
+      .replace(/[.?!]+$/g, '')
+      .trim() || normalizeText(chapter) || 'the chapter';
+    const q = normalizeText(question).toLowerCase();
+
+    if (q.includes('worksheet') || q.includes('practice question') || q.includes('practice questions')) {
+      return [
+        'Here is a simple worksheet:',
+        '1. What is the chapter about?',
+        '2. Who or what is in the chapter?',
+        '3. What does the main person or character do?',
+        '4. What is one important thing that happens?',
+        '5. What is the main idea?',
+      ].join('\n');
+    }
+
+    if (q.includes('parent tip') || q.includes('teaching tip') || q.includes('tip')) {
+      return 'Tip: Read the chapter with your child, ask one easy question, and let them answer in one short sentence.';
+    }
+
+    if (q.includes('example')) {
+      return `Example: If the chapter is about ${topic}, you can talk about a similar thing from home or school.`;
+    }
+
+    if (q.includes('explain') || q.includes('summarize') || q.includes('what is happening') || q.includes("what's happening") || q.includes('simple')) {
+      return `This chapter is about ${topic}.`;
+    }
+
+    if (q.includes('new words') || q.includes('difficult words') || q.includes('vocabulary')) {
+      return topic !== 'the chapter'
+        ? `Important words from ${topic} should be learned slowly.`
+        : 'Look for the important words in the chapter and learn their meaning.';
+    }
+
+    return `This chapter is about ${topic}.`;
+  }
+
+  function isGenericFallback(text: string): boolean {
+    const normalized = normalizeText(text).toLowerCase();
+    return (
+      !normalized ||
+      normalized.includes('simple answer') ||
+      normalized.includes('answer simply') ||
+      normalized.includes('chapter clues')
+    );
+  }
+
+  const rawDisplayText = (isStudentMode ? response.explanation : (viewMode === 'parent' ? response.explanation : response.simplified_explanation)).trim();
+  const displayText = !isGenericFallback(rawDisplayText)
+    ? rawDisplayText
+    : buildFallbackAnswer(query);
 
   // Typing animation
   useEffect(() => {

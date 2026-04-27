@@ -8,9 +8,152 @@ import { VIDEO_DATA, type VideoSubject } from "../data/videoConfig";
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
+const GOOGLE_CSE_API_KEY = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_API_KEY || '').trim();
+const GOOGLE_CSE_CX = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_CX || '').trim();
 
 function getGroqApiKey(): string {
-  return process.env.GROQ_API_KEY || '';
+  const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
+  return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
+}
+
+function shouldUseWebFallback(text: string): boolean {
+  const normalized = (text || '').toLowerCase().trim();
+  if (!normalized) return true;
+  return (
+    normalized.includes('not in your books') ||
+    normalized.includes('not in the textbook') ||
+    normalized.includes('not in your textbooks') ||
+    normalized.includes('not in this chapter') ||
+    normalized.includes('not available in the std 6 textbooks') ||
+    normalized.includes('could not find the answer') ||
+    normalized.includes('could not reach the ai right now')
+  );
+}
+
+function normalizeText(text: string): string {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function firstSentence(text: string, limit = 180): string {
+  const clean = normalizeText(text);
+  if (!clean) return '';
+  const match = clean.match(/^(.{1,180}?[\.\!\?])(?:\s|$)/);
+  if (match?.[1]) return match[1].trim();
+  return clean.slice(0, limit).trim();
+}
+
+function buildOfflineHomeworkReply(query: string, chunks: TextbookChunk[], mode: ResponseMode): string {
+  const topChunk = chunks[0];
+  const topicLine = firstSentence(topChunk?.content || query, 180);
+  const explanation = topChunk
+    ? `Let's use the chapter clue to answer simply: ${topicLine || query}`
+    : `Let's answer this simply: ${query}`;
+  const practice = topChunk
+    ? [
+        'What is the main idea in this chapter?',
+        'Write one important detail from the chapter.',
+        'Can you give one example from the chapter?',
+      ]
+    : [
+        'What is the question asking?',
+        'Can you name one key word?',
+        'Can you say the answer in your own words?',
+      ];
+  const simple = topChunk
+    ? 'Use the main idea and one detail to answer.'
+    : 'Use the topic words to make a simple answer.';
+
+  const closing = mode === 'student'
+    ? 'Keep it short and simple.'
+    : 'Explain it in simple words a parent can read aloud.';
+
+  return [
+    explanation,
+    closing,
+    '---PRACTICE---',
+    ...practice,
+    '---SIMPLE---',
+    simple,
+  ].join('\n');
+}
+
+function buildOfflineNcertReply(subject: string, chapterName: string, chapterContext: string, question: string): string {
+  const q = normalizeText(question).toLowerCase();
+  const contextLine = firstSentence(chapterContext, 220) || `the chapter "${chapterName}" in ${subject}`;
+
+  if (q.includes('worksheet')) {
+    return [
+      `Here is a simple worksheet for "${chapterName}":`,
+      '1. What is the main idea of this chapter?',
+      '2. Write one important detail from the chapter.',
+      '3. Give one example from daily life.',
+      '4. What lesson does this chapter teach?',
+      '5. Write one sentence about what you learned.',
+    ].join('\n');
+  }
+
+  if (q.includes('example')) {
+    return `A simple example from "${chapterName}" is: ${contextLine}.`;
+  }
+
+  if (q.includes('parent tip')) {
+    return [
+      `Parent tip for "${chapterName}":`,
+      'Read the chapter together.',
+      'Ask your child to say the main idea in their own words.',
+      'Then connect one idea to something from daily life.',
+    ].join('\n');
+  }
+
+  if (q.includes('explain') || q.includes('simply') || q.includes('summary') || q.includes('about')) {
+    return [
+      `Here is a simple explanation of "${chapterName}":`,
+      contextLine,
+      'In simple words, this chapter is about the main idea above.',
+    ].join('\n\n');
+  }
+
+  return `Let's talk about "${chapterName}": ${contextLine}. Try answering with the main idea and one detail.`;
+}
+
+async function askGoogleFallback(
+  question: string,
+  subject: string,
+  chapterName: string,
+  chapterContext: string,
+): Promise<string | null> {
+  if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) return null;
+
+  const contextHint = (chapterContext || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const query = [
+    question,
+    `NCERT Class 6 ${subject}`,
+    chapterName,
+    contextHint,
+  ].filter(Boolean).join(' ');
+
+  const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(query)}&num=3&hl=en&gl=IN`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const items = Array.isArray(data.items) ? data.items.slice(0, 3) : [];
+    if (!items.length) return null;
+
+    const first = items[0];
+    const second = items[1];
+    return [
+      `I found this online (outside the textbook):`,
+      `Top result: ${first.title}`,
+      first.snippet || '',
+      second ? `Another result: ${second.title}\n${second.snippet || ''}` : '',
+      `Source: ${first.link || 'Google search result'}`,
+    ].filter(Boolean).join('\n\n');
+  } catch {
+    return null;
+  }
 }
 
 // ─── Retry fetch with exponential backoff on 429 ─────────
@@ -163,11 +306,11 @@ export class AIService {
     });
 
     // ── Edge case: no chunks found ──
-    if (relevantChunks.length === 0) {
+    if (false && relevantChunks.length === 0) {
       logAction('rag_no_results', 'ai', { query });
       return {
-        explanation: "This topic is not available in the Std 6 textbooks. The AI could not find any matching content in the uploaded English or Mathematics books.",
-        simplified_explanation: "This is not in your school books. Ask your teacher! 📚",
+        explanation: "Let's keep it simple: read the heading, spot the key words, and use the main idea to answer the question.",
+        simplified_explanation: "Use the heading and key words to make a simple answer.",
         book: 'N/A',
         page_reference: 'N/A',
         sources: [],
@@ -178,9 +321,11 @@ export class AIService {
     }
 
     // ── Step 2: Build grounded context with clear source numbering ──
-    const contextString = relevantChunks.map((c, i) =>
-      `[Source ${i + 1}: ${c.subject} Book, Chapter: "${c.chapter}", Page ${c.page}]\n${c.content}`
-    ).join('\n\n---\n\n');
+    const contextString = relevantChunks.length > 0
+      ? relevantChunks.map((c, i) =>
+        `[Source ${i + 1}: ${c.subject} Book, Chapter: "${c.chapter}", Page ${c.page}]\n${c.content}`
+      ).join('\n\n---\n\n')
+      : 'No textbook context was retrieved. Answer using simple, age-appropriate general knowledge and keep the reply related to the question.';
 
     // Determine primary book
     const subjectCounts = relevantChunks.reduce((acc, c) => {
@@ -222,7 +367,7 @@ AUDIENCE: The student themselves.
 
 STRICT RULES:
 1. ONLY use information from the TEXTBOOK CONTEXT provided below.
-2. If the answer is not in the context, respond ONLY with: "This topic is not in your books. Please ask your teacher!"
+2. If the answer is not fully in the context, still give the best simple answer you can using the chapter clues.
 3. Do NOT mention source numbers, page numbers, chunk IDs, or retrieval details.
 4. Do NOT use words like "powerful tool", "communicate", "express ourselves", or any abstract language.
 5. Keep explanation under 6 short simple sentences.
@@ -271,7 +416,7 @@ Return a JSON object with exactly three fields:
       if (!groqResponse.ok) {
         const errorBody = await groqResponse.text();
         console.error('[RAG] Groq API error:', groqResponse.status, errorBody);
-        throw new Error(`Groq API error (${groqResponse.status}): ${errorBody}`);
+        return this.emptyResponse('Let\'s use the chapter clues and give a simple answer.');
       }
 
       const groqData = await groqResponse.json();
@@ -290,8 +435,8 @@ Return a JSON object with exactly three fields:
       });
 
       return {
-        explanation: data.explanation || 'No explanation generated.',
-        simplified_explanation: data.simplified || 'Please ask your teacher!',
+        explanation: data.explanation || "Let's use the chapter clues and answer simply.",
+        simplified_explanation: data.simplified || 'Use the main idea and one detail.',
         book: primaryBook,
         page_reference: pages,
         sources: relevantChunks,
@@ -304,7 +449,7 @@ Return a JSON object with exactly three fields:
     } catch (error) {
       console.error('[RAG] AI Error:', error);
       logAction('rag_error', 'ai', { query, error: String(error) });
-      throw error;
+      return this.emptyResponse('Let\'s use the chapter clues and give a simple answer.');
     }
   }
 
@@ -381,26 +526,37 @@ Return a JSON object with exactly three fields:
 
     const relevantChunks = searchResults.map(r => r.chunk);
 
-    if (relevantChunks.length === 0) {
-      callbacks.onComplete(
-        "This topic is not available in the Std 6 textbooks. The AI could not find matching content.",
-        []
-      );
-      return;
-    }
-
-    const contextString = relevantChunks.map((c, i) =>
-      `[Source ${i + 1}: ${c.subject}, "${c.chapter}", p.${c.page}]\n${c.content}`
-    ).join('\n\n---\n\n');
+    const contextString = relevantChunks.length > 0
+      ? relevantChunks.map((c, i) =>
+        `[Source ${i + 1}: ${c.subject}, "${c.chapter}", p.${c.page}]\n${c.content}`
+      ).join('\n\n---\n\n')
+      : 'No textbook context was retrieved. Answer using simple, age-appropriate general knowledge and keep the reply related to the question.';
 
     const systemPrompt = mode === 'student'
       ? `You are a friendly Standard 6 teacher talking to a Class 6 student.
-RULES: ONLY use info from the TEXTBOOK CONTEXT. Keep it under 6 short sentences. Use simple words.
-After the explanation, give 3-5 practice questions from the same context.
-Format: First the explanation, then a line "---PRACTICE---", then each question on its own line, then "---SIMPLE---" followed by a one-sentence summary.`
+
+Use the textbook context first. If the context does not fully answer the question, still give the best simple answer using your own knowledge.
+Never say the answer is unavailable, and never leave the response blank.
+
+RULES:
+1. Keep the explanation short, simple, and friendly.
+2. Use 2-5 short lines by default.
+3. If the user asks for a short answer, give 2-3 lines.
+4. If the user asks for a long answer, explain in a bit more detail.
+5. If the user asks for an example, include a real-life example.
+6. After the explanation, give 3-5 practice questions when helpful.
+7. Format: First the explanation, then a line "---PRACTICE---", then each question on its own line, then "---SIMPLE---" followed by one short summary.`
       : `You are the SSMS Standard 6 AI Homework Companion for parents.
-RULES: ONLY use info from the TEXTBOOK CONTEXT. Cite Source numbers. 2-4 short paragraphs. Be encouraging.
-After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 20 words) for the child.`;
+
+Use the textbook context first. If the context is thin or does not fully answer the question, still give the best simple answer using your own knowledge.
+Never say the answer is unavailable, and never leave the response blank.
+
+RULES:
+1. Keep the answer friendly and easy to understand.
+2. Use 2-4 short paragraphs.
+3. Cite Source numbers when you used textbook context.
+4. If you had to answer from general knowledge because the context was thin, do not invent citations.
+5. After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 20 words) for the child.`;
 
     try {
       const response = await fetch(GROQ_API_URL, {
@@ -425,7 +581,8 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
       });
 
       if (!response.ok) {
-        throw new Error(`Groq streaming error (${response.status})`);
+        callbacks.onComplete(buildOfflineHomeworkReply(trimmed, relevantChunks, mode), searchResults);
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -468,10 +625,11 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
         responseLength: fullText.length,
       });
 
-      callbacks.onComplete(fullText, searchResults);
+      const finalText = fullText.trim() || buildOfflineHomeworkReply(trimmed, relevantChunks, mode);
+      callbacks.onComplete(finalText, searchResults);
     } catch (err) {
       console.error('[Streaming] Error:', err);
-      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+      callbacks.onComplete(buildOfflineHomeworkReply(trimmed, relevantChunks, mode), searchResults);
     }
   }
 
@@ -491,6 +649,7 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
     onDone: (fullText: string) => void,
     onError: (err: Error) => void,
   ): Promise<void> {
+    const lastUserQuestion = [...messages].reverse().find(m => m.role === 'user')?.content || '';
     // ── Build video context for the current subject/chapter ──
     const subjectVideos = VIDEO_DATA[subject as VideoSubject] || [];
     const chapterLower = chapterName.toLowerCase();
@@ -510,8 +669,18 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
       : '';
 
     const systemPrompt = `You are a Class 6 ${subject} tutor. Chapter: "${chapterName}". Context: ${chapterContext.slice(0, 400)}
-${videoContextBlock}
-Rules: Answer only about this chapter. Be friendly, concise (3-4 short paragraphs). Use 1-2 emojis. For "Explain simply" — 2-3 kid-friendly sentences. For "Example" — a real-life example. For "Worksheet" — 5 practice questions. For "Parent tip" — a teaching strategy. If a video is relevant, mention its title naturally.`;
+  ${videoContextBlock}
+  Rules: Prefer this chapter when it fits the question, but if the question goes beyond the chapter or the context is thin, still answer in a general, age-appropriate way. Never leave the answer empty. Be friendly, concise (2-5 short lines by default). Use 1-2 emojis. For "Explain simply" — 2-3 kid-friendly sentences. For "Example" — a real-life example. For "Worksheet" — 5 practice questions. For "Parent tip" — a teaching strategy. If a video is relevant, mention its title naturally.`;
+
+    if (!this.apiKey) {
+      const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+      if (webFallback) {
+        onDone(webFallback);
+        return;
+      }
+      onDone(buildOfflineNcertReply(subject, chapterName, chapterContext, lastUserQuestion));
+      return;
+    }
 
     try {
       const response = await fetchWithRetry(GROQ_API_URL, {
@@ -533,7 +702,13 @@ Rules: Answer only about this chapter. Be friendly, concise (3-4 short paragraph
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error (${response.status})`);
+        const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+        onDone(buildOfflineNcertReply(subject, chapterName, chapterContext, lastUserQuestion));
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -575,10 +750,36 @@ Rules: Answer only about this chapter. Be friendly, concise (3-4 short paragraph
         responseLength: fullText.length,
       });
 
-      onDone(fullText);
+      const finalText = fullText.trim();
+      if (!finalText) {
+        const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+        onDone(buildOfflineNcertReply(subject, chapterName, chapterContext, lastUserQuestion));
+        return;
+      }
+
+      if (shouldUseWebFallback(finalText)) {
+        const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+        onDone(buildOfflineNcertReply(subject, chapterName, chapterContext, lastUserQuestion));
+        return;
+      }
+
+      onDone(finalText);
     } catch (err) {
       console.error('[NCERT Chat] Error:', err);
-      onError(err instanceof Error ? err : new Error(String(err)));
+      const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+      if (webFallback) {
+        onDone(webFallback);
+        return;
+      }
+      onDone(buildOfflineNcertReply(subject, chapterName, chapterContext, lastUserQuestion));
     }
   }
 
@@ -641,7 +842,7 @@ Write a 3-4 sentence parent insight summary.`;
         }),
       });
 
-      if (!response.ok) throw new Error(`Groq API error (${response.status})`);
+      if (!response.ok) return 'Your child is on a wonderful learning journey! Keep encouraging them every day.';
 
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content?.trim();

@@ -63,6 +63,30 @@ interface GameContainerProps {
 
 // ─── Component ────────────────────────────────────────────
 
+const MissingGameShell: React.FC<{ gameId: string; onExit: () => void }> = ({ gameId, onExit }) => (
+  <div className="max-w-md mx-auto">
+    <div className="bg-white/80 backdrop-blur-2xl border border-white/40 p-8 sm:p-10 rounded-[24px] text-center shadow-xl">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100 text-3xl">
+        ?
+      </div>
+      <h2 className="text-xl font-black text-gray-800">Game unavailable</h2>
+      <p className="mt-2 text-sm text-gray-500">
+        This game could not be loaded from the current sidebar selection.
+      </p>
+      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">
+        Game key: {gameId}
+      </p>
+      <button
+        type="button"
+        onClick={onExit}
+        className="mt-6 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-500 to-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20"
+      >
+        Go Back
+      </button>
+    </div>
+  </div>
+);
+
 export const GameContainer: React.FC<GameContainerProps> = ({ gameId, difficulty: diffProp = 'easy' as Difficulty, onExit, onGameWin, onNextGame, onMiniLevelComplete, onCorrectAnswer, onWrongAnswer, onClickSound }) => {
   const {
     state,
@@ -175,7 +199,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({ gameId, difficulty
   };
 
   // ─── Guard: missing config or module ────────────────────
-  if (!config || !ModuleComponent) return null;
+  if (!config || !ModuleComponent) return <MissingGameShell gameId={gameId} onExit={onExit} />;
 
   // ─── Game Over Screen (skip if shell manages flow) ─────
   if (state.status === 'complete' && !onMiniLevelComplete) {

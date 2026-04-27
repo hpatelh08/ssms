@@ -23,6 +23,7 @@ import { ColorProgressPage } from './pages/ColorProgressPage';
 import { MessagesPage } from './pages/MessagesPage';
 import LeavePage from './pages/LeavePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExamsMarksPage } from './pages/ExamsMarksPage';
 import { NCERTAssistantPage } from './pages/NCERTAssistantPage';
 import { AiBuddyLearningZone } from './pages/AiBuddyLearningZone';
 import { AiWorksheetGenerator } from './pages/AiWorksheetGenerator';
@@ -38,7 +39,7 @@ import { type BookEntry } from '../data/bookConfig';
 import { type VideoEntry, type VideoSubject } from '../data/videoConfig';
 import AIBuddyFloating from '../components/AIBuddyFloating';
 
-/* â”€â”€ Lazy-loaded immersive book reader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Lazy-loaded immersive book reader ───────────────── */
 const BookReaderPage = React.lazy(() => import('./pages/BookReaderPage'));
 
 /* â”€â”€ Layout Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -115,6 +116,8 @@ const ParentShell: React.FC = () => {
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
       case 'assignments': return <AssignmentsPage />;
       case 'study-materials': return <StudyMaterialsPage />;
+      case 'exams': return <ExamsMarksPage />;
+      case 'exams-marks': return <ExamsMarksPage />;
       case 'garden':      return <GardenGrowthPage />;
       case 'colors':      return <ColorProgressPage />;
       case 'messages':    return <MessagesPage />;
@@ -124,13 +127,12 @@ const ParentShell: React.FC = () => {
     }
   };
 
-  /* â”€â”€ Immersive mode: Book reader takes over the full viewport â”€â”€ */
   if (readerBook) {
     return (
       <Suspense
         fallback={
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100">
-            <p className="text-sm text-gray-400 font-medium">Loading readerâ€¦</p>
+            <p className="text-sm text-gray-400 font-medium">Loading reader...</p>
           </div>
         }
       >

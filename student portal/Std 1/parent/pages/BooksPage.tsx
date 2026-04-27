@@ -31,6 +31,7 @@ import {
 import type { TextbookChunk } from '../../types';
 
 const spring = { type: 'spring' as const, stiffness: 220, damping: 24 };
+const BookReaderPage = React.lazy(() => import('./BookReaderPage'));
 
 /* ── localStorage helpers ─────────────────────── */
 
@@ -550,6 +551,14 @@ export const BooksPage: React.FC<BooksPageProps> = ({ onOpenBook }) => {
       setIndexing(false);
     }
   }, [indexing]);
+
+  if (readerBook && !onOpenBook) {
+    return (
+      <React.Suspense fallback={<div className="text-center py-12 text-purple-400 text-sm font-medium">Loading...</div>}>
+        <BookReaderPage book={readerBook} onBack={() => setReaderBook(null)} />
+      </React.Suspense>
+    );
+  }
 
   // ─── Render ─────────────────────────────────────
 

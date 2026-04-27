@@ -49,6 +49,12 @@ const NAV_ITEMS: NavItem[] = [
     activeGlow: 'rgba(136,215,183,0.24)',
   },
   {
+    key: 'books', label: 'Books', icon: '📚',
+    accentColor: '#8bb7e8',
+    activeBg: 'rgba(232,242,255,0.92)',
+    activeGlow: 'rgba(139,183,232,0.24)',
+  },
+  {
     key: 'save-ocean', label: 'Save the Ocean', icon: '🌊',
     accentColor: '#48bfd8',
     activeBg: 'rgba(223,247,252,0.94)',

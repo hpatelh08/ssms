@@ -195,8 +195,8 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
           name: String(match.name || currentUser.name || '').trim() || currentUser.name,
           email: String(match.email || currentUser.email || '').trim(),
           teacherId: String(currentUser.teacherId || match.teacher_id || match.emp || match.email || '').trim(),
-          assignedClass: String(currentUser.assignedClass || parsedClass.assignedClass || '').trim(),
-          division: String(currentUser.division || parsedClass.division || '').trim().toUpperCase(),
+          assignedClass: String(parsedClass.assignedClass || currentUser.assignedClass || '').trim(),
+          division: String(parsedClass.division || currentUser.division || '').trim().toUpperCase(),
           subject: String(currentUser.subject || match.subject || '').trim()
         };
 
@@ -218,8 +218,8 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
             name: String(match.name || currentUser.name || '').trim() || currentUser.name,
             email: String(match.email || currentUser.email || '').trim(),
             teacherId: String(currentUser.teacherId || match.teacher_id || match.emp || match.email || '').trim(),
-            assignedClass: String(currentUser.assignedClass || parsedClass.assignedClass || '').trim(),
-            division: String(currentUser.division || parsedClass.division || '').trim().toUpperCase(),
+            assignedClass: String(parsedClass.assignedClass || currentUser.assignedClass || '').trim(),
+            division: String(parsedClass.division || currentUser.division || '').trim().toUpperCase(),
             subject: String(currentUser.subject || match.subject || '').trim()
           };
 

@@ -19,6 +19,7 @@ import {
   startReadingSession,
   endReadingSession,
   recordPageView,
+  recordBookTotalPages,
   updateBookReadingProgress,
   recordAIQuestion,
   recordQuizResult,
@@ -80,17 +81,28 @@ export function useReadingTracker(bookId: string, bookTitle: string, totalPages 
 
   const trackPageView = useCallback(
     (pageNum: number) => {
-      if (!pagesSeenRef.current.has(pageNum)) {
-        pagesSeenRef.current.add(pageNum);
-        recordPageView(pageNum);
-        if (totalPages > 0) {
-          updateBookReadingProgress(bookId, bookTitle, totalPages, pageNum);
+      const cleanPage = Math.round(pageNum);
+      const cleanTotal = Math.round(totalPages);
+      if (cleanPage <= 0) return;
+      if (!pagesSeenRef.current.has(cleanPage)) {
+        pagesSeenRef.current.add(cleanPage);
+        recordPageView(cleanPage, cleanTotal > 0 ? cleanTotal : undefined);
+        if (cleanTotal > 0) {
+          recordBookTotalPages(cleanTotal);
+          updateBookReadingProgress(bookId, bookTitle, cleanTotal, cleanPage);
         }
         setStats((s) => ({ ...s, pagesRead: pagesSeenRef.current.size }));
       }
     },
     [bookId, bookTitle, totalPages],
   );
+
+  const trackBookTotalPages = useCallback((pages: number) => {
+    const cleanTotal = Math.round(pages);
+    if (cleanTotal > 0) {
+      recordBookTotalPages(cleanTotal);
+    }
+  }, []);
 
   const trackWordClick = useCallback(() => {
     setStats((s) => ({ ...s, wordsClicked: s.wordsClicked + 1 }));
@@ -135,6 +147,7 @@ export function useReadingTracker(bookId: string, bookTitle: string, totalPages 
   return {
     stats,
     trackPageView,
+    trackBookTotalPages,
     trackWordClick,
     trackAIQuestion,
     trackQuizResult,

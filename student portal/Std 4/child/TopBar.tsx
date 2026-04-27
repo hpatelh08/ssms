@@ -39,6 +39,7 @@ export const TopBar: React.FC = React.memo(() => {
     grade: user.grade,
     status: 'Active',
     studentId: '',
+    parentAccessKey: '',
     password: '',
     admissionNumber: '',
     grNo: '',
@@ -52,6 +53,7 @@ export const TopBar: React.FC = React.memo(() => {
   };
   const division = profile.division || 'A';
   const fatherName = profile.fatherName || profile.parentName || '-';
+  const parentAccessKey = profile.parentAccessKey || `${user.username || 'STD4'}-PARENT`;
   const openProfile = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -272,7 +274,8 @@ export const TopBar: React.FC = React.memo(() => {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    ['Student ID', profile.studentId],
+                  ['Student ID', profile.studentId],
+                    ['Parent Access Key', parentAccessKey],
                     ['Password', profile.password],
                     ['Admission No', profile.admissionNumber],
                     ['GR No', profile.grNo],

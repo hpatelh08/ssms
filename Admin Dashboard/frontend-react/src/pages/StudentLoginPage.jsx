@@ -91,6 +91,11 @@ const loginCards = [
   },
 ];
 
+function getStudentPortalUrl(grade) {
+  const port = 3000 + grade;
+  return `http://127.0.0.1:${port}`;
+}
+
 function getTeacherPortalBaseUrl() {
   return `${window.location.protocol}//${window.location.hostname}:5001`;
 }
@@ -237,7 +242,9 @@ export default function StudentLoginPage() {
                       <button
                         key={card.grade}
                         type="button"
-                        onClick={() => navigate('/login')}
+                        onClick={() => {
+                          window.location.href = getStudentPortalUrl(card.grade);
+                        }}
                         className="rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                       >
                         <div className="mb-4 flex items-center justify-between gap-3">

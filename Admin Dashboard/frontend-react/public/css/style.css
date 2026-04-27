@@ -2655,22 +2655,6 @@ select.form-control { cursor: pointer; }
   text-align: center;
 }
 
-.student-portal-link {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: #2563eb;
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 0.15rem;
-}
-
-.student-portal-link:hover {
-  color: #1d4ed8;
-}
-
 /* =============================================
    FEE PAYMENT AUTOCOMPLETE
    ============================================= */

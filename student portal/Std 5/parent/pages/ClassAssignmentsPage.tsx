@@ -152,6 +152,42 @@ function getAssignmentFileLink(item: AssignmentRecord) {
   return toTeacherFileUrl(attachment?.path || '');
 }
 
+function getAssignmentDownloadName(item: AssignmentRecord, fallbackLink: string) {
+  const attachment = item.attachment || item.attachments?.[0] || null;
+  const candidate =
+    attachment?.originalName ||
+    attachment?.filename ||
+    (fallbackLink ? (() => {
+      try {
+        const parsed = new URL(fallbackLink);
+        return decodeURIComponent(parsed.pathname.split('/').pop() || '');
+      } catch {
+        return '';
+      }
+    })() : '') ||
+    item.title ||
+    'assignment';
+  return String(candidate)
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim() || 'assignment';
+}
+
+function buildTeacherFileActionUrl(source: string, disposition: 'inline' | 'attachment', filename: string) {
+  const url = String(source || '').trim();
+  if (!url) return '';
+  const teacherPortalBase = `${window.location.protocol}//${window.location.hostname}:5002`;
+  if (/^https?:\/\//i.test(url) && !url.startsWith(teacherPortalBase)) {
+    return url;
+  }
+  const params = new URLSearchParams({
+    url,
+    disposition,
+  });
+  if (filename) params.set('filename', filename);
+  return `/teacher-file?${params.toString()}`;
+}
+
 export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null }> = ({ studentProfile }) => {
   const [items, setItems] = useState<AssignmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,6 +280,9 @@ export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {items.map((item) => {
             const fileLink = getAssignmentFileLink(item);
+            const downloadName = getAssignmentDownloadName(item, fileLink);
+            const viewLink = buildTeacherFileActionUrl(fileLink, 'inline', downloadName);
+            const downloadLink = buildTeacherFileActionUrl(fileLink, 'attachment', downloadName);
             const subject = typeof item.subject === 'object' ? item.subject?.subjectName : item.subject;
             return (
               <article
@@ -286,14 +325,23 @@ export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null
                     Uploaded {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN') : 'recently'}
                   </p>
                   {fileLink ? (
-                    <a
-                      href={fileLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
-                    >
-                      View / Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={viewLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        View
+                      </a>
+                      <a
+                        href={downloadLink}
+                        download={downloadName}
+                        className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
+                      >
+                        Download
+                      </a>
+                    </div>
                   ) : (
                     <span className="text-xs font-semibold text-slate-400">No attachment</span>
                   )}

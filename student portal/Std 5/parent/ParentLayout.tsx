@@ -18,6 +18,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { ProgressPage } from './pages/ProgressPage';
 import { AttendancePage } from './pages/AttendancePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExamsMarksPage } from './pages/ExamsMarksPage';
 import { GameProgressPage } from './pages/GameProgressPage';
 import { NCERTAssistantPage } from './pages/NCERTAssistantPage';
 import { AiBuddyLearningZone } from './pages/AiBuddyLearningZone';
@@ -91,7 +92,9 @@ const ParentShell: React.FC = () => {
   /* Should the floating AI buddy be visible? Hide on Ask AI and Report pages */
   const showAIBuddy = !(
     (activeScreen === 'ai-buddy' && aiSubScreen === 'ask') ||
-    activeScreen === 'report'
+    activeScreen === 'report' ||
+    activeScreen === 'exams' ||
+    activeScreen === 'exams-marks'
   );
 
   const handleAskAIBuddy = useCallback(() => {
@@ -120,9 +123,11 @@ const ParentShell: React.FC = () => {
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
       case 'assignments': return <AssignmentsPage />;
       case 'study-materials': return <StudyMaterialsPage />;
+      case 'exams': return <ExamsMarksPage />;
+      case 'exams-marks': return <ExamsMarksPage />;
       case 'brain-boost': return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><BrainBoostProgressPage /></Suspense>;
       case 'puzzle-zone':  return <Suspense fallback={<div className="flex items-center justify-center py-20"><p className="text-sm text-gray-400">Loadingâ€¦</p></div>}><PuzzleZoneProgressPage /></Suspense>;
-      case 'report':      return <ReportCardPage onBack={() => setActiveScreen('overview')} />;
+      case 'report':      return <ExamsMarksPage />;
       case 'messages':    return <MessagesPage />;
       case 'leave':       return <LeavePage />;
       case 'settings':    return <SettingsPage />;

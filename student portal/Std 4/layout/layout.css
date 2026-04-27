@@ -30,10 +30,11 @@
   margin-left: 240px; /* offset for fixed sidebar on desktop */
 }
 
-/* ── Bottom padding for mobile nav ── */
+/* ── Right padding for mobile rail ── */
 @media (max-width: 1023px) {
   .main-area {
-    padding-bottom: 80px; /* room for fixed bottom nav */
+    padding-right: 96px; /* room for fixed right rail */
+    padding-bottom: 24px;
     margin-left: 0; /* no sidebar on mobile */
   }
 }

@@ -25,6 +25,11 @@ const ADMIN_TOKEN_STORAGE_KEY = 'ssms_std5_admin_token';
 const DEFAULT_USER: AuthUser = { role: 'student', grade: 5, name: 'Explorer' };
 const FORCE_PORTAL_PATH = '/student-portal/5';
 const FALLBACK_STUDENT_ID = 'STU20240481';
+const getStudentLoginRedirectUrl = () => (
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:5000/student-login`
+    : '/student-login'
+);
 interface PersistedSession { studentId?: string; studentProfile?: StudentProfile; }
 
 function loadPersistedState(): AuthState {
@@ -149,7 +154,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { ok: false, error: 'Invalid Student ID or Parent Access Key' };
   }, []);
 
-  const logout = useCallback(() => { setAuthState({ isAuthenticated: false, user: DEFAULT_USER, studentProfile: null, parentVerified: false }); setParentAccessPromptOpen(false); setNotice(null); clearSessionStorage(); persistAdminToken(null); }, []);
+  const logout = useCallback(() => {
+    const shouldRedirectToLogin = authState.user.role === 'parent';
+    setAuthState({ isAuthenticated: false, user: DEFAULT_USER, studentProfile: null, parentVerified: false });
+    setParentAccessPromptOpen(false);
+    setNotice(null);
+    clearSessionStorage();
+    persistAdminToken(null);
+    if (shouldRedirectToLogin) {
+      window.location.replace(getStudentLoginRedirectUrl());
+    }
+  }, [authState.user.role]);
   const updateStudentProfile = useCallback((updates: Partial<StudentProfile>): AuthActionResult => {
     if (!authState.isAuthenticated || !authState.studentProfile) return { ok: false, error: 'Please login first' };
     const nextProfile = saveStudentProfileOverrides(authState.studentProfile.studentId, updates);

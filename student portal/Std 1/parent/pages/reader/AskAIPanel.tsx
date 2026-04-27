@@ -38,29 +38,92 @@ interface Message {
 
 /* ── Groq AI Integration ──────────────────────── */
 
-const GROQ_API_KEY = (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) || '';
+const GROQ_API_KEY = (
+  (import.meta as any)?.env?.VITE_GROQ_API_KEY ||
+  (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) ||
+  ''
+).trim();
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GOOGLE_CSE_API_KEY = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_API_KEY || '').trim();
+const GOOGLE_CSE_CX = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_CX || '').trim();
+const NO_ANSWER_REPLY = 'I can help with the best simple answer I can give from this page.';
+
+function isNoAnswerReply(text: string): boolean {
+  const normalized = text.toLowerCase().trim();
+  return (
+    !normalized ||
+    normalized.includes('could not find the answer') ||
+    normalized.includes('could not reach the ai right now') ||
+    normalized.includes('not found in the provided study material') ||
+    normalized.includes('not in this chapter')
+  );
+}
+
+async function askGoogleFallback(
+  question: string,
+  pageText: string,
+  bookTitle: string,
+  pageNum: number,
+  bookBoard: string,
+): Promise<string | null> {
+  if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) return null;
+
+  const pageHint = (pageText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const query = [question, bookTitle, bookBoard, pageHint].filter(Boolean).join(' ');
+  const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(query)}&num=3&hl=en&gl=IN`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const items = Array.isArray(data.items) ? data.items.slice(0, 3) : [];
+    if (!items.length) return null;
+
+    const first = items[0];
+    const second = items[1];
+    return [
+      `I checked Google for this question about "${bookTitle}" (page ${pageNum}).`,
+      `Top result: ${first.title}`,
+      first.snippet || '',
+      second ? `Another result: ${second.title}\n${second.snippet || ''}` : '',
+      `Source: ${first.link || 'Google search result'}`,
+    ].filter(Boolean).join('\n\n');
+  } catch {
+    return null;
+  }
+}
 
 async function askGroqAI(question: string, pageText: string, bookTitle: string, pageNum: number, bookBoard: string): Promise<string> {
   if (!GROQ_API_KEY) {
-    return generateFallbackResponse(question, pageText, bookTitle);
+    return (await askGoogleFallback(question, pageText, bookTitle, pageNum, bookBoard)) || generateFallbackResponse(question, pageText, bookTitle);
   }
 
   try {
-    const systemPrompt = `You are a friendly, encouraging AI tutor helping a Class 1 student (age 6-7) understand a story from their textbook.
+    const systemPrompt = `You are an intelligent AI assistant for a Smart School System.
+
+Your job is to answer student and parent questions using ONLY the provided data sources:
+- PDFs (books, notes, study material)
+- Uploaded documents
+- Video transcripts (YouTube lessons)
+
+IMPORTANT RULES:
+1. Use the page context first whenever it is helpful.
+2. If the page does not contain the exact answer, still give the best simple answer you can using general knowledge.
+3. Do NOT refuse just because the exact words are not on the page.
+4. Keep answers simple and easy to understand.
+5. Be helpful, friendly, and teacher-like.
+6. If user asks "short answer" give 2-3 lines.
+7. If user asks "long answer" give a detailed explanation.
+8. If user asks "definition" give a precise definition.
+9. If user asks "example" include an example.
+10. Do not guess wildly; if unsure, give the closest helpful educational answer.
 
 Book: ${bookTitle}
 Board: ${bookBoard}
 Page: ${pageNum}
 
-Rules:
-- Use very simple words a 6 year old can understand
-- Keep answers short (2-4 sentences max)
-- Be warm, encouraging, and fun
-- Use emojis occasionally to keep it engaging
-- If the page text is empty/unclear, still try to help based on the question
-- For word meanings, give a simple definition + a kid-friendly example
-- For summaries, focus on what's happening in simple terms`;
+Use the provided page context and question only.`;
 
     const resp = await fetch(GROQ_API_URL, {
       method: 'POST',
@@ -84,14 +147,18 @@ Rules:
 
     if (!resp.ok) {
       console.warn('[AskAI] Groq API error:', resp.status);
-      return generateFallbackResponse(question, pageText, bookTitle);
+      return (await askGoogleFallback(question, pageText, bookTitle, pageNum, bookBoard)) || generateFallbackResponse(question, pageText, bookTitle);
     }
 
     const data = await resp.json();
-    return data.choices?.[0]?.message?.content || generateFallbackResponse(question, pageText, bookTitle);
+    const content = (data.choices?.[0]?.message?.content || '').trim();
+    if (isNoAnswerReply(content)) {
+      return (await askGoogleFallback(question, pageText, bookTitle, pageNum, bookBoard)) || generateFallbackResponse(question, pageText, bookTitle);
+    }
+    return content || (await askGoogleFallback(question, pageText, bookTitle, pageNum, bookBoard)) || generateFallbackResponse(question, pageText, bookTitle);
   } catch (err) {
     console.warn('[AskAI] Groq fetch failed:', err);
-    return generateFallbackResponse(question, pageText, bookTitle);
+    return (await askGoogleFallback(question, pageText, bookTitle, pageNum, bookBoard)) || generateFallbackResponse(question, pageText, bookTitle);
   }
 }
 
@@ -120,7 +187,13 @@ function generateFallbackResponse(question: string, pageText: string, bookTitle:
     return `Here's a question for you: What did you learn from this page? Try telling it to someone! That's the best way to remember. 💡`;
   }
 
-  return `That's a wonderful question about "${bookTitle}"! 🌟 This page has many interesting things to discover. Keep reading — you're doing great! 💪`;
+  const excerpt = (pageText || '').replace(/\s+/g, ' ').trim();
+  if (excerpt) {
+    const shortExcerpt = excerpt.slice(0, 180);
+    return `Here is the simplest help I can give from this page: "${shortExcerpt}${excerpt.length > 180 ? '...' : ''}"`;
+  }
+
+  return NO_ANSWER_REPLY;
 }
 
 /* ── Component ────────────────────────────────── */
@@ -165,9 +238,10 @@ export const AskAIPanel: React.FC<AskAIPanelProps> = ({
 
     try {
       const response = await askGroqAI(q, pageText, bookTitle, pageNum, bookBoard);
-      setMessages((prev) => [...prev, { role: 'ai', text: response, timestamp: Date.now() }]);
+      const answer = (response || '').trim() || generateFallbackResponse(q, pageText, bookTitle);
+      setMessages((prev) => [...prev, { role: 'ai', text: answer, timestamp: Date.now() }]);
     } catch {
-      setMessages((prev) => [...prev, { role: 'ai', text: 'Oops! I had trouble thinking. Please try again! 🤔', timestamp: Date.now() }]);
+      setMessages((prev) => [...prev, { role: 'ai', text: generateFallbackResponse(q, pageText, bookTitle), timestamp: Date.now() }]);
     } finally {
       setIsThinking(false);
     }
@@ -297,20 +371,30 @@ export const AskAIPanel: React.FC<AskAIPanelProps> = ({
             <div
               style={{
                 maxWidth: '85%',
-                padding: '10px 14px',
+                padding: '11px 14px',
                 borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                 background:
                   msg.role === 'user'
-                    ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
-                    : 'rgba(243,244,246,0.8)',
-                color: msg.role === 'user' ? '#fff' : '#1F2937',
-                fontSize: 12,
-                lineHeight: 1.7,
+                    ? 'linear-gradient(135deg, #4F46E5, #7C3AED)'
+                    : '#FFFFFF',
+                color: msg.role === 'user' ? '#FFFFFF' : '#0F172A',
+                WebkitTextFillColor: msg.role === 'user' ? '#FFFFFF' : '#0F172A',
+                opacity: 1,
+                mixBlendMode: 'normal',
+                fontSize: 14,
+                lineHeight: 1.6,
                 fontWeight: 500,
-                border: msg.role === 'ai' ? '1px solid rgba(0,0,0,0.04)' : 'none',
+                border: msg.role === 'ai' ? '1px solid rgba(148,163,184,0.28)' : 'none',
+                boxShadow: msg.role === 'ai' ? '0 8px 24px rgba(15,23,42,0.06)' : 'none',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                minHeight: 20,
+                overflowWrap: 'anywhere',
               }}
             >
-              {msg.text}
+              <span style={{ color: 'inherit', WebkitTextFillColor: 'inherit' }}>
+                {msg.text?.trim() || 'I could not generate a reply. Please try again.'}
+              </span>
             </div>
           </motion.div>
         ))}

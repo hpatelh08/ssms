@@ -637,6 +637,142 @@ const TypingIndicator: React.FC = () => (
    CHAT BUBBLE
    ═══════════════════════════════════════════════════ */
 
+function normalizeText(text: string): string {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function firstSentence(text: string): string {
+  const clean = normalizeText(text);
+  if (!clean) return '';
+  const match = clean.match(/[^.!?]+[.!?]?/);
+  return (match?.[0] || clean).trim();
+}
+
+function buildChapterAnswer(question: string, chapterName: string, chapterContext: string): string {
+  const q = normalizeText(question).toLowerCase();
+  const topic = firstSentence(chapterContext)
+    .replace(/^(story about|this chapter is about|it is about)\s+/i, '')
+    .replace(/[.?!]+$/g, '')
+    .trim() || normalizeText(chapterName) || 'the chapter';
+
+  if (q.includes('worksheet') || q.includes('practice question') || q.includes('practice questions')) {
+    return [
+      'Here is a simple worksheet:',
+      '1. What is the chapter about?',
+      '2. Who or what is in the chapter?',
+      '3. What does the main person or character do?',
+      '4. What is one important thing that happens?',
+      '5. What is the main idea?',
+    ].join('\n');
+  }
+
+  if (q.includes('parent tip') || q.includes('teaching tip') || q.includes('tip')) {
+    return 'Tip: Read the chapter with your child, ask one easy question, and let them answer in one short sentence.';
+  }
+
+  if (q.includes('example')) {
+    return `Example: If the chapter is about ${topic}, you can talk about a similar thing from home or school.`;
+  }
+
+  if (q.includes('explain') || q.includes('summarize') || q.includes('what is happening') || q.includes("what's happening") || q.includes('simple')) {
+    return `This chapter is about ${topic}.`;
+  }
+
+  if (q.includes('new words') || q.includes('difficult words') || q.includes('vocabulary')) {
+    return topic !== 'the chapter'
+      ? `Important words from ${topic} should be learned slowly.`
+      : 'Look for the important words in the chapter and learn their meaning.';
+  }
+
+  return `This chapter is about ${topic}.`;
+}
+
+function isGenericFallback(text: string): boolean {
+  const normalized = normalizeText(text).toLowerCase();
+  return (
+    !normalized ||
+    normalized.includes('simple answer') ||
+    normalized.includes('answer simply') ||
+    normalized.includes('chapter clues')
+  );
+}
+
+function normalizeLookupText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097F\u0A80-\u0AFF]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getChapterVideoUrl(subject: Subject, chapter: ChapterInfo): string | null {
+  const subjectVideos = ((VIDEO_DATA as Record<string, VideoEntry[]>)[subject] || []).filter(Boolean);
+  if (!subjectVideos.length) return null;
+
+  const chapterName = normalizeLookupText(chapter.name);
+  const chapterNumber = String(chapter.chapter);
+  const words = chapterName.split(' ').filter(word => word.length > 2);
+
+  let bestMatch: VideoEntry | null = null;
+  let bestScore = 0;
+
+  for (const video of subjectVideos) {
+    const title = normalizeLookupText(video.title);
+    const context = normalizeLookupText(video.context);
+    let score = 0;
+
+    if (chapterName && title.includes(chapterName)) score += 8;
+    if (chapterName && context.includes(chapterName)) score += 7;
+    if (chapterNumber && title.includes(chapterNumber)) score += 3;
+    if (chapterNumber && context.includes(chapterNumber)) score += 2;
+
+    for (const word of words.slice(0, 4)) {
+      if (title.includes(word)) score += 2;
+      if (context.includes(word)) score += 1;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = video;
+    }
+  }
+
+  return bestScore >= 4 ? bestMatch?.url || null : null;
+}
+
+function appendVideoLinkIfExplain(answer: string, question: string, chapter: ChapterInfo, subject: Subject): string {
+  const normalizedQuestion = normalizeLookupText(question);
+  if (!normalizedQuestion.includes('explain')) return answer;
+
+  const videoUrl = getChapterVideoUrl(subject, chapter);
+  if (!videoUrl) return answer;
+  if (/youtu\.be|youtube\.com/i.test(answer)) return answer;
+
+  return `${answer}\n\nWatch video: ${videoUrl}`;
+}
+
+function renderTextWithLinks(text: string): React.ReactNode {
+  const parts = (text || '').split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2"
+          style={{ color: 'inherit', fontWeight: 700 }}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
 const ChatBubble: React.FC<{ msg: ChatMsg; isStreaming?: boolean }> = ({ msg, isStreaming }) => {
   const isUser = msg.role === 'user';
 
@@ -664,7 +800,7 @@ const ChatBubble: React.FC<{ msg: ChatMsg; isStreaming?: boolean }> = ({ msg, is
           wordBreak: 'break-word' as const,
         }}
       >
-        {msg.text}
+        {renderTextWithLinks(msg.text?.trim() || 'Let\'s answer from the chapter.')}
         {isStreaming && (
           <motion.span
             className="inline-block w-0.5 h-4 ml-0.5 align-text-bottom"
@@ -768,16 +904,29 @@ const AskAiSection: React.FC<{
             prev.map(m => (m.id === aiMsgId ? { ...m, text: partial } : m)),
           );
         },
-        (_full) => { setIsStreaming(false); },
+        (full) => {
+          setIsStreaming(false);
+          const finalText = isGenericFallback(full || '')
+            ? buildChapterAnswer(text.trim(), selectedChapter.name, selectedChapter.context)
+            : normalizeText(full);
+          setMessages(prev =>
+            prev.map(m => (m.id === aiMsgId ? { ...m, text: appendVideoLinkIfExplain(finalText, text.trim(), selectedChapter, selectedChapter.subject) } : m)),
+          );
+        },
         (err) => {
           setIsStreaming(false);
-          setError(err.message || 'Something went wrong. Please try again.');
-          setMessages(prev => prev.filter(m => m.id !== aiMsgId));
+          setMessages(prev =>
+            prev.map(m => (m.id === aiMsgId ? { ...m, text: appendVideoLinkIfExplain(buildChapterAnswer(text.trim(), selectedChapter.name, selectedChapter.context), text.trim(), selectedChapter, selectedChapter.subject) } : m)),
+          );
+          setError(null);
         },
       );
     } catch {
       setIsStreaming(false);
-      setError('Failed to connect. Please check your connection.');
+      setMessages(prev =>
+        prev.map(m => (m.id === aiMsgId ? { ...m, text: appendVideoLinkIfExplain(buildChapterAnswer(text.trim(), selectedChapter.name, selectedChapter.context), text.trim(), selectedChapter, selectedChapter.subject) } : m)),
+      );
+      setError(null);
     }
   }, [isStreaming, messages, selectedChapter, subject]);
 

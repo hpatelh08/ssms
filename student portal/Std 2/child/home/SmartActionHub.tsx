@@ -69,6 +69,18 @@ const TILES: TileDef[] = [
     shineTint: 'rgba(255,255,255,0.38)',
   },
   {
+    icon: '📚',
+    watermark: '📖',
+    label: 'Books',
+    desc: 'Open textbooks!',
+    xp: '+10 XP',
+    screen: 'books',
+    gradient: 'linear-gradient(145deg, #dbeafe 0%, #bfdbfe 52%, #93c5fd 100%)',
+    iconBg: 'rgba(255,255,255,0.30)',
+    accentColor: '#3b82f6',
+    shineTint: 'rgba(255,255,255,0.40)',
+  },
+  {
     icon: '🌊',
     watermark: '🌊',
     label: 'Save the Ocean',

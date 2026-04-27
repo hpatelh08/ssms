@@ -31,7 +31,8 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 function getGroqApiKey(): string {
-  return process.env.GROQ_API_KEY || '';
+  const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
+  return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
 }
 
 // ─── Types ────────────────────────────────────────────────
@@ -86,9 +87,9 @@ const DEBOUNCE_MS = 400;
 function chapterFallback(chapter: string): ChapterRAGResponse {
   return {
     explanation:
-      'This question does not appear in the selected chapter. Please try another question or select a different chapter.',
+      'Try asking about the main idea, a word meaning, or one example from this chapter. I can help turn that into a simple answer.',
     simplified_explanation:
-      'This is not in this chapter. Try asking something else! 📚',
+      'Ask about the main idea or a word from this chapter.',
     chapter,
     page_numbers: [],
     similarity_scores: [],
@@ -102,8 +103,8 @@ function chapterFallback(chapter: string): ChapterRAGResponse {
 
 function invalidSelectionResponse(): ChapterRAGResponse {
   return {
-    explanation: 'Please select a subject and chapter before asking a question.',
-    simplified_explanation: 'Pick a chapter first! 📖',
+    explanation: 'Please select a subject and chapter first, then ask your question. I will help step by step.',
+    simplified_explanation: 'Pick a chapter first, then ask me.',
     chapter: '',
     page_numbers: [],
     similarity_scores: [],
@@ -118,27 +119,26 @@ function invalidSelectionResponse(): ChapterRAGResponse {
 // ─── System Prompts ───────────────────────────────────────
 
 const PARENT_PROMPT = `You are a Standard 6 academic assistant.
-Answer ONLY using the provided textbook context.
-If the answer is not in the context, clearly say:
-"This topic is not covered in the selected chapter."
-Do not use outside knowledge.
+Use the textbook context first.
+If the answer is not fully covered by the context, still give the closest helpful answer using simple general knowledge and keep it related to the chapter.
+Do not leave the answer empty or say the topic is unavailable.
 
 PEDAGOGICAL RULES:
-- Explain CONCEPTS, do NOT give direct homework answers.
+- Explain CONCEPTS, and if the question needs a direct answer, give the closest helpful answer in a child-friendly way.
 - Use language suitable for a Class 6 (age 11-12) student.
 - Be encouraging, warm, and supportive.
 - Use emojis sparingly (1–2 per paragraph max).
-- Always cite which Source number(s) you used.
+- Cite which Source number(s) you used when the answer comes from the context. If you used general knowledge because the context was thin, do not invent citations.
 
 OUTPUT FORMAT:
 Return a JSON object with exactly two fields:
-  - "explanation": A clear, grounded explanation citing sources. 2–4 short paragraphs. Written for a parent to read to their child.
+  - "explanation": A clear, helpful explanation. 2–4 short paragraphs. Written for a parent to read to their child.
   - "simplified": ONE simple sentence (max 20 words) a Class 6 student can understand.`;
 
 const STUDENT_PROMPT = `You are a friendly Standard 6 teacher talking directly to a Class 6 (age 11-12) student.
-Answer ONLY using the provided textbook context.
-If the answer is not in the context, respond ONLY with:
-"This topic is not in this chapter. Please try another question."
+Use the textbook context first.
+If the answer is not fully covered by the context, still give the closest helpful answer using simple general knowledge and keep it related to the chapter.
+Do not leave the answer blank or say it is not in the chapter.
 
 STRICT RULES:
 - Do NOT mention source numbers, page numbers, chunk IDs, or retrieval details.
@@ -146,12 +146,12 @@ STRICT RULES:
 - Do NOT over-explain or give motivational lectures.
 - Do NOT use advanced language. Use only words a Class 6 student knows.
 - Keep explanation under 6 short simple sentences.
-- Use only examples from the textbook context provided.
+- Use textbook examples when available. If not, give a simple real-life example that fits the topic.
 - Be friendly and encouraging but brief.
 
 After the explanation, generate 3–5 practice questions that:
-- Are answerable STRICTLY from the same chapter context provided.
-- Use NO outside knowledge.
+- Are answerable from the chapter when possible.
+- If the context is thin, stay on the same topic and keep them easy for a Class 6 student.
 - Are appropriate for a Class 6 student.
 
 OUTPUT FORMAT:
@@ -246,30 +246,22 @@ async function _executeRAG(
 
   // ── Step 5: Threshold check — if too low, return fallback (NO LLM call) ──
   if (searchResults.length === 0 || avgScore < MIN_SIMILARITY_THRESHOLD) {
-    console.log(`[RAG] Below threshold (avg ${avgScore.toFixed(4)} < ${MIN_SIMILARITY_THRESHOLD}) — returning fallback`);
+    console.log(`[RAG] Below threshold (avg ${avgScore.toFixed(4)} < ${MIN_SIMILARITY_THRESHOLD}) — continuing with a general fallback-friendly prompt`);
     logAction('rag_below_threshold', 'ai', {
       query, subject, chapter: chapterRaw,
       avgScore: +avgScore.toFixed(4),
       threshold: MIN_SIMILARITY_THRESHOLD,
       resultsCount: searchResults.length,
     });
-
-    // But if we have SOME results, try with relaxed threshold
-    // to avoid being too aggressive on borderline cases
-    if (searchResults.length > 0 && avgScore >= 0.4) {
-      console.log('[RAG] Borderline — proceeding with available chunks');
-      // Allow it to proceed to LLM with a lower confidence signal
-    } else {
-      logRAGInteraction({ ...auditEntry, llm_called: false, fallback: true } as RAGAuditEntry);
-      return chapterFallback(chapterRaw);
-    }
   }
 
   // ── Step 6: Build grounded context + call LLM ──
   const relevantChunks = searchResults.map(r => r.chunk);
-  const contextString = relevantChunks.map((c, i) =>
-    `[Source ${i + 1}: ${c.subject} Book, Chapter: "${c.chapter}", Page ${c.page}]\n${c.content}`
-  ).join('\n\n---\n\n');
+  const contextString = relevantChunks.length > 0
+    ? relevantChunks.map((c, i) =>
+      `[Source ${i + 1}: ${c.subject} Book, Chapter: "${c.chapter}", Page ${c.page}]\n${c.content}`
+    ).join('\n\n---\n\n')
+    : `No closely matching textbook passage was retrieved for chapter "${chapterRaw}". Answer in a simple Class 6 way using general knowledge if needed, while staying related to the selected chapter.`;
 
   const pages = [...new Set(relevantChunks.map(c => c.page))].sort((a, b) => a - b);
   const searchMethod = searchResults[0]?.method || 'none';
@@ -343,8 +335,8 @@ async function _executeRAG(
     } as RAGAuditEntry);
 
     return {
-      explanation: data.explanation || 'No explanation generated.',
-      simplified_explanation: data.simplified || 'Please ask your teacher!',
+      explanation: data.explanation || "Let's use the chapter clues and answer simply.",
+      simplified_explanation: data.simplified || 'Use the main idea and one detail.',
       chapter: chapterRaw,
       page_numbers: pages,
       similarity_scores: searchResults.map(r => +r.score.toFixed(4)),

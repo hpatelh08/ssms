@@ -15,7 +15,9 @@ export type ParentScreen =
   | 'books'
   | 'assignments'
   | 'study-materials'
+  | 'exams'
   | 'report'
+  | 'exams-marks'
   | 'messages'
   | 'leave'
   | 'settings';
@@ -32,42 +34,41 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'overview', label: 'Home', sublabel: 'Quick summary', icon: 'ðŸ ', gradient: 'from-indigo-400 to-blue-500', glowColor: 'rgba(99,102,241,0.20)', accentColor: '#6366f1', iconBg: 'rgba(99,102,241,0.10)' },
-  { key: 'progress', label: 'Learning', sublabel: 'Subject progress', icon: 'ðŸ“˜', gradient: 'from-purple-400 to-indigo-500', glowColor: 'rgba(168,85,247,0.20)', accentColor: '#a855f7', iconBg: 'rgba(168,85,247,0.10)' },
-  { key: 'games', label: 'Practice Games', sublabel: 'Skill practice', icon: 'ðŸŽ®', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(139,92,246,0.20)', accentColor: '#8b5cf6', iconBg: 'rgba(139,92,246,0.10)' },
-  { key: 'attendance', label: 'Attendance', sublabel: 'School days', icon: 'ðŸ“…', gradient: 'from-cyan-400 to-blue-500', glowColor: 'rgba(6,182,212,0.20)', accentColor: '#06b6d4', iconBg: 'rgba(6,182,212,0.10)' },
-  { key: 'ai-buddy', label: 'Ask AI Helper', sublabel: 'Simple help', icon: 'ðŸ§ ', gradient: 'from-amber-400 to-orange-500', glowColor: 'rgba(245,158,11,0.20)', accentColor: '#f59e0b', iconBg: 'rgba(245,158,11,0.10)' },
-  { key: 'books', label: 'Books', sublabel: 'Reading', icon: 'ðŸ“š', gradient: 'from-rose-400 to-pink-500', glowColor: 'rgba(244,63,94,0.20)', accentColor: '#f43f5e', iconBg: 'rgba(244,63,94,0.10)' },
-  { key: 'report', label: 'Report Card', sublabel: 'Print or download', icon: 'ðŸ“„', gradient: 'from-teal-400 to-cyan-500', glowColor: 'rgba(20,184,166,0.20)', accentColor: '#14b8a6', iconBg: 'rgba(20,184,166,0.10)' },
-  { key: 'messages', label: 'Messages', sublabel: 'From school', icon: 'ðŸ’¬', gradient: 'from-indigo-400 to-cyan-500', glowColor: 'rgba(59,130,246,0.18)', accentColor: '#3b82f6', iconBg: 'rgba(59,130,246,0.10)' },
-  { key: 'leave', label: 'Leave Request', sublabel: 'Apply leave', icon: 'ðŸ“', gradient: 'from-orange-400 to-rose-500', glowColor: 'rgba(249,115,22,0.18)', accentColor: '#f97316', iconBg: 'rgba(249,115,22,0.10)' },
-  { key: 'settings', label: 'Settings', sublabel: 'Parent options', icon: 'âš™ï¸', gradient: 'from-slate-400 to-gray-500', glowColor: 'rgba(100,116,139,0.15)', accentColor: '#64748b', iconBg: 'rgba(100,116,139,0.08)' },
-  { key: 'assignments', label: 'Assignments', sublabel: 'Class Work', icon: 'ðŸ“', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(168,85,247,0.20)', accentColor: '#7c3aed', iconBg: 'rgba(168,85,247,0.10)' },
-  { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: 'ðŸ“', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16,185,129,0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.10)' },
+  { key: 'overview', label: 'Home', sublabel: 'Quick summary', icon: '\u{1F3E0}', gradient: 'from-emerald-400 to-green-500', glowColor: 'rgba(34,197,94,0.20)', accentColor: '#22c55e', iconBg: 'rgba(34,197,94,0.10)' },
+  { key: 'progress', label: 'Learning', sublabel: 'Subject progress', icon: '\u{1F4D8}', gradient: 'from-green-400 to-emerald-500', glowColor: 'rgba(16,185,129,0.20)', accentColor: '#10b981', iconBg: 'rgba(16,185,129,0.10)' },
+  { key: 'games', label: 'Practice Games', sublabel: 'Skill practice', icon: '\u{1F3AE}', gradient: 'from-lime-400 to-green-500', glowColor: 'rgba(132,204,22,0.20)', accentColor: '#84cc16', iconBg: 'rgba(132,204,22,0.10)' },
+  { key: 'attendance', label: 'Attendance', sublabel: 'School days', icon: '\u{1F4C5}', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(20,184,166,0.20)', accentColor: '#14b8a6', iconBg: 'rgba(20,184,166,0.10)' },
+  { key: 'ai-buddy', label: 'Ask AI Helper', sublabel: 'Simple help', icon: '\u{1F9E0}', gradient: 'from-green-400 to-emerald-400', glowColor: 'rgba(34,197,94,0.18)', accentColor: '#22c55e', iconBg: 'rgba(34,197,94,0.10)' },
+  { key: 'books', label: 'Books', sublabel: 'Reading', icon: '\u{1F4DA}', gradient: 'from-emerald-400 to-green-400', glowColor: 'rgba(16,185,129,0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.10)' },
+  { key: 'exams', label: 'Exams', sublabel: 'Marks Board', icon: '\u{1F4DD}', gradient: 'from-green-400 to-lime-500', glowColor: 'rgba(132,204,22,0.18)', accentColor: '#65a30d', iconBg: 'rgba(132,204,22,0.10)' },
+  { key: 'messages', label: 'Messages', sublabel: 'From school', icon: '\u{1F4AC}', gradient: 'from-teal-400 to-emerald-500', glowColor: 'rgba(45,212,191,0.18)', accentColor: '#14b8a6', iconBg: 'rgba(45,212,191,0.10)' },
+  { key: 'leave', label: 'Leave Request', sublabel: 'Apply leave', icon: '\u{1F4DD}', gradient: 'from-lime-400 to-emerald-500', glowColor: 'rgba(132,204,22,0.16)', accentColor: '#65a30d', iconBg: 'rgba(132,204,22,0.10)' },
+  { key: 'settings', label: 'Settings', sublabel: 'Parent options', icon: '\u{2699}\u{FE0F}', gradient: 'from-slate-400 to-gray-500', glowColor: 'rgba(100,116,139,0.15)', accentColor: '#64748b', iconBg: 'rgba(100,116,139,0.08)' },
+  { key: 'assignments', label: 'Assignments', sublabel: 'Class Work', icon: '\u{1F4DD}', gradient: 'from-green-400 to-emerald-500', glowColor: 'rgba(34,197,94,0.18)', accentColor: '#16a34a', iconBg: 'rgba(34,197,94,0.10)' },
+  { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: '\u{1F4C1}', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16,185,129,0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.10)' },
 ];
 
 function getNavIcon(key: ParentScreen) {
   switch (key) {
     case 'overview': return '\u{1F3E0}';
-    case 'progress': return '\u{1F4C8}';
+    case 'progress': return '\u{1F4D8}';
     case 'attendance': return '\u{1F4C5}';
     case 'ai-buddy': return '\u{1F9E0}';
     case 'books': return '\u{1F4DA}';
-    case 'garden': return '\u{1F333}';
-    case 'colors': return '\u{1F3A8}';
     case 'messages': return '\u{1F4AC}';
     case 'leave': return '\u{1F4DD}';
     case 'settings': return '\u{2699}\u{FE0F}';
     case 'assignments': return '\u{1F4DD}';
     case 'study-materials': return '\u{1F4C1}';
     case 'games': return '\u{1F3AE}';
+    case 'exams': return '\u{1F4DD}';
     case 'report': return '\u{1F4C4}';
     case 'brain-boost': return '\u{1F331}';
     case 'puzzle-zone': return '\u{1FA9C}';
     case 'fillblanks': return '\u{1F9E9}';
     case 'space-war': return '\u{1F680}';
     case 'eco-system': return '\u{1F30D}';
-    default: return '\u2728';
+    default: return '\u{2728}';
   }
 }
 
@@ -88,16 +89,16 @@ const SidebarItem: React.FC<{
         padding: 'clamp(5px, 0.7vh, 12px) 12px clamp(5px, 0.7vh, 12px) 16px',
         ...(isActive
           ? {
-              background: 'linear-gradient(135deg, rgba(129,140,248,0.12), rgba(167,139,250,0.08))',
-              boxShadow: `0 3px 18px ${item.glowColor}, 0 1px 3px rgba(92,106,196,0.04)`,
-              border: '1px solid rgba(129,140,248,0.12)',
+              background: 'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(134,239,172,0.08))',
+              boxShadow: `0 3px 18px ${item.glowColor}, 0 1px 3px rgba(34,197,94,0.04)`,
+              border: '1px solid rgba(74,222,128,0.14)',
             }
           : {
               background: 'transparent',
               border: '1px solid transparent',
             }),
       }}
-      whileHover={!isActive ? { x: 2, background: 'rgba(129,140,248,0.05)' } : {}}
+      whileHover={!isActive ? { x: 2, background: 'rgba(74,222,128,0.05)' } : {}}
       whileTap={{ scale: 0.97 }}
     >
       {isActive && (
@@ -138,7 +139,7 @@ const SidebarItem: React.FC<{
           style={{
             fontSize: 'clamp(11px, 1.3vw, 13px)',
             fontWeight: isActive ? 700 : 600,
-            color: isActive ? '#3A3F9F' : '#5C6AC4',
+            color: isActive ? '#166534' : '#15803d',
             display: 'block',
             lineHeight: 1.3,
             whiteSpace: 'nowrap',
@@ -152,7 +153,7 @@ const SidebarItem: React.FC<{
           style={{
             fontSize: 'clamp(8px, 1vw, 10px)',
             fontWeight: 500,
-            color: isActive ? '#7A86C2' : '#A0AEC0',
+            color: isActive ? '#4b5563' : '#6b7280',
             display: 'block',
             lineHeight: 1.3,
             whiteSpace: 'nowrap',
@@ -178,7 +179,7 @@ const BottomTab: React.FC<{
   return (
     <motion.button
       onClick={handleClick}
-      className="relative flex flex-col items-center justify-center gap-0.5 py-1 flex-1 cursor-pointer"
+      className="relative flex flex-col items-center justify-center gap-0.5 py-2 w-full cursor-pointer"
       whileTap={{ scale: 0.88 }}
     >
       {isActive && (
@@ -199,7 +200,7 @@ const BottomTab: React.FC<{
         style={{
           fontSize: 10,
           fontWeight: isActive ? 700 : 600,
-          color: isActive ? '#3A3F9F' : '#7A86C2',
+          color: isActive ? '#166534' : '#6b7280',
           position: 'relative',
           zIndex: 10,
         }}
@@ -216,13 +217,13 @@ interface Props {
   onNavigate: (screen: ParentScreen) => void;
 }
 
-export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
+export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, []);
 
   return (
     <>
@@ -232,11 +233,11 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
           top: 0,
           height: '100vh',
           paddingTop: 70,
-          background: 'linear-gradient(180deg, rgba(238,242,255,0.82) 0%, rgba(245,240,255,0.78) 40%, rgba(252,235,243,0.72) 100%)',
+          background: 'linear-gradient(180deg, rgba(236,253,245,0.92) 0%, rgba(240,253,244,0.90) 40%, rgba(220,252,231,0.84) 100%)',
           backdropFilter: 'blur(32px)',
           WebkitBackdropFilter: 'blur(32px)',
-          borderRight: '1px solid rgba(255,255,255,0.5)',
-          boxShadow: '3px 0 30px rgba(92,106,196,0.04)',
+          borderRight: '1px solid rgba(167,243,208,0.6)',
+          boxShadow: '3px 0 30px rgba(34,197,94,0.05)',
         }}
         initial={{ x: -260 }}
         animate={{ x: 0 }}
@@ -249,13 +250,13 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
               animate={{ rotate: [0, 10, -10, 0] }}
               transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              ðŸ›¡ï¸
+              🛡️
             </motion.span>
             <div>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#3A3F9F' }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#166534' }}>
                 Parent Dashboard
               </h2>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#7A86C2', marginTop: 3, fontFamily: 'Nunito, sans-serif', letterSpacing: '0.3px' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#16a34a', marginTop: 3, fontFamily: 'Nunito, sans-serif', letterSpacing: '0.3px' }}>
                 Std 2 Parent Section
               </p>
             </div>
@@ -286,7 +287,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
                   style={{
                     height: 1,
                     margin: '2px 16px',
-                    background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.12), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(34,197,94,0.12), transparent)',
                   }}
                 />
               )}
@@ -298,7 +299,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
           style={{
             flexShrink: 0,
             padding: '8px 8px 12px',
-            borderTop: '1px solid rgba(129,140,248,0.08)',
+            borderTop: '1px solid rgba(74,222,128,0.10)',
           }}
         >
           <div
@@ -306,7 +307,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(129,140,248,0.06)',
+              background: 'rgba(74,222,128,0.08)',
               borderRadius: 14,
               padding: '8px 12px',
             }}
@@ -322,10 +323,10 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
               }}
             />
             <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#3A3F9F', margin: 0, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#166534', margin: 0, whiteSpace: 'nowrap' }}>
                 Live Updates
               </p>
-              <p style={{ fontSize: 8, fontWeight: 500, color: '#7A86C2', margin: 0, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 8, fontWeight: 500, color: '#4b5563', margin: 0, whiteSpace: 'nowrap' }}>
                 Information updates live
               </p>
             </div>
@@ -335,18 +336,18 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(99,102,241,0.05)',
+              background: 'rgba(34,197,94,0.06)',
               borderRadius: 14,
               padding: '8px 12px',
               marginTop: 6,
             }}
           >
-            <span style={{ fontSize: 14, flexShrink: 0 }}>ðŸ•</span>
+            <span style={{ fontSize: 14, flexShrink: 0 }}>🕐</span>
             <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#3A3F9F', margin: 0, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#166534', margin: 0, whiteSpace: 'nowrap' }}>
                 Current Time
               </p>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', margin: 0, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#16a34a', margin: 0, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
@@ -355,13 +356,13 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
       </motion.aside>
 
       <motion.nav
-        className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
+        className="fixed right-3 top-[84px] bottom-3 z-40 w-[76px] flex flex-col items-stretch gap-2 px-2 py-2 lg:hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(245,240,255,0.92) 0%, rgba(255,255,255,0.98) 100%)',
+          background: 'linear-gradient(180deg, rgba(240,253,244,0.95) 0%, rgba(255,255,255,0.98) 100%)',
           backdropFilter: 'blur(28px)',
           WebkitBackdropFilter: 'blur(28px)',
-          borderTop: '1px solid rgba(129,140,248,0.1)',
-          boxShadow: '0 -2px 24px rgba(92,106,196,0.06)',
+          borderTop: '1px solid rgba(74,222,128,0.12)',
+          boxShadow: '0 -2px 24px rgba(34,197,94,0.06)',
         }}
         initial={{ y: 64 }}
         animate={{ y: 0 }}

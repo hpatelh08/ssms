@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ Screen type Ã¢â€â‚¬Ã¢â€â‚¬ */
 
-export type ParentScreen = 'overview' | 'progress' | 'attendance' | 'ai-buddy' | 'books' | 'garden' | 'colors' | 'messages' | 'leave' | 'settings' | 'assignments' | 'study-materials';
+export type ParentScreen = 'overview' | 'progress' | 'attendance' | 'ai-buddy' | 'books' | 'garden' | 'colors' | 'messages' | 'leave' | 'settings' | 'assignments' | 'study-materials' | 'exams' | 'exams-marks';
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ Nav Items Ã¢â€â‚¬Ã¢â€â‚¬ */
 
@@ -42,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'settings',    label: 'Settings',       sublabel: 'Preferences',   icon: '⚙️', gradient: 'from-slate-400 to-gray-500',    glowColor: 'rgba(100,116,139,0.15)',  accentColor: '#64748b', iconBg: 'rgba(100,116,139,0.08)' },
   { key: 'assignments',  label: 'Assignments',    sublabel: 'Class Work',    icon: '📝', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(168,85,247,0.20)',   accentColor: '#7c3aed', iconBg: 'rgba(168,85,247,0.10)' },
   { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: '📁', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16,185,129,0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.10)' },
+  { key: 'exams', label: 'Exams', sublabel: 'Marks Board', icon: '📝', gradient: 'from-fuchsia-400 to-pink-500', glowColor: 'rgba(236,72,153,0.18)', accentColor: '#ec4899', iconBg: 'rgba(236,72,153,0.10)' },
 ];
 
 /* Divider after these indices (0-based): After Attendance (idx 2) and after Books (idx 4) */
@@ -59,6 +60,7 @@ function getNavIcon(key: ParentScreen) {
     case 'settings': return '\u{2699}\u{FE0F}';
     case 'assignments': return '\u{1F4DD}';
     case 'study-materials': return '\u{1F4C1}';
+    case 'exams': return '\u{1F4DD}';
     case 'games': return '\u{1F3AE}';
     case 'report': return '\u{1F4C4}';
     case 'brain-boost': return '\u{1F331}';
@@ -159,7 +161,7 @@ const BottomTab: React.FC<{
   return (
     <motion.button
       onClick={handleClick}
-      className="relative flex flex-col items-center justify-center gap-0.5 py-1 flex-1 cursor-pointer"
+      className="relative flex flex-col items-center justify-center gap-0.5 py-2 w-full cursor-pointer"
       whileTap={{ scale: 0.88 }}
     >
       {isActive && (
@@ -301,7 +303,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
 
     {/* Ã¢â€â‚¬Ã¢â€â‚¬ Mobile Bottom Bar Ã¢â€â‚¬Ã¢â€â‚¬ */}
     <motion.nav
-      className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
+      className="fixed right-3 top-[84px] bottom-3 z-40 w-[76px] flex flex-col items-stretch gap-2 px-2 py-2 lg:hidden"
       style={{
         background: 'linear-gradient(180deg, rgba(245,240,255,0.92) 0%, rgba(255,255,255,0.98) 100%)',
         backdropFilter: 'blur(28px)',

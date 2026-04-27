@@ -36,6 +36,12 @@ const NAV_ITEMS: NavItem[] = [
     activeGlow: 'rgba(99,102,241,0.15)',
   },
   {
+    key: 'books', label: 'Books', icon: '📚',
+    accentColor: '#f97316',
+    activeBg: 'rgba(249,115,22,0.08)',
+    activeGlow: 'rgba(249,115,22,0.15)',
+  },
+  {
     key: 'play', label: 'Games', icon: '🎮',
     accentColor: '#10b981',
     activeBg: 'rgba(16,185,129,0.08)',

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-10T14:40:15.805Z",
+  "generatedAt": "2026-04-11T04:44:22.482Z",
   "source": "Admin Dashboard/backend/database.sqlite",
   "total": 35,
   "teachers": [
@@ -416,8 +416,8 @@
       "name": "Ananya Tiwari",
       "emp": "EMP-125",
       "subject": "Gujarati",
-      "class": "1",
-      "division": null,
+      "class": "6",
+      "division": "C",
       "salary": 44500,
       "phone": "9811001025",
       "email": "teacher125@teacher.com",
@@ -484,8 +484,8 @@
       "name": "Siya Patel",
       "emp": "EMP-129",
       "subject": "Mathematics",
-      "class": "5",
-      "division": null,
+      "class": "6",
+      "division": "A",
       "salary": 54500,
       "phone": "9811001029",
       "email": "teacher129@teacher.com",

@@ -7,11 +7,80 @@ import { logAction } from "../utils/auditLog";
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GOOGLE_CSE_API_KEY = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_API_KEY || '').trim();
+const GOOGLE_CSE_CX = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_CX || '').trim();
 const CHAT_ANALYTICS_KEY = 'ssms_ai_question_analytics_v1';
 
 function getGroqApiKey(): string {
   const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
   return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
+}
+
+function shouldUseWebFallback(text: string): boolean {
+  const normalized = (text || '').toLowerCase().trim();
+  if (!normalized) return true;
+  return (
+    normalized.includes('not in your books') ||
+    normalized.includes('not in the textbook') ||
+    normalized.includes('not in your textbooks') ||
+    normalized.includes('not in this chapter') ||
+    normalized.includes('not available in the std 4 textbooks') ||
+    normalized.includes('could not find the answer') ||
+    normalized.includes('could not reach the ai right now')
+  );
+}
+
+function looksGenericChapterReply(text: string): boolean {
+  const normalized = (text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!normalized) return true;
+  return [
+    "that's a good question about",
+    'keep reading and look for the main idea',
+    'this chapter has a simple idea to learn',
+    'i can help with a simple answer',
+    'try this: what did you learn from this page',
+    'look for the main point',
+  ].some((phrase) => normalized.includes(phrase));
+}
+
+async function askGoogleFallback(
+  question: string,
+  subject: string,
+  chapterName: string,
+  chapterContext: string,
+): Promise<string | null> {
+  if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) return null;
+
+  const contextHint = (chapterContext || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const query = [
+    question,
+    `NCERT Class 4 ${subject}`,
+    chapterName,
+    contextHint,
+  ].filter(Boolean).join(' ');
+
+  const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(query)}&num=3&hl=en&gl=IN`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const items = Array.isArray(data.items) ? data.items.slice(0, 3) : [];
+    if (!items.length) return null;
+
+    const first = items[0];
+    const second = items[1];
+    return [
+      `I found this online (outside the textbook):`,
+      `Top result: ${first.title}`,
+      first.snippet || '',
+      second ? `Another result: ${second.title}\n${second.snippet || ''}` : '',
+      `Source: ${first.link || 'Google search result'}`,
+    ].filter(Boolean).join('\n\n');
+  } catch {
+    return null;
+  }
 }
 
 function isGroqAuthError(status: number): boolean {
@@ -43,7 +112,13 @@ function offlineFallbackResponse(question: string, pageText: string, bookTitle: 
   }
 
   if (q.includes('question') || q.includes('practice') || q.includes('quiz')) {
-    return 'Try this: What did you learn from this page?';
+    if (pageText && pageText.trim().length > 20) {
+      const sentence = pageText.trim().replace(/\s+/g, ' ').split(/[.!?]/).filter(Boolean)[0] || '';
+      if (sentence) {
+        return `Try this: What did you learn from this page about ${sentence.trim()}?`;
+      }
+    }
+    return 'Try this: What is the main idea of this page?';
   }
 
   if (pageText && pageText.trim().length > 20) {
@@ -53,7 +128,7 @@ function offlineFallbackResponse(question: string, pageText: string, bookTitle: 
     }
   }
 
-  return `That's a good question about "${bookTitle}". Keep reading and look for the main idea.`;
+  return `This part of ${bookTitle} has a simple idea to learn. Read it once more and look for the main point.`;
 }
 
 function buildChapterFallbackAnswer(
@@ -75,6 +150,29 @@ function buildChapterFallbackAnswer(
 
   const keySentence = sentenceCandidates[0] || cleanContext.split(/\s+/).slice(0, 30).join(' ');
   const subjectLabel = subject || 'this subject';
+
+  if (q.includes('explain') || q.includes('simple') || q.includes('summary') || q.includes('summarize')) {
+    if (keySentence) {
+      return `Here is a simple explanation of ${chapterName}: ${keySentence}. In easy words, it teaches an important idea from ${subjectLabel}.`;
+    }
+    return `Here is a simple explanation of ${chapterName}. It teaches an important idea from ${subjectLabel}.`;
+  }
+
+  if (q.includes('example')) {
+    if (keySentence) {
+      return `A simple real-life example from ${chapterName} is: ${keySentence}.`;
+    }
+    return `A simple real-life example from ${chapterName} can be found by connecting it to daily life.`;
+  }
+
+  if ((q.includes('parent') && q.includes('tip')) || q.includes('teaching tip') || q.includes('practical tip') || q.includes('at home')) {
+    return [
+      `Parent tip for ${chapterName}:`,
+      'Read the chapter together.',
+      'Ask your child to say the main idea in one short sentence.',
+      'Then connect it to one thing from daily life.',
+    ].join('\n');
+  }
 
   if (q.includes('key point') || q.includes('important point')) {
     const points = sentenceCandidates.slice(0, 3);
@@ -258,7 +356,7 @@ export class AIService {
     if (relevantChunks.length === 0) {
       logAction('rag_no_results', 'ai', { query });
       return {
-        explanation: "This topic is not available in the Std 4 textbooks. The AI could not find any matching content in the uploaded English or Mathematics books.",
+        explanation: 'This chapter has a simple idea to learn. Look for the main point in the chapter clues.',
         simplified_explanation: "This is not in your school books. Ask your teacher! ðŸ“š",
         book: 'N/A',
         page_reference: 'N/A',
@@ -314,7 +412,7 @@ AUDIENCE: The child themselves.
 
 STRICT RULES:
 1. ONLY use information from the TEXTBOOK CONTEXT provided below.
-2. If the answer is not in the context, respond ONLY with: "This topic is not in your books. Please ask your teacher!"
+2. If the answer is not fully in the context, still give the best simple answer you can using the chapter clues.
 3. Do NOT mention source numbers, page numbers, chunk IDs, or retrieval details.
 4. Do NOT use words like "powerful tool", "communicate", "express ourselves", or any abstract language.
 5. Keep explanation under 6 short simple sentences.
@@ -396,8 +494,8 @@ Return a JSON object with exactly three fields:
       });
 
       return {
-        explanation: data.explanation || 'No explanation generated.',
-        simplified_explanation: data.simplified || 'Please ask your teacher!',
+        explanation: data.explanation || 'This chapter has a simple idea to learn. Look for the main point in the chapter clues.',
+        simplified_explanation: data.simplified || 'Use the main idea and one detail.',
         book: primaryBook,
         page_reference: pages,
         sources: relevantChunks,
@@ -489,7 +587,7 @@ Return a JSON object with exactly three fields:
 
     if (relevantChunks.length === 0) {
       callbacks.onComplete(
-        "This topic is not available in the Std 4 textbooks. The AI could not find matching content.",
+        'This chapter has a simple idea to learn. Read the page again and look for the main point.',
         []
       );
       return;
@@ -581,7 +679,8 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
         responseLength: fullText.length,
       });
 
-      callbacks.onComplete(fullText, searchResults);
+      const finalText = fullText.trim() || 'This chapter has a simple idea to learn. Read the page again and look for the main point.';
+      callbacks.onComplete(finalText, searchResults);
     } catch (err) {
       console.error('[Streaming] Error:', err);
       callbacks.onError(err instanceof Error ? err : new Error(String(err)));
@@ -616,6 +715,17 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
     let chapterResults: SearchResult[] = [];
     let nearestChapter = '';
 
+    if (!this.apiKey) {
+      const webFallback = await askGoogleFallback(lastUserMessage, subject, chapterName, chapterContext);
+      if (webFallback) {
+        onDone(webFallback);
+        return;
+      }
+      const fallbackText = buildChapterFallbackAnswer(lastUserMessage, chapterName, chapterContext, subject);
+      onDone(fallbackText);
+      return;
+    }
+
     try {
       chapterResults = await searchKnowledge(lastUserMessage, 5, subjectKey, 0.005, chapterName);
 
@@ -627,41 +737,31 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
       chapterResults = [];
     }
 
-    const retrievedContext = chapterResults.length > 0
+    let retrievedContext = chapterResults.length > 0
       ? chapterResults
           .map((r, i) => `Context ${i + 1}\nBook: Class 4 ${r.chunk.subject}\nChapter: ${r.chunk.chapter}\nPage: ${r.chunk.page}\nText: ${r.chunk.content}`)
           .join('\n\n---\n\n')
       : `Context 1\nBook: Class 4 ${subject}\nChapter: ${chapterName}\nPage: N/A\nText: ${chapterContext}`;
 
     if (chapterResults.length === 0 && !chapterContext.trim()) {
-      const fallbackText = `I could not find the exact answer in the study material. Please try a different chapter or ask about "${nearestChapter || chapterName}".`;
-
-      onChunk(fallbackText);
-      onDone(fallbackText);
-      return;
+      retrievedContext = `Context 1\nBook: Class 4 ${subject}\nChapter: ${chapterName}\nPage: N/A\nText: (No textbook context available)`;
     }
 
     const systemPrompt = `You are a friendly school assistant for a Class 4 student.
 
-Your job is to answer only from the provided textbook context.
+  Your job is to answer in a helpful, age-appropriate way. Use the provided textbook context if it is relevant.
 
-Rules:
-- Keep language simple, warm, and easy to understand.
-- If the user asks for "Explain simply", give exactly 3 short lines.
-- If the user asks for "Key points", give short bullet points only.
-- If the user asks for "Give worksheet", give 5 to 6 simple questions only.
-- If the user asks for "Parent tip", give one practical suggestion only.
-- If the user asks for "Word meanings", list important words and their meanings only.
-- If the user asks for "Oral questions", give 5 short questions only.
-- If the user asks for "Revision plan", give chapter information, a few practice questions, and one example only.
-- If the question is math-related, explain step by step.
-- If the answer is not fully in the context, give the closest helpful explanation from the chapter.
-- Do not hallucinate or invent facts.
-- Do not mention source names, page numbers, file names, chapter notes, or retrieval details.
-- Do not use labels like "Source", "Direct Answer", or "Explanation".
-- Always respond in English only.
-
-Never use outside knowledge.`;
+  Rules:
+  - Keep language simple, warm, and easy to understand.
+  - If the user asks for "Explain simply", give a short simple explanation in 3 lines.
+  - If the user asks for "Give example", give one fun real-life example from the chapter.
+  - If the user asks for "Give worksheet", give 5 to 6 simple questions only.
+  - If the user asks for "Parent tip", give one practical suggestion only.
+  - If the question is math-related, explain step by step.
+  - If the answer is not fully in the context, still give a general, accurate explanation suitable for Class 4.
+  - Do not mention source names, page numbers, file names, chapter notes, or retrieval details.
+  - Do not use labels like "Source", "Direct Answer", or "Explanation".
+  - Always respond in English only.`;
 
     const userPrompt = `Student Standard: 4
 
@@ -678,7 +778,7 @@ ${messages.slice(-8).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\
 
 Fallback nearest chapter: ${nearestChapter || 'Not found'}
 
-Instruction: Answer only from retrieved context in simple student-friendly English.`;
+Instruction: Prefer the retrieved context, but if it is missing or insufficient, answer generally in simple student-friendly English.`;
 
     try {
       const response = await fetch(GROQ_API_URL, {
@@ -748,7 +848,31 @@ Instruction: Answer only from retrieved context in simple student-friendly Engli
         responseLength: fullText.length,
       });
 
-      onDone(fullText);
+      const finalText = fullText.trim();
+      if (!finalText) {
+        const webFallback = await askGoogleFallback(lastUserMessage, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+        onDone(buildChapterFallbackAnswer(lastUserMessage, chapterName, chapterContext, subject));
+        return;
+      }
+
+      if (looksGenericChapterReply(finalText)) {
+        onDone(buildChapterFallbackAnswer(lastUserMessage, chapterName, chapterContext, subject));
+        return;
+      }
+
+      if (shouldUseWebFallback(finalText)) {
+        const webFallback = await askGoogleFallback(lastUserMessage, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+      }
+
+      onDone(finalText);
     } catch (err) {
       const status = typeof err === 'object' && err !== null && typeof (err as { status?: unknown }).status === 'number'
         ? (err as { status: number }).status

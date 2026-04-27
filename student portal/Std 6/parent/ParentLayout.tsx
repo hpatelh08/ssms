@@ -21,6 +21,7 @@ import { ProgressPage } from './pages/ProgressPage';
 import { AttendancePage } from './pages/AttendancePage';
 import { GardenGrowthPage } from './pages/GardenGrowthPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExamsMarksPage } from './pages/ExamsMarksPage';
 import { NCERTAssistantPage } from './pages/NCERTAssistantPage';
 import { AiBuddyLearningZone } from './pages/AiBuddyLearningZone';
 import { AiWorksheetGenerator } from './pages/AiWorksheetGenerator';
@@ -126,6 +127,8 @@ const ParentShell: React.FC = () => {
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
       case 'assignments': return <AssignmentsPage />;
       case 'study-materials': return <StudyMaterialsPage />;
+      case 'exams': return <ExamsMarksPage />;
+      case 'exams-marks': return <ExamsMarksPage />;
       case 'messages':    return <MessagesPage />;
       case 'leave':       return <LeavePage />;
       case 'garden':      return (

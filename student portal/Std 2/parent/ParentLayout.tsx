@@ -21,6 +21,7 @@ import { AttendancePage } from './pages/AttendancePage';
 import { MessagesPage } from './pages/MessagesPage';
 import LeavePage from './pages/LeavePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExamsMarksPage } from './pages/ExamsMarksPage';
 import { GameProgressPage } from './pages/GameProgressPage';
 import { NCERTAssistantPage } from './pages/NCERTAssistantPage';
 import { AiBuddyLearningZone } from './pages/AiBuddyLearningZone';
@@ -36,9 +37,10 @@ import { pageTransition } from '../styles/theme';
 import { type BookEntry } from '../data/bookConfig';
 import { type VideoEntry, type VideoSubject } from '../data/videoConfig';
 import AIBuddyFloating from '../components/AIBuddyFloating';
+
 import { ReportCardPage } from './pages/ReportCardPage';
 
-/* â”€â”€ Lazy-loaded immersive book reader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Lazy-loaded immersive book reader ───────────────── */
 const BookReaderPage = React.lazy(() => import('./pages/BookReaderPage'));
 
 /* â”€â”€ Layout Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -88,7 +90,7 @@ const ParentShell: React.FC = () => {
   }, []);
 
   /* Should the floating AI buddy be visible? Hide on Ask AI page */
-  const showAIBuddy = !(activeScreen === 'ai-buddy' && aiSubScreen === 'ask');
+  const showAIBuddy = !(activeScreen === 'ai-buddy' && aiSubScreen === 'ask') && activeScreen !== 'exams';
 
   const handleAskAIBuddy = useCallback(() => {
     setActiveScreen('ai-buddy');
@@ -116,7 +118,9 @@ const ParentShell: React.FC = () => {
       case 'books':       return <BooksPage onNavigate={(s) => handleNavigate(s as ParentScreen)} onOpenBook={handleOpenBook} />;
       case 'assignments': return <AssignmentsPage />;
       case 'study-materials': return <StudyMaterialsPage />;
-      case 'report':      return <ReportCardPage onBack={() => setActiveScreen('overview')} />;
+      case 'exams': return <ExamsMarksPage />;
+      case 'exams-marks': return <ExamsMarksPage />;
+      case 'report':      return <ExamsMarksPage />;
       case 'messages':    return <MessagesPage />;
       case 'leave':       return <LeavePage />;
       case 'settings':    return <SettingsPage />;
@@ -124,13 +128,12 @@ const ParentShell: React.FC = () => {
     }
   };
 
-  /* â”€â”€ Immersive mode: Book reader takes over the full viewport â”€â”€ */
   if (readerBook) {
     return (
       <Suspense
         fallback={
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100">
-            <p className="text-sm text-gray-400 font-medium">Loading readerâ€¦</p>
+            <p className="text-sm text-gray-400 font-medium">Loading reader...</p>
           </div>
         }
       >

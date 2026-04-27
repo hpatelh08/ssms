@@ -8,7 +8,7 @@ function loadScript(src) {
       return;
     }
     const s = document.createElement('script');
-    s.src = src;
+    s.src = `${src}${src.includes('?') ? '&' : '?'}v=${Date.now()}`;
     s.dataset.ssms = src;
     s.onload = resolve;
     s.onerror = reject;
@@ -93,10 +93,6 @@ export default function Login() {
 
   const openVisitorPage = () => {
     navigate('/visitor');
-  };
-
-  const openStudentPortal = () => {
-    navigate('/student-login');
   };
 
   const handleLogin = async (e) => {
@@ -255,9 +251,6 @@ export default function Login() {
 
         <div className="login-footer">
           <span>© 2025 Smart School Management System. All rights reserved.</span>
-          <button type="button" className="student-portal-link" onClick={openStudentPortal}>
-            Student Portal
-          </button>
         </div>
       </div>
     </div>

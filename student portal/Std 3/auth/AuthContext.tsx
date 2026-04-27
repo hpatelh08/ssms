@@ -57,6 +57,11 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'ssms_student_session_v1';
 const LEGACY_ROLE_STORAGE_KEY = 'app_auth_role';
 const ADMIN_TOKEN_STORAGE_KEY = 'ssms_std3_admin_token';
+const getStudentLoginRedirectUrl = () => (
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:5000/student-login`
+    : '/student-login'
+);
 
 const DEFAULT_USER: AuthUser = {
   role: 'student',
@@ -326,6 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
+    const shouldRedirectToLogin = authState.user.role === 'parent';
     setAuthState({
       isAuthenticated: false,
       user: DEFAULT_USER,
@@ -336,7 +342,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotice(null);
     clearSessionStorage();
     persistAdminToken(null);
-  }, []);
+    if (shouldRedirectToLogin) {
+      window.location.replace(getStudentLoginRedirectUrl());
+    }
+  }, [authState.user.role]);
 
   const updateStudentProfile = useCallback((updates: Partial<StudentProfile>): AuthActionResult => {
     if (!authState.isAuthenticated || !authState.studentProfile) {

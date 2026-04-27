@@ -25,7 +25,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../auth/AuthContext';
 import { useParentAnalytics } from '../analytics/useParentAnalytics';
-import { getAdminBackendBaseUrl } from '../../services/adminBackend';
+import { getTeacherPortalJson } from '../../services/teacherPortal';
 import {
   WEEKLY_TREND,
   STRONG_AREAS,
@@ -72,7 +72,49 @@ const CARD_GRADIENTS = {
   streak:     'linear-gradient(135deg, rgba(251,146,60,0.14) 0%, rgba(244,114,182,0.08) 100%)',
 };
 
-const ADMIN_TOKEN_STORAGE_KEY = 'ssms_std3_admin_token';
+type ParentMarksProfile = {
+  studentId?: string;
+  parentAccessKey?: string;
+  studentName?: string;
+  className?: string;
+  section?: string;
+  division?: string;
+  grade?: number;
+  grNo?: string;
+  admissionNumber?: string;
+  children?: Array<{
+    studentId?: string;
+    grNo?: string;
+    admissionNumber?: string;
+    parentAccessKey?: string;
+    studentName?: string;
+  }>;
+};
+
+function buildAcademicQuery(profile: ParentMarksProfile | null): string {
+  const studentId = String(profile?.studentId || profile?.children?.[0]?.studentId || '').trim();
+  const accessKey = String(profile?.parentAccessKey || profile?.children?.[0]?.parentAccessKey || '').trim();
+  const aliases = [
+    profile?.studentName,
+    profile?.studentId,
+    profile?.grNo,
+    profile?.admissionNumber,
+    ...(Array.isArray(profile?.children) ? profile.children.flatMap((child) => [
+      child?.studentName,
+      child?.studentId,
+      child?.grNo,
+      child?.admissionNumber,
+    ]) : []),
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  const params = new URLSearchParams();
+  if (studentId) params.set('studentId', studentId);
+  if (accessKey) params.set('accessKey', accessKey);
+  if (aliases.length) params.set('aliases', aliases.join(','));
+  return params.toString();
+}
 
 const PANEL_BASE = 'linear-gradient(180deg, rgba(7,12,28,0.9) 0%, rgba(15,23,42,0.8) 100%)';
 const SUBPANEL_BASE = 'linear-gradient(180deg, rgba(15,23,42,0.84) 0%, rgba(30,41,59,0.74) 100%)';
@@ -493,6 +535,7 @@ export const ProgressPage: React.FC = () => {
   const [marksLoading, setMarksLoading] = useState(false);
   const [marksError, setMarksError] = useState('');
   const [marksRecords, setMarksRecords] = useState<TeacherMarksRecord[]>([]);
+  const academicQuery = useMemo(() => buildAcademicQuery(studentProfile as ParentMarksProfile | null), [studentProfile]);
 
   /* ── Data from centralized mock ── */
   const weeklyTrend = useMemo(() => [...WEEKLY_TREND], []);
@@ -519,19 +562,8 @@ export const ProgressPage: React.FC = () => {
   }, [selectedMarksRecord]);
 
   useEffect(() => {
-    const studentName = studentProfile?.studentName || '';
-    const grade = Number(studentProfile?.grade || user?.grade || 3) || 3;
-    const section = String(studentProfile?.division || 'A').trim().toUpperCase() || 'A';
-    const token = localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
-
-    if (!studentName) {
+    if (!academicQuery) {
       setMarksError('Student profile not available for marks lookup.');
-      setMarksRecords([]);
-      return;
-    }
-
-    if (!token) {
-      setMarksError('Login token missing. Please log in again to load marks.');
       setMarksRecords([]);
       return;
     }
@@ -542,23 +574,10 @@ export const ProgressPage: React.FC = () => {
 
     const loadMarks = async () => {
       try {
-        const url = `${getAdminBackendBaseUrl()}/api/marks?class=${encodeURIComponent(String(grade))}&section=${encodeURIComponent(section)}`;
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to load marks (${response.status})`);
-        }
-        const payload = await response.json().catch(() => ({}));
+        const payload = await getTeacherPortalJson(`/api/parent/my-child-marks?${academicQuery}`);
         const rows = Array.isArray(payload?.data) ? payload.data : [];
-        const normalizedTarget = normalizeStudentName(studentName);
-        const filtered = rows.filter((row: TeacherMarksRecord) => (
-          normalizeStudentName(row.student) === normalizedTarget
-        ));
         if (!active) return;
-        setMarksRecords(filtered);
+        setMarksRecords(rows);
         setMarksLoading(false);
       } catch (error) {
         if (!active) return;
@@ -572,7 +591,7 @@ export const ProgressPage: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [studentProfile?.studentName, studentProfile?.grade, studentProfile?.division, user?.grade]);
+  }, [academicQuery, user?.grade]);
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', paddingBottom: 40, position: 'relative' }}>

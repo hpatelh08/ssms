@@ -171,24 +171,6 @@ export async function fetchTeacherTeachingTimetable(currentUser) {
     };
   };
 
-  const buildAssignedClassFallback = async () => {
-    const assignedClass = String(identity?.assignedClass || '').trim();
-    const section = String(identity?.division || '').trim().toUpperCase();
-    if (!assignedClass || !section) return null;
-
-    try {
-      const classPayload = await fetchClassTimetable(assignedClass, section);
-      if (!classPayload || !classPayload.schedule) return null;
-
-      return buildResult(classPayload, {
-        classLabel: `${assignedClass}${section}`
-      });
-    } catch (error) {
-      console.warn('Failed to load assigned class fallback timetable:', error.message);
-      return null;
-    }
-  };
-
   const fetchTeacherView = async (name, idValue) => {
     const response = await axios.get(apiUrl('/api/teacher/timetable-public'), {
       params: {
@@ -203,7 +185,7 @@ export async function fetchTeacherTeachingTimetable(currentUser) {
 
   try {
     const payload = await fetchTeacherView(teacherName, identity?.teacherId || identity?.email || '');
-    if (payload && payload.schedule && payload.lectureCount) {
+    if (payload && payload.schedule) {
       return buildResult(payload);
     }
 
@@ -217,7 +199,7 @@ export async function fetchTeacherTeachingTimetable(currentUser) {
         const resolvedName = String(lookup?.data?.user?.name || '').trim();
         if (resolvedName) {
           const retryPayload = await fetchTeacherView(resolvedName, lookupId);
-          if (retryPayload && retryPayload.schedule && retryPayload.lectureCount) {
+          if (retryPayload && retryPayload.schedule) {
             return buildResult(retryPayload);
           }
         }
@@ -225,19 +207,10 @@ export async function fetchTeacherTeachingTimetable(currentUser) {
         // Ignore lookup failures and fall back to empty schedule.
       }
     }
-
-    const fallback = await buildAssignedClassFallback();
-    if (fallback) {
-      return {
-        ...fallback,
-        note: fallback.lectureCount
-          ? 'No direct teacher timetable found. Showing assigned class timetable data instead.'
-          : 'No lectures found for this teacher.'
-      };
-    }
   } catch (error) {
     console.warn('Failed to load teacher timetable from admin view:', error.message);
   }
 
+  targetTimetable.note = 'No direct teacher timetable found.';
   return targetTimetable;
 }

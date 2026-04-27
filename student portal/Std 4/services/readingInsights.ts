@@ -395,6 +395,22 @@ export function recordPageView(pageNum: number): void {
   });
 }
 
+/**
+ * Store total pages for the currently open book session.
+ * This allows true progress = pages viewed / total pages.
+ */
+export function recordBookTotalPages(totalPages: number): void {
+  const active = loadActiveSession();
+  if (!active) return;
+  const cleanTotal = Math.round(totalPages);
+  if (!Number.isFinite(cleanTotal) || cleanTotal <= 0) return;
+  persistActiveSession({
+    ...active,
+    lastHeartbeatAt: new Date().toISOString(),
+    totalPages: cleanTotal,
+  });
+}
+
 export function recordChapterView(chapterName: string): void {
   const active = loadActiveSession();
   if (!active) return;

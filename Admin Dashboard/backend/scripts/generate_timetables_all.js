@@ -10,6 +10,16 @@ const SUBJECTS_BY_STD = {
   upper: ['Mathematics', 'Science', 'Social Science', 'English', 'Hindi', 'Gujarati', 'Sanskrit', 'Computer', 'PT', 'Drawing']
 };
 
+const LECTURE_ONE_SUBJECTS = new Set([
+  'Mathematics',
+  'Gujarati',
+  'Hindi',
+  'Sanskrit',
+  'Science',
+  'Moral Science',
+  'Social Science',
+]);
+
 const SUBJECT_MAP = {
   'Mathematics': 'Mathematics',
   'Science': 'Science',
@@ -104,6 +114,7 @@ const TT_TEACHERS = buildTTTeachers();
 function generateTimetable(std, section) {
   const isPrimary = std <= PRIMARY_STANDARD_MAX;
   const subjectPool = isPrimary ? SUBJECTS_BY_STD.primary : SUBJECTS_BY_STD.upper;
+  const lectureOnePool = subjectPool.filter((subject) => LECTURE_ONE_SUBJECTS.has(subject));
   const classTeacher = getClassTeacherForClass(std, section);
   const classTeacherName = String(classTeacher?.name || '').trim();
   const classTeacherSubject = normalizeSubjectName(classTeacher?.subject || '');
@@ -125,12 +136,16 @@ function generateTimetable(std, section) {
     const slots = day === 'Saturday' ? TT_SLOTS_SATURDAY : TT_SLOTS_WEEKDAY;
     const lectures = [];
     const shuffled = [...subjectPool].sort(() => rand() - 0.5);
+    const lectureOnePoolShuffled = [...lectureOnePool].sort(() => rand() - 0.5);
     let si = 0;
     slots.forEach((slot) => {
       if (slot.isBreak) {
         lectures.push({ ...slot, subject: null, teacher: null });
       } else {
         let subj = shuffled[si % shuffled.length];
+        if (slot.num === 1 && lectureOnePoolShuffled.length) {
+          subj = lectureOnePoolShuffled[0];
+        }
         let teacher = getTeacher(subj);
         if (slot.num === 1 && classTeacherName) {
           subj = classTeacherSubject || subj;

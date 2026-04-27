@@ -22,9 +22,19 @@ import { authenticate, isTeacher } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { verifyToken } from '../utils/jwt.js';
 import { findTeacherByIdentifier, getTeacherAssignedStudents } from '../utils/adminTeacherAuth.js';
 import { getAdminTeacherTimetable } from '../utils/adminTimetable.js';
+import { createRequire } from 'module';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
+const projectRoot = path.resolve(__dirname, '..', '..', '..');
+const {
+  upsertExamRecord,
+} = require(path.join(projectRoot, 'shared', 'examSync.js'));
 
 const router = express.Router();
 
@@ -107,6 +117,47 @@ function authenticateAdminTeacher(req, res, next) {
     return res.status(401).json({ success: false, error: 'Invalid or expired teacher session.' });
   }
 }
+
+function normalizeSyncExamPayload(exam = {}) {
+  const classValueRaw = String(exam.class || '').trim();
+  const classMatch = classValueRaw.match(/\d+/);
+  const classValue = classMatch ? classMatch[0] : classValueRaw;
+  const dateValue = String(exam.date || '').trim();
+  const durationValue = String(exam.duration || '').trim();
+  const startTime = String(exam.startTime || '').trim();
+  const endTime = String(exam.endTime || '').trim();
+  return {
+    id: String(exam.id || exam._id || '').trim(),
+    name: String(exam.name || exam.examName || 'Exam').trim(),
+    class: classValue,
+    subject: String(exam.subject || '').trim(),
+    date: dateValue,
+    duration: durationValue || `${startTime} - ${endTime}`.trim(),
+    maxMarks: Number(exam.maxMarks || exam.max_marks || exam.totalMarks || 100) || 100,
+    status: String(exam.status || 'Scheduled').trim(),
+    examType: String(exam.examType || '').trim(),
+    startTime,
+    endTime,
+    passingMarks: Number(exam.passingMarks || 0) || 0,
+    description: String(exam.description || '').trim(),
+    teacherId: String(exam.teacherId || exam.teacher || '').trim(),
+    source: String(exam.source || 'teacher-portal').trim(),
+  };
+}
+
+router.post('/exams/public-sync', (req, res) => {
+  const incoming = Array.isArray(req.body?.exams) ? req.body.exams : [];
+  let synced = 0;
+
+  incoming.forEach((exam) => {
+    const record = normalizeSyncExamPayload(exam);
+    if (!record.id || !record.class || !record.date) return;
+    upsertExamRecord(record);
+    synced += 1;
+  });
+
+  res.json({ success: true, synced });
+});
 
 router.get('/my-profile', authenticateAdminTeacher, (req, res) => {
   return res.json({

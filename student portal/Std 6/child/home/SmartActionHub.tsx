@@ -92,6 +92,18 @@ const TILES: TileDef[] = [
     accentColor: T.warning,
     shineTint: 'rgba(255,255,255,0.45)',
   },
+  {
+    icon: '\u{1F4DA}',
+    watermark: '\u{1F4D6}',
+    label: 'Books',
+    desc: 'Open Flipbook Reader',
+    xp: '+8 XP',
+    screen: 'books',
+    gradient: 'linear-gradient(135deg, #f2ecff 0%, #dfd5ff 100%)',
+    iconBg: 'rgba(124,58,237,0.12)',
+    accentColor: '#7c3aed',
+    shineTint: 'rgba(255,255,255,0.45)',
+  },
 ];
 
 /* â”€â”€ "Recommended Today" â€” based on day-of-year â”€â”€â”€â”€ */

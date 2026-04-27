@@ -311,7 +311,46 @@ const OddOneOutGame: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     setShowResult(true);
   };
 
-  if (!question) return null;
+  if (!question) {
+    return (
+      <div
+        style={{
+          maxWidth: 440,
+          margin: '48px auto',
+          background: 'linear-gradient(135deg, #f0f4ff 60%, #e0f7fa 100%)',
+          borderRadius: 24,
+          boxShadow: '0 8px 32px #c7d2fe99',
+          padding: 32,
+          textAlign: 'center',
+          border: '2px solid #a5b4fc',
+        }}
+      >
+        <h2 style={{ fontSize: 24, fontWeight: 900, color: '#4f46e5', marginBottom: 12 }}>
+          Odd One Out
+        </h2>
+        <p style={{ color: '#6366f1', fontWeight: 600, marginBottom: 20 }}>
+          No question data is available right now.
+        </p>
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              background: '#6366f1',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 12,
+              padding: '10px 18px',
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            Go Back
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   const nonRepeatCount = BASE_QUESTIONS.length + TOTAL_SYNTHETIC_QUESTIONS;
 

@@ -1232,11 +1232,16 @@ async function loadExams() {
     return Number.isInteger(classNumber) && classNumber >= 1 && classNumber <= 6;
   });
   try {
-    const res = await api.get('/exams');
+    const res = await api.get('/exams/public');
     return filterSupportedExams(res.data || res);
   } catch (e) {
-    console.warn('Exams API unavailable, using mock data');
-    return filterSupportedExams(typeof EXAMS !== 'undefined' ? JSON.parse(JSON.stringify(EXAMS)) : []);
+    try {
+      const res = await api.get('/exams');
+      return filterSupportedExams(res.data || res);
+    } catch (err) {
+      console.warn('Exams API unavailable, using mock data');
+      return filterSupportedExams(typeof EXAMS !== 'undefined' ? JSON.parse(JSON.stringify(EXAMS)) : []);
+    }
   }
 }
 

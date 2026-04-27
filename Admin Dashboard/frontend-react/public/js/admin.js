@@ -207,7 +207,7 @@ window.initAdminPage = function() {
     const scope = sections.dashboard;
     const dashStats = await loadDashboardStats();
     const dashNotices = typeof NOTICES !== 'undefined' ? NOTICES : await loadNotices();
-    const dashExams = typeof EXAMS !== 'undefined' ? EXAMS : await loadExams();
+    const dashExams = await loadExams();
 
     scope.querySelector('#stat-students').dataset.rollTarget = dashStats.totalStudents;
     scope.querySelector('#stat-teachers').dataset.rollTarget = dashStats.totalTeachers;
@@ -4847,7 +4847,11 @@ ${issuedRow}
       try {
         const res = await api.get('/timetable/teachers');
         const list = Array.isArray(res?.data) ? res.data : [];
-        if (list.length === 0) throw new Error('Empty timetable teacher list');
+        if (list.length === 0) {
+          teacherList = [];
+          teacherSel.innerHTML = '<option value="">No timetable teachers available</option>';
+          return;
+        }
         const nameSet = new Set(list.map((name) => String(name || '').trim()).filter(Boolean));
         teacherList = list.map((name) => ({ name }));
         teacherSel.innerHTML = '<option value="">Select teacher</option>';
@@ -4868,21 +4872,8 @@ ${issuedRow}
           // Keep name-only list if detailed data is unavailable.
         }
       } catch (_) {
-        try {
-          const res = await api.get('/teachers?limit=200');
-          const list = res?.data || [];
-          teacherList = list;
-          teacherSel.innerHTML = '<option value="">Select teacher</option>';
-          list.forEach((t) => {
-            const opt = document.createElement('option');
-            opt.value = t.name;
-            opt.textContent = t.name;
-            teacherSel.appendChild(opt);
-          });
-        } catch {
-          teacherList = [];
-          teacherSel.innerHTML = '<option value="">Unable to load teachers</option>';
-        }
+        teacherList = [];
+        teacherSel.innerHTML = '<option value="">Unable to load timetable teachers</option>';
       }
 
       if (!teacherSel.value && teacherSel.options.length > 1) {
@@ -5082,6 +5073,11 @@ ${issuedRow}
       return cachedSubjects[standard];
     }
 
+    function getLectureOneSubjects(subjects) {
+      const allowed = new Set(['Mathematics', 'Gujarati', 'Hindi', 'Sanskrit', 'Science', 'Moral Science', 'Social Science']);
+      return (Array.isArray(subjects) ? subjects : []).filter((subject) => allowed.has(String(subject?.name || '').trim()));
+    }
+
     async function fetchTeachersForSubject(subjectId, standard) {
       const key = `${subjectId}|${standard}`;
       if (cachedTeachers[key]) return cachedTeachers[key];
@@ -5150,9 +5146,17 @@ ${issuedRow}
       }
 
       if (!matchedTeachers.length) {
-        matchedTeachers = Array.isArray(teachers)
-          ? teachers.filter((teacher) => teacherNameMatchesSubject(teacher?.name, subject))
-          : [];
+        popupTeacher.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'No timetable teachers found for this subject';
+        popupTeacher.appendChild(placeholder);
+        popupTeacher.value = '';
+        popupTeacher.style.display = 'block';
+        popupTeacherAuto.style.display = 'none';
+        if (popupOverrideBtn) popupOverrideBtn.style.display = 'none';
+        hideConflictWarning();
+        return '';
       }
 
       popupTeacher.innerHTML = '';
@@ -5177,17 +5181,6 @@ ${issuedRow}
         hideConflictWarning();
         return selectedName;
       }
-
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = 'No teachers found for this subject';
-      popupTeacher.appendChild(placeholder);
-      popupTeacher.value = '';
-      popupTeacher.style.display = 'block';
-      popupTeacherAuto.style.display = 'none';
-      if (popupOverrideBtn) popupOverrideBtn.style.display = 'none';
-      hideConflictWarning();
-      return '';
     }
 
     // Override button → show full dropdown
@@ -5243,6 +5236,9 @@ ${issuedRow}
         subjects = await fetchSubjectsForStd(std);
       } catch (_) {
         subjects = [];
+      }
+      if (num === 1) {
+        subjects = getLectureOneSubjects(subjects);
       }
       popupSubject.innerHTML = subjects.length
         ? subjects.map(s => `<option value="${s.name}" data-id="${s.id}" ${s.name === current.subject ? 'selected' : ''}>${s.name}</option>`).join('')

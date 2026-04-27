@@ -16,14 +16,23 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 
 export const DashboardSwitch: React.FC = React.memo(() => {
-  const { user, switchRole } = useAuth();
+  const {
+    user,
+    switchRole,
+    requestParentAccess,
+  } = useAuth();
   const isStudent = user.role === 'student';
 
   const handleSwitch = useCallback(
     (target: 'student' | 'parent') => {
-      if (user.role !== target) switchRole();
+      if (user.role === target) return;
+      if (target === 'parent') {
+        requestParentAccess();
+        return;
+      }
+      switchRole();
     },
-    [user.role, switchRole],
+    [user.role, requestParentAccess, switchRole],
   );
 
   return (

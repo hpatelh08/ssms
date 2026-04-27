@@ -48,10 +48,11 @@ interface ParentTopBarProps {
 }
 
 export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onNavigate }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const firstName = useMemo(() => user.name?.split(' ')[0] || 'Parent', [user.name]);
   const greeting = useMemo(getTimeGreeting, []);
   const [showNotif, setShowNotif] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   return (
     <motion.header
@@ -211,8 +212,86 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onNavigat
           >
             <GearIcon />
           </motion.button>
+
+          <motion.button
+            onClick={() => setShowLogoutConfirm(true)}
+            className="h-11 rounded-[30px] px-4 flex items-center justify-center cursor-pointer"
+            style={{
+              background: 'linear-gradient(135deg, #fbbf24, #d97706)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.28)',
+              boxShadow: '0 10px 24px rgba(245,158,11,0.22)',
+              fontWeight: 800,
+              fontSize: 13,
+            }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.94 }}
+          >
+            Logout
+          </motion.button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div
+            className="fixed inset-0 z-[140] flex items-center justify-center px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              type="button"
+              className="absolute inset-0"
+              style={{ background: 'rgba(120,53,15,0.28)', backdropFilter: 'blur(10px)' }}
+              aria-label="Close logout confirm"
+              onClick={() => setShowLogoutConfirm(false)}
+            />
+            <motion.div
+              className="relative w-full max-w-md overflow-hidden rounded-[30px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,251,235,0.98), rgba(254,243,199,0.98))',
+                border: '1px solid rgba(245,158,11,0.18)',
+                boxShadow: '0 28px 70px rgba(180,83,9,0.18)',
+              }}
+              initial={{ scale: 0.96, y: 18 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 12 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-amber-100">
+                <p className="text-[11px] font-black tracking-[0.3em] uppercase text-amber-600">Parent Mode</p>
+                <h3 className="mt-2 text-2xl font-black text-amber-950">Confirm Logout</h3>
+                <p className="mt-2 text-sm font-medium text-amber-800/80">
+                  Are you sure you want to logout from Parent mode?
+                </p>
+              </div>
+
+              <div className="p-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 rounded-2xl border border-amber-200 bg-white/85 px-4 py-3 text-sm font-extrabold text-amber-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogoutConfirm(false);
+                    logout();
+                  }}
+                  className="flex-1 rounded-2xl px-4 py-3 text-sm font-extrabold text-white"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                >
+                  Logout
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.header>
   );
 });

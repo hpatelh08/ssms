@@ -13,6 +13,8 @@ const projectRoot = path.resolve(__dirname, '..', '..', '..');
 const adminBackendRoot = path.join(projectRoot, 'Admin Dashboard', 'backend');
 const adminDbPath = path.join(adminBackendRoot, 'database.sqlite');
 const Database = require(path.join(adminBackendRoot, 'node_modules', 'better-sqlite3'));
+const { readExamSyncFile, normalizeExamRecord } = require(path.join(projectRoot, 'shared', 'examSync.js'));
+const SCHOOL_TIME_ZONE = 'Asia/Kolkata';
 
 let adminDb = null;
 
@@ -105,6 +107,31 @@ function normalizeExamStatus(status) {
   return 'scheduled';
 }
 
+function getSchoolDateIso(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SCHOOL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  if (!lookup.year || !lookup.month || !lookup.day) {
+    return '';
+  }
+
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+}
+
+function getExamDateIso(value) {
+  return String(value || '').trim().slice(0, 10);
+}
+
+function isOnOrAfterToday(value, todayIso = getSchoolDateIso()) {
+  const examDate = getExamDateIso(value);
+  return Boolean(examDate) && examDate >= todayIso;
+}
+
 function mapExamRow(row) {
   return {
     id: row.id,
@@ -116,6 +143,59 @@ function mapExamRow(row) {
     maxMarks: row.max_marks ?? row.maxMarks ?? 100,
     status: normalizeExamStatus(row.status),
   };
+}
+
+function mergeExamRows(sqlRows = [], sharedRows = []) {
+  const merged = new Map();
+
+  const push = (row, sourceTag) => {
+    if (!row) return;
+    const exam = mapExamRow(row);
+    const key = String(exam.id || `${exam.name}|${exam.class}|${exam.subject}|${exam.date}|${sourceTag || ''}`).trim();
+    if (!merged.has(key)) {
+      merged.set(key, exam);
+      return;
+    }
+    merged.set(key, { ...merged.get(key), ...exam });
+  };
+
+  sqlRows.forEach((row) => push(row, 'sql'));
+  sharedRows.forEach((row) => push(normalizeExamRecord(row), 'shared'));
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const dateDiff = String(a.date || '').localeCompare(String(b.date || ''));
+    if (dateDiff !== 0) return dateDiff;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
+function loadClassExams(classNo) {
+  const db = getAdminDb();
+  const sqlRows = db.prepare(`
+    SELECT id, name, class, subject, date, duration, max_marks, status
+    FROM exams
+    WHERE CAST(class AS INTEGER) = ?
+    ORDER BY date ASC, id ASC
+  `).all(classNo);
+
+  const sharedRows = readExamSyncFile().filter((exam) => {
+    const parsedClass = parseInt(String(exam?.class || '').trim(), 10);
+    return Number.isInteger(parsedClass) && parsedClass === classNo;
+  });
+
+  const todayIso = getSchoolDateIso();
+
+  return mergeExamRows(sqlRows, sharedRows)
+    .filter((exam) => isSupportedClass(exam.class) && isOnOrAfterToday(exam.date, todayIso))
+    .map((exam) => {
+      const examDate = getExamDateIso(exam.date);
+      const upcoming = exam.status === 'upcoming' || exam.status === 'scheduled' || (examDate && examDate >= todayIso);
+      return {
+        ...exam,
+        upcoming,
+        isToday: examDate === todayIso,
+      };
+    });
 }
 
 function buildMarksGroups(rows, childCandidates, classNo) {
@@ -176,28 +256,8 @@ router.get('/my-child-exams', (req, res) => {
     return res.status(401).json({ success: false, error: childContext.error });
   }
 
-  const db = getAdminDb();
-  const rows = db.prepare(`
-    SELECT id, name, class, subject, date, duration, max_marks, status
-    FROM exams
-    WHERE CAST(class AS INTEGER) = ?
-    ORDER BY date ASC, id ASC
-  `).all(parseInt(childContext.standard, 10));
-
-  const nowIso = new Date().toISOString().split('T')[0];
-  const mapped = rows
-    .filter((row) => isSupportedClass(row.class))
-    .map((row) => {
-      const exam = mapExamRow(row);
-      const examDate = String(exam.date || '').slice(0, 10);
-      const upcoming = exam.status === 'upcoming' || exam.status === 'scheduled' || (examDate && examDate >= nowIso);
-      return {
-        ...exam,
-        upcoming,
-        isToday: examDate === nowIso,
-      };
-    })
-    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  const classNo = parseInt(childContext.standard, 10);
+  const mapped = loadClassExams(classNo).filter((exam) => isSupportedClass(exam.class));
 
   return res.json({
     success: true,

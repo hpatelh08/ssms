@@ -18,11 +18,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'home', label: 'Home', icon: 'H', accentColor: '#3f8f3a', activeBg: 'rgba(63,143,58,0.10)', activeGlow: 'rgba(63,143,58,0.22)' },
-  { key: 'play', label: 'Games', icon: 'G', accentColor: '#2f7f4c', activeBg: 'rgba(47,127,76,0.10)', activeGlow: 'rgba(47,127,76,0.22)' },
-  { key: 'brain-boost', label: 'Brain Boost', icon: 'B', accentColor: '#8b6038', activeBg: 'rgba(139,96,56,0.10)', activeGlow: 'rgba(139,96,56,0.22)' },
-  { key: 'puzzle-zone', label: 'Puzzle Zone', icon: 'P', accentColor: '#c06a8f', activeBg: 'rgba(192,106,143,0.10)', activeGlow: 'rgba(192,106,143,0.24)' },
-  { key: 'journey', label: 'Journey', icon: 'J', accentColor: '#3b7fa8', activeBg: 'rgba(59,127,168,0.10)', activeGlow: 'rgba(59,127,168,0.22)' },
+  { key: 'home', label: 'Home', icon: '🏠', accentColor: '#3f8f3a', activeBg: 'rgba(63,143,58,0.10)', activeGlow: 'rgba(63,143,58,0.22)' },
+  { key: 'books', label: 'Books', icon: '📚', accentColor: '#f97316', activeBg: 'rgba(249,115,22,0.10)', activeGlow: 'rgba(249,115,22,0.20)' },
+  { key: 'play', label: 'Games', icon: '🎮', accentColor: '#2f7f4c', activeBg: 'rgba(47,127,76,0.10)', activeGlow: 'rgba(47,127,76,0.22)' },
+  { key: 'brain-boost', label: 'Brain Boost', icon: '🧠', accentColor: '#8b6038', activeBg: 'rgba(139,96,56,0.10)', activeGlow: 'rgba(139,96,56,0.22)' },
+  { key: 'puzzle-zone', label: 'Puzzle Zone', icon: '🧩', accentColor: '#c06a8f', activeBg: 'rgba(192,106,143,0.10)', activeGlow: 'rgba(192,106,143,0.24)' },
+  { key: 'journey', label: 'Journey', icon: '🗺️', accentColor: '#3b7fa8', activeBg: 'rgba(59,127,168,0.10)', activeGlow: 'rgba(59,127,168,0.22)' },
 ];
 
 const SidebarItem: React.FC<{
@@ -66,18 +67,14 @@ const SidebarItem: React.FC<{
 
       <span
         style={{
-          width: 24,
-          height: 24,
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 8,
-          background: isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.28)',
           color: isActive ? item.accentColor : 'var(--sidebar-text)',
-          fontSize: 12,
-          fontWeight: 800,
+          fontSize: 24,
           lineHeight: 1,
-          transition: 'all 0.2s ease',
+          filter: isActive ? 'none' : 'grayscale(0.15)',
+          transition: 'filter 0.2s ease',
         }}
       >
         {item.icon}
@@ -193,7 +190,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
             animate={{ y: [0, -2, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            S
+            🌟
           </motion.span>
           <div>
             <h2 className="sidebar-title" style={{ margin: 0 }}>

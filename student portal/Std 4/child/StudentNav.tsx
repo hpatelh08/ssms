@@ -21,15 +21,23 @@ const NAV_ITEMS: NavItem[] = [
   {
     key: 'home',
     label: 'Home',
-    icon: 'H',
+    icon: '🏠',
     accentColor: '#6366f1',
     activeBg: 'rgba(99,102,241,0.08)',
     activeGlow: 'rgba(99,102,241,0.15)',
   },
   {
+    key: 'books',
+    label: 'Books',
+    icon: '📚',
+    accentColor: '#f97316',
+    activeBg: 'rgba(249,115,22,0.08)',
+    activeGlow: 'rgba(249,115,22,0.15)',
+  },
+  {
     key: 'play',
     label: 'Games',
-    icon: 'G',
+    icon: '🎮',
     accentColor: '#10b981',
     activeBg: 'rgba(16,185,129,0.08)',
     activeGlow: 'rgba(16,185,129,0.15)',
@@ -37,7 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     key: 'odd-one-out',
     label: 'Odd One Out',
-    icon: 'O',
+    icon: '🚗',
     accentColor: '#fbbf24',
     activeBg: 'rgba(251,191,36,0.08)',
     activeGlow: 'rgba(251,191,36,0.15)',
@@ -45,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     key: 'word-builder',
     label: 'Word Builder',
-    icon: 'W',
+    icon: '🔤',
     accentColor: '#38bdf8',
     activeBg: 'rgba(56,189,248,0.08)',
     activeGlow: 'rgba(56,189,248,0.15)',
@@ -53,7 +61,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     key: 'journey',
     label: 'Journey',
-    icon: 'J',
+    icon: '🗺️',
     accentColor: '#8b5cf6',
     activeBg: 'rgba(139,92,246,0.08)',
     activeGlow: 'rgba(139,92,246,0.2)',
@@ -101,18 +109,14 @@ const SidebarItem: React.FC<{
 
       <span
         style={{
-          width: 24,
-          height: 24,
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 8,
-          background: isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.28)',
           color: isActive ? item.accentColor : 'var(--sidebar-text)',
-          fontSize: 12,
-          fontWeight: 800,
+          fontSize: 24,
           lineHeight: 1,
-          transition: 'all 0.2s ease',
+          filter: isActive ? 'none' : 'grayscale(0.15)',
+          transition: 'filter 0.2s ease',
         }}
       >
         {item.icon}
@@ -228,7 +232,7 @@ export const StudentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =
             animate={{ y: [0, -2, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            S
+            🌟
           </motion.span>
           <div>
             <h2 className="sidebar-title" style={{ margin: 0 }}>

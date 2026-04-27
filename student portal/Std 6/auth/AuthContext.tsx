@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { type StudentProfile } from '../data/studentProfiles';
+import { getStudentProfileById, type StudentProfile } from '../data/studentProfiles';
 import { logAction } from '../utils/auditLog';
 import { postAdminBackendJson } from '../services/adminBackend';
 
@@ -35,6 +35,11 @@ const ADMIN_TOKEN_STORAGE_KEY = 'ssms_std6_admin_token';
 const DEFAULT_USER: AuthUser = { role: 'student', grade: 6, name: 'Explorer' };
 const FORCE_PORTAL_PATH = '/student-portal/6';
 const FALLBACK_STUDENT_ID = 'STU20240601';
+const getStudentLoginRedirectUrl = () => (
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:5000/student-login`
+    : '/student-login'
+);
 
 interface PersistedSession {
   studentId?: string;
@@ -274,12 +279,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
+    const shouldRedirectToLogin = authState.user.role === 'parent';
     setAuthState({ isAuthenticated: false, user: DEFAULT_USER, studentProfile: null, parentVerified: false });
     setParentAccessPromptOpen(false);
     setNotice(null);
     clearSessionStorage();
     persistAdminToken(null);
-  }, []);
+    if (shouldRedirectToLogin) {
+      window.location.replace(getStudentLoginRedirectUrl());
+    }
+  }, [authState.user.role]);
 
   const updateStudentProfile = useCallback((updates: Partial<StudentProfile>): AuthActionResult => {
     if (!authState.isAuthenticated || !authState.studentProfile) return { ok: false, error: 'Please login first' };

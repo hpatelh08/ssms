@@ -166,14 +166,148 @@ function awardVideoXP(videoId: string) {
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 const QUICK_ACTIONS = [
-  { label: 'Explain simply', icon: '1', prompt: 'Explain this chapter in simple words in exactly 3 short lines. Do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Key points', icon: '2', prompt: 'Give the key points from this chapter as short bullet points only. Do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Give worksheet', icon: '3', prompt: 'Give 5 to 6 simple worksheet questions from this chapter only. Do not show answers unless needed, and do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Parent tip', icon: '4', prompt: 'Give a practical parent suggestion for helping a Class 4 child learn this chapter. Keep it short and useful. Do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Word meanings', icon: '5', prompt: 'Give the important words from this chapter and their simple meanings. Keep it clear and child-friendly. Do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Oral questions', icon: '6', prompt: 'Give 5 short oral questions from this chapter only, with very short answers if needed. Do not show source, chapter notes, page numbers, or any extra labels.' },
-  { label: 'Revision plan', icon: '7', prompt: 'Give chapter information, a few practice questions, and one easy example for revision. Keep it simple and do not show source, chapter notes, page numbers, or any extra labels.' },
+  { label: 'Explain simply', icon: '💡', prompt: 'Explain this chapter simply so a Class 4 student can understand easily.' },
+  { label: 'Give example', icon: '🎯', prompt: 'Give a fun, relatable real-life example from this chapter for my child.' },
+  { label: 'Give worksheet', icon: '📝', prompt: 'Generate a 5-question worksheet from this chapter suitable for a Class 4 student.' },
+  { label: 'Parent tip', icon: '👨‍👩‍👧', prompt: 'Give me a practical parent teaching tip for this chapter that I can use at home.' },
 ];
+
+function normalizeQuickText(text: string): string {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function firstSentence(text: string): string {
+  const cleaned = normalizeQuickText(text);
+  if (!cleaned) return '';
+  return cleaned.split(/[.!?]/).map((part) => part.trim()).find(Boolean) || cleaned;
+}
+
+function buildQuickFallbackReply(question: string, chapterName: string, chapterContext: string): string {
+  const q = normalizeQuickText(question).toLowerCase();
+  const summary = firstSentence(chapterContext) || `the chapter "${chapterName}"`;
+
+  if (q.includes('explain') || q.includes('simple') || q.includes('summary') || q.includes('summarize')) {
+    return `Here is a simple explanation from "${chapterName}": ${summary}.`;
+  }
+
+  if (q.includes('example')) {
+    return `A simple real-life example from "${chapterName}" is: ${summary}.`;
+  }
+
+  if (q.includes('worksheet') || q.includes('practice')) {
+    return [
+      `Here is a simple worksheet from "${chapterName}":`,
+      '1. What is this chapter about?',
+      '2. Write one important thing you learned.',
+      '3. Name one word or idea from the chapter.',
+      '4. What lesson does the chapter teach?',
+      '5. Write one real-life example from this chapter.',
+    ].join('\n');
+  }
+
+  if ((q.includes('parent') && q.includes('tip')) || q.includes('teaching tip') || q.includes('practical tip') || q.includes('at home')) {
+    return [
+      `Parent tip for "${chapterName}":`,
+      'Read the chapter together.',
+      'Ask your child to say the main idea in one short sentence.',
+      'Then connect it to one thing from daily life.',
+    ].join('\n');
+  }
+
+  if (q.includes('example')) {
+    return `A simple real-life example from "${chapterName}" is: ${summary}.`;
+  }
+
+  return `Here is a simple answer from "${chapterName}": ${summary}.`;
+}
+
+function normalizeLookupText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097F\u0A80-\u0AFF]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getChapterVideoUrl(subject: Subject, chapter: ChapterInfo): string | null {
+  const subjectVideos = ((VIDEO_DATA as Record<string, VideoEntry[]>)[subject] || []).filter(Boolean);
+  if (!subjectVideos.length) return null;
+
+  const chapterName = normalizeLookupText(chapter.name);
+  const chapterNumber = String(chapter.chapter);
+  const words = chapterName.split(' ').filter(word => word.length > 2);
+
+  let bestMatch: VideoEntry | null = null;
+  let bestScore = 0;
+
+  for (const video of subjectVideos) {
+    const title = normalizeLookupText(video.title);
+    const context = normalizeLookupText(video.context);
+    let score = 0;
+
+    if (chapterName && title.includes(chapterName)) score += 8;
+    if (chapterName && context.includes(chapterName)) score += 7;
+    if (title.includes(`unit ${chapterNumber}`) || title.includes(`chapter ${chapterNumber}`)) score += 4;
+    if (context.includes(`unit ${chapterNumber}`) || context.includes(`chapter ${chapterNumber}`)) score += 3;
+
+    words.forEach(word => {
+      if (title.includes(word)) score += 1;
+      if (context.includes(word)) score += 1;
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = video;
+    }
+  }
+
+  return bestScore >= 4 ? bestMatch?.url || null : null;
+}
+
+function appendVideoLinkIfExplain(answer: string, question: string, chapter: ChapterInfo, subject: Subject): string {
+  const normalizedQuestion = normalizeLookupText(question);
+  if (!normalizedQuestion.includes('explain')) return answer;
+
+  const videoUrl = getChapterVideoUrl(subject, chapter);
+  if (!videoUrl) return answer;
+  if (/youtu\.be|youtube\.com/i.test(answer)) return answer;
+
+  return `${answer}\n\nWatch video: ${videoUrl}`;
+}
+
+function renderTextWithLinks(text: string): React.ReactNode {
+  const parts = (text || '').split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 700 }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+function isQuickActionPrompt(question: string): boolean {
+  const q = normalizeQuickText(question).toLowerCase();
+  return (
+    q.includes('worksheet') ||
+    q.includes('practice') ||
+    q.includes('example') ||
+    q.includes('explain') ||
+    q.includes('simple') ||
+    q.includes('summary') ||
+    q.includes('summarize') ||
+    ((q.includes('parent') && q.includes('tip')) || q.includes('teaching tip') || q.includes('practical tip') || q.includes('at home'))
+  );
+}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    GLASS CARD STYLE
@@ -609,7 +743,7 @@ const ChatBubble: React.FC<{ msg: ChatMsg; isStreaming?: boolean }> = ({ msg, is
           wordBreak: 'break-word' as const,
         }}
       >
-        {msg.text}
+        {renderTextWithLinks(msg.text?.trim() || 'Thinking...')}
         {isStreaming && (
           <motion.span
             className="inline-block w-0.5 h-4 ml-0.5 align-text-bottom"
@@ -697,6 +831,20 @@ const AskAiSection: React.FC<{
     setIsStreaming(true);
     setError(null);
 
+    if (isQuickActionPrompt(text)) {
+      const directAnswer = appendVideoLinkIfExplain(
+        buildQuickFallbackReply(text, selectedChapter.name, selectedChapter.context),
+        text,
+        selectedChapter,
+        selectedChapter.subject,
+      );
+      setMessages(prev =>
+        prev.map(m => (m.id === aiMsgId ? { ...m, text: directAnswer } : m)),
+      );
+      setIsStreaming(false);
+      return;
+    }
+
     const history: { role: 'user' | 'assistant'; content: string }[] = [
       ...messages.slice(-10).map(m => ({ role: m.role, content: m.text })),
       { role: 'user' as const, content: text.trim() },
@@ -713,16 +861,48 @@ const AskAiSection: React.FC<{
             prev.map(m => (m.id === aiMsgId ? { ...m, text: partial } : m)),
           );
         },
-        (_full) => { setIsStreaming(false); },
+        (full) => {
+          setIsStreaming(false);
+          const finalText = appendVideoLinkIfExplain(
+            full?.trim() || buildQuickFallbackReply(text, selectedChapter.name, selectedChapter.context),
+            text,
+            selectedChapter,
+            selectedChapter.subject,
+          );
+          setMessages(prev =>
+            prev.map(m => (m.id === aiMsgId ? { ...m, text: finalText } : m)),
+          );
+        },
         (err) => {
           setIsStreaming(false);
-          setError(err.message || 'Something went wrong. Please try again.');
-          setMessages(prev => prev.filter(m => m.id !== aiMsgId));
+          setMessages(prev =>
+            prev.map(m => (m.id === aiMsgId ? {
+              ...m,
+              text: appendVideoLinkIfExplain(
+                buildQuickFallbackReply(text, selectedChapter.name, selectedChapter.context),
+                text,
+                selectedChapter,
+                selectedChapter.subject,
+              ),
+            } : m)),
+          );
+          setError(null);
         },
       );
     } catch {
       setIsStreaming(false);
-      setError('Failed to connect. Please check your connection.');
+      setMessages(prev =>
+        prev.map(m => (m.id === aiMsgId ? {
+          ...m,
+          text: appendVideoLinkIfExplain(
+            buildQuickFallbackReply(text, selectedChapter.name, selectedChapter.context),
+            text,
+            selectedChapter,
+            selectedChapter.subject,
+          ),
+        } : m)),
+      );
+      setError(null);
     }
   }, [isStreaming, messages, selectedChapter, subject]);
 

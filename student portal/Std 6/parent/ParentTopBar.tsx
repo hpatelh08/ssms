@@ -25,7 +25,47 @@ interface ParentNotificationItem {
   createdAt?: string;
 }
 
+type LogoutTheme = {
+  surface: string;
+  glow: string;
+  badgeBg: string;
+  badgeColor: string;
+  title: string;
+  body: string;
+  cancelBg: string;
+  cancelText: string;
+  cancelBorder: string;
+  confirmGradient: string;
+  confirmShadow: string;
+};
+
+const LOGOUT_THEMES: Record<string, LogoutTheme> = {
+  1: { surface: 'linear-gradient(180deg, rgba(7,12,28,0.98) 0%, rgba(15,23,42,0.96) 100%)', glow: 'radial-gradient(circle at top left, rgba(96,165,250,0.18), transparent 60%), radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 55%)', badgeBg: 'rgba(96,165,250,0.12)', badgeColor: '#dbeafe', title: '#dbeafe', body: '#94a3b8', cancelBg: 'rgba(15,23,42,0.82)', cancelText: '#cbd5e1', cancelBorder: 'rgba(148,163,184,0.18)', confirmGradient: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', confirmShadow: '0 12px 26px rgba(59,130,246,0.24)' },
+  2: { surface: 'linear-gradient(180deg, rgba(5,31,25,0.98) 0%, rgba(6,38,35,0.96) 100%)', glow: 'radial-gradient(circle at top left, rgba(16,185,129,0.18), transparent 60%), radial-gradient(circle at top right, rgba(45,212,191,0.16), transparent 55%)', badgeBg: 'rgba(16,185,129,0.12)', badgeColor: '#d1fae5', title: '#d1fae5', body: '#a7f3d0', cancelBg: 'rgba(6,38,35,0.82)', cancelText: '#ccfbf1', cancelBorder: 'rgba(153,246,228,0.18)', confirmGradient: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)', confirmShadow: '0 12px 26px rgba(16,185,129,0.24)' },
+  3: { surface: 'linear-gradient(180deg, rgba(7,12,28,0.98) 0%, rgba(15,23,42,0.96) 100%)', glow: 'radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 60%), radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 55%)', badgeBg: 'rgba(56,189,248,0.12)', badgeColor: '#bfdbfe', title: '#bfdbfe', body: '#93c5fd', cancelBg: 'rgba(15,23,42,0.82)', cancelText: '#dbeafe', cancelBorder: 'rgba(148,163,184,0.18)', confirmGradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)', confirmShadow: '0 12px 26px rgba(245,158,11,0.24)' },
+  4: { surface: 'linear-gradient(180deg, rgba(11,14,31,0.98) 0%, rgba(17,24,39,0.96) 100%)', glow: 'radial-gradient(circle at top left, rgba(249,115,22,0.18), transparent 60%), radial-gradient(circle at top right, rgba(236,72,153,0.16), transparent 55%)', badgeBg: 'rgba(249,115,22,0.12)', badgeColor: '#fcd34d', title: '#fde68a', body: '#fbbf24', cancelBg: 'rgba(17,24,39,0.82)', cancelText: '#f8fafc', cancelBorder: 'rgba(251,191,36,0.16)', confirmGradient: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)', confirmShadow: '0 12px 26px rgba(249,115,22,0.24)' },
+  5: { surface: 'linear-gradient(180deg, rgba(4,28,16,0.98) 0%, rgba(15,42,29,0.96) 100%)', glow: 'radial-gradient(circle at top left, rgba(34,197,94,0.18), transparent 60%), radial-gradient(circle at top right, rgba(132,204,22,0.16), transparent 55%)', badgeBg: 'rgba(34,197,94,0.12)', badgeColor: '#dcfce7', title: '#dcfce7', body: '#bbf7d0', cancelBg: 'rgba(15,42,29,0.82)', cancelText: '#ecfdf5', cancelBorder: 'rgba(134,239,172,0.18)', confirmGradient: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)', confirmShadow: '0 12px 26px rgba(34,197,94,0.24)' },
+  6: {
+    surface: 'linear-gradient(180deg, rgba(2,22,44,0.99) 0%, rgba(7,44,74,0.98) 100%)',
+    glow: 'radial-gradient(circle at top left, rgba(14,165,233,0.28), transparent 56%), radial-gradient(circle at top right, rgba(34,211,238,0.24), transparent 52%), radial-gradient(circle at bottom right, rgba(59,130,246,0.12), transparent 42%)',
+    badgeBg: 'rgba(8,145,178,0.26)',
+    badgeColor: '#dff8ff',
+    title: '#38d5ff',
+    body: '#b7ebff',
+    cancelBg: 'rgba(8,27,50,0.9)',
+    cancelText: '#8ee7ff',
+    cancelBorder: 'rgba(110,231,255,0.24)',
+    confirmGradient: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 52%, #22d3ee 100%)',
+    confirmShadow: '0 14px 30px rgba(14,165,233,0.30)',
+  },
+};
+
+function getLogoutTheme(grade?: number): LogoutTheme {
+  return LOGOUT_THEMES[String(grade || 6)] || LOGOUT_THEMES[6];
+}
+
 const PARENT_NOTIFICATIONS_STORAGE_KEY = 'parent-notifications';
+const LOGIN_REDIRECT_URL = `${window.location.protocol}//${window.location.hostname}:5000/student-login`;
 
 const DEFAULT_PARENT_NOTIFICATIONS: ParentNotificationItem[] = [
   { id: 'default-1', icon: '✅', text: 'Daily streak maintained!', time: '2 min ago', bg: 'rgba(16,185,129,0.08)' },
@@ -97,7 +137,8 @@ const ConfirmLogoutModal: React.FC<{
   open: boolean;
   onCancel: () => void;
   onConfirm: () => void;
-}> = ({ open, onCancel, onConfirm }) => (
+  theme: LogoutTheme;
+}> = ({ open, onCancel, onConfirm, theme }) => (
   <AnimatePresence>
     {open && (
       <motion.div
@@ -120,8 +161,8 @@ const ConfirmLogoutModal: React.FC<{
         <motion.div
           className="relative w-full max-w-md overflow-hidden rounded-[30px] p-6 md:p-7"
           style={{
-            background: 'linear-gradient(180deg, rgba(6,11,28,0.98) 0%, rgba(15,23,42,0.96) 100%)',
-            border: '1px solid rgba(148,163,184,0.18)',
+            background: theme.surface,
+            border: `1px solid ${theme.cancelBorder}`,
             boxShadow: '0 30px 70px rgba(2,6,23,0.5)',
           }}
           initial={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -134,10 +175,7 @@ const ConfirmLogoutModal: React.FC<{
         >
           <div
             className="absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 60%), radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 55%)',
-            }}
+            style={{ background: theme.glow }}
             aria-hidden
           />
 
@@ -145,8 +183,8 @@ const ConfirmLogoutModal: React.FC<{
             <div
               className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em]"
               style={{
-                background: 'rgba(96,165,250,0.12)',
-                color: '#bfdbfe',
+                background: theme.badgeBg,
+                color: theme.badgeColor,
               }}
             >
               Parent mode
@@ -154,11 +192,11 @@ const ConfirmLogoutModal: React.FC<{
             <h2
               id="confirm-logout-title"
               className="mt-4 text-[26px] font-black leading-tight"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: theme.title }}
             >
               Confirm Logout
             </h2>
-            <p className="mt-2 text-[14px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+            <p className="mt-2 text-[14px] font-semibold" style={{ color: theme.body }}>
               Are you sure you want to logout from Parent mode?
             </p>
 
@@ -168,9 +206,9 @@ const ConfirmLogoutModal: React.FC<{
                 onClick={onCancel}
                 className="flex-1 rounded-2xl py-3 text-[14px] font-extrabold"
                 style={{
-                  background: 'rgba(15,23,42,0.82)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid rgba(148,163,184,0.18)',
+                  background: theme.cancelBg,
+                  color: theme.cancelText,
+                  border: `1px solid ${theme.cancelBorder}`,
                 }}
               >
                 Cancel
@@ -180,8 +218,8 @@ const ConfirmLogoutModal: React.FC<{
                 onClick={onConfirm}
                 className="flex-1 rounded-2xl py-3 text-[14px] font-extrabold text-white"
                 style={{
-                  background: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
-                  boxShadow: '0 12px 26px rgba(239,68,68,0.24)',
+                  background: theme.confirmGradient,
+                  boxShadow: theme.confirmShadow,
                 }}
               >
                 Logout
@@ -198,6 +236,7 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
   const { user, studentProfile, logout } = useAuth();
   const firstName = useMemo(() => user.name?.split(' ')[0] || 'Parent', [user.name]);
   const greeting = useMemo(getTimeGreeting, []);
+  const logoutTheme = useMemo(() => getLogoutTheme(studentProfile?.grade || user?.grade || 6), [studentProfile?.grade, user?.grade]);
   const [showNotif, setShowNotif] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notifications, setNotifications] = useState<ParentNotificationItem[]>(() => loadParentNotifications());
@@ -233,6 +272,7 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
   const handleLogout = () => {
     setShowLogoutConfirm(false);
     logout();
+    window.location.replace(LOGIN_REDIRECT_URL);
   };
 
   return (
@@ -414,14 +454,14 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
                   onClick={() => setShowLogoutConfirm(true)}
                   className="cursor-pointer rounded-xl px-4 py-2.5 text-[14px] font-extrabold text-white"
                   style={{
-                    background: 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
-                    boxShadow: '0 8px 18px rgba(239,68,68,0.22)',
+                    background: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 52%, #2563eb 100%)',
+                    boxShadow: '0 8px 18px rgba(14,165,233,0.22)',
                     border: 'none',
                   }}
                   whileHover={{
                     scale: 1.05,
-                    background: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)',
-                    boxShadow: '0 12px 24px rgba(239,68,68,0.28)',
+                    background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 52%, #60a5fa 100%)',
+                    boxShadow: '0 12px 24px rgba(14,165,233,0.28)',
                   }}
                   whileTap={{ scale: 0.97 }}
                 >
@@ -437,6 +477,7 @@ export const ParentTopBar: React.FC<ParentTopBarProps> = React.memo(({ onOpenSet
         open={showLogoutConfirm}
         onCancel={() => setShowLogoutConfirm(false)}
         onConfirm={handleLogout}
+        theme={logoutTheme}
       />
     </>
 );

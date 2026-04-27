@@ -7,9 +7,67 @@ import { logAction } from "../utils/auditLog";
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GOOGLE_CSE_API_KEY = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_API_KEY || '').trim();
+const GOOGLE_CSE_CX = ((import.meta as any)?.env?.VITE_GOOGLE_CSE_CX || '').trim();
+const SIMPLE_CHAPTER_FALLBACK = "I can help with a simple answer.";
 
 function getGroqApiKey(): string {
-  return process.env.GROQ_API_KEY || '';
+  const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
+  return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
+}
+
+function shouldUseWebFallback(text: string): boolean {
+  const normalized = (text || '').toLowerCase().trim();
+  if (!normalized) return true;
+  return (
+    normalized.includes('not in your books') ||
+    normalized.includes('not in the textbook') ||
+    normalized.includes('not in your textbooks') ||
+    normalized.includes('not in this chapter') ||
+    normalized.includes('not available in the std 3 textbooks') ||
+    normalized.includes('could not find the answer') ||
+    normalized.includes('could not reach the ai right now')
+  );
+}
+
+async function askGoogleFallback(
+  question: string,
+  subject: string,
+  chapterName: string,
+  chapterContext: string,
+): Promise<string | null> {
+  if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) return null;
+
+  const contextHint = (chapterContext || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const query = [
+    question,
+    `NCERT Class 3 ${subject}`,
+    chapterName,
+    contextHint,
+  ].filter(Boolean).join(' ');
+
+  const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(query)}&num=3&hl=en&gl=IN`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const items = Array.isArray(data.items) ? data.items.slice(0, 3) : [];
+    if (!items.length) return null;
+
+    const first = items[0];
+    const second = items[1];
+    return [
+      `I found this online (outside the textbook):`,
+      `Top result: ${first.title}`,
+      first.snippet || '',
+      second ? `Another result: ${second.title}\n${second.snippet || ''}` : '',
+      `Source: ${first.link || 'Google search result'}`,
+    ].filter(Boolean).join('\n\n');
+  } catch {
+    return null;
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────
@@ -145,8 +203,8 @@ export class AIService {
     if (relevantChunks.length === 0) {
       logAction('rag_no_results', 'ai', { query });
       return {
-        explanation: "This topic is not available in the Std 3 textbooks. The AI could not find any matching content in the uploaded English or Mathematics books.",
-        simplified_explanation: "This is not in your school books. Ask your teacher! 📚",
+        explanation: SIMPLE_CHAPTER_FALLBACK,
+        simplified_explanation: 'Use the chapter idea and one detail.',
         book: 'N/A',
         page_reference: 'N/A',
         sources: [],
@@ -201,7 +259,7 @@ AUDIENCE: The child themselves.
 
 STRICT RULES:
 1. ONLY use information from the TEXTBOOK CONTEXT provided below.
-2. If the answer is not in the context, respond ONLY with: "This topic is not in your books. Please ask your teacher!"
+2. If the answer is not fully in the context, still give the best simple answer you can using the chapter clues.
 3. Do NOT mention source numbers, page numbers, chunk IDs, or retrieval details.
 4. Do NOT use words like "powerful tool", "communicate", "express ourselves", or any abstract language.
 5. Keep explanation under 6 short simple sentences.
@@ -250,7 +308,7 @@ Return a JSON object with exactly three fields:
       if (!groqResponse.ok) {
         const errorBody = await groqResponse.text();
         console.error('[RAG] Groq API error:', groqResponse.status, errorBody);
-        throw new Error(`Groq API error (${groqResponse.status}): ${errorBody}`);
+        return this.emptyResponse(SIMPLE_CHAPTER_FALLBACK);
       }
 
       const groqData = await groqResponse.json();
@@ -269,8 +327,8 @@ Return a JSON object with exactly three fields:
       });
 
       return {
-        explanation: data.explanation || 'No explanation generated.',
-        simplified_explanation: data.simplified || 'Please ask your teacher!',
+        explanation: data.explanation || SIMPLE_CHAPTER_FALLBACK,
+        simplified_explanation: data.simplified || 'Use the main idea and one detail.',
         book: primaryBook,
         page_reference: pages,
         sources: relevantChunks,
@@ -283,7 +341,7 @@ Return a JSON object with exactly three fields:
     } catch (error) {
       console.error('[RAG] AI Error:', error);
       logAction('rag_error', 'ai', { query, error: String(error) });
-      throw error;
+      return this.emptyResponse(SIMPLE_CHAPTER_FALLBACK);
     }
   }
 
@@ -361,10 +419,7 @@ Return a JSON object with exactly three fields:
     const relevantChunks = searchResults.map(r => r.chunk);
 
     if (relevantChunks.length === 0) {
-      callbacks.onComplete(
-        "This topic is not available in the Std 3 textbooks. The AI could not find matching content.",
-        []
-      );
+      callbacks.onComplete(SIMPLE_CHAPTER_FALLBACK, []);
       return;
     }
 
@@ -404,7 +459,9 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
       });
 
       if (!response.ok) {
-        throw new Error(`Groq streaming error (${response.status})`);
+        const fallbackText = SIMPLE_CHAPTER_FALLBACK;
+        callbacks.onComplete(fallbackText, searchResults);
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -447,10 +504,11 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
         responseLength: fullText.length,
       });
 
-      callbacks.onComplete(fullText, searchResults);
+      const finalText = fullText.trim() || SIMPLE_CHAPTER_FALLBACK;
+      callbacks.onComplete(finalText, searchResults);
     } catch (err) {
       console.error('[Streaming] Error:', err);
-      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+      callbacks.onComplete(SIMPLE_CHAPTER_FALLBACK, searchResults);
     }
   }
 
@@ -470,22 +528,34 @@ After the explanation, add "---SIMPLE---" followed by ONE simple sentence (max 2
     onDone: (fullText: string) => void,
     onError: (err: Error) => void,
   ): Promise<void> {
-    const systemPrompt = `You are the NCERT Class 3 ${subject} Assistant — a helpful, accurate guide for parents teaching their 6-7 year old child.
+    const systemPrompt = `You are a Class 1 ${subject} Assistant — a helpful, accurate guide for parents teaching a 6-7 year old child.
 
-CURRENT CHAPTER: "${chapterName}" (${subject})
-TEXTBOOK CONTEXT: ${chapterContext}
+  CURRENT CHAPTER: "${chapterName}" (${subject})
+  TEXTBOOK CONTEXT (use if relevant): ${chapterContext}
 
-STRICT RULES:
-1. ONLY provide information relevant to NCERT Class 3 ${subject}, specifically the chapter "${chapterName}".
-2. If asked about topics outside this chapter or class, respond: "That topic is not in this chapter. Please select the correct chapter from the list above."
-3. Use SIMPLE language a 6-year-old can understand. Short sentences. Friendly tone.
-4. When the parent asks "Explain simply" — give a 2-3 sentence kid-friendly explanation.
-5. When the parent asks for an "Example" — give a concrete, relatable example from daily life.
-6. When the parent asks for a "Worksheet" — generate 5 simple practice questions appropriate for Class 3.
-7. When the parent asks for a "Parent tip" — give a practical teaching strategy the parent can use at home.
-8. Do NOT hallucinate content not in the NCERT Class 3 syllabus.
-9. Be encouraging and warm. Use 1-2 emojis per response (not more).
-10. Keep responses concise — max 4-5 short paragraphs.`;
+  RULES:
+  1. Prefer NCERT Class 1 ${subject} content and the current chapter when it fits the question.
+  2. If the question is outside the chapter, still answer in a general, age-appropriate way (do not refuse).
+  3. Use SIMPLE language a 6-year-old can understand. Short sentences. Friendly tone.
+  4. When the parent asks "Explain simply" — give a 2-3 sentence kid-friendly explanation.
+  5. When the parent asks for an "Example" — give a concrete, relatable example from daily life.
+  6. When the parent asks for a "Worksheet" — generate 5 simple practice questions appropriate for Class 1.
+  7. When the parent asks for a "Parent tip" — give a practical teaching strategy the parent can use at home.
+  8. Be encouraging and warm. Use 1-2 emojis per response (not more).
+  9. Keep responses concise — max 4-5 short paragraphs.`;
+
+    const lastUserQuestion = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+
+    if (!this.apiKey) {
+      const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+      if (webFallback) {
+        onDone(webFallback);
+        return;
+      }
+      const fallbackText = `${SIMPLE_CHAPTER_FALLBACK}\n\nChapter summary (${subject} - ${chapterName}): ${chapterContext || 'No context available.'}`;
+      onDone(fallbackText);
+      return;
+    }
 
     try {
       const response = await fetch(GROQ_API_URL, {
@@ -507,7 +577,8 @@ STRICT RULES:
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error (${response.status})`);
+        onDone(SIMPLE_CHAPTER_FALLBACK);
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -549,10 +620,29 @@ STRICT RULES:
         responseLength: fullText.length,
       });
 
-      onDone(fullText);
+      const finalText = fullText.trim();
+      if (!finalText) {
+        const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+        onDone(`${SIMPLE_CHAPTER_FALLBACK}\n\nChapter summary (${subject} - ${chapterName}): ${chapterContext || 'No context available.'}`);
+        return;
+      }
+
+      if (shouldUseWebFallback(finalText)) {
+        const webFallback = await askGoogleFallback(lastUserQuestion, subject, chapterName, chapterContext);
+        if (webFallback) {
+          onDone(webFallback);
+          return;
+        }
+      }
+
+      onDone(finalText);
     } catch (err) {
       console.error('[NCERT Chat] Error:', err);
-      onError(err instanceof Error ? err : new Error(String(err)));
+      onDone(SIMPLE_CHAPTER_FALLBACK);
     }
   }
 
@@ -615,7 +705,7 @@ Write a 3-4 sentence parent insight summary.`;
         }),
       });
 
-      if (!response.ok) throw new Error(`Groq API error (${response.status})`);
+      if (!response.ok) return 'Your child is on a wonderful learning journey! Keep encouraging them every day.';
 
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content?.trim();

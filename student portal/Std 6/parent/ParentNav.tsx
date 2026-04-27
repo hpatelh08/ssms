@@ -1,4 +1,4 @@
-/**
+﻿/**
  * parent/ParentNav.tsx
  * Water-themed parent sidebar + mobile bottom nav.
  */
@@ -17,7 +17,9 @@ export type ParentScreen =
   | 'garden'
   | 'fillblanks'
   | 'messages'
-  | 'leave' | 'settings';
+  | 'leave' | 'settings'
+  | 'exams'
+  | 'exams-marks';
 
 interface NavItem {
   key: ParentScreen;
@@ -43,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'settings', label: 'Settings', sublabel: 'Preferences', icon: '??', gradient: 'from-slate-400 to-sky-500', glowColor: 'rgba(109, 156, 176, 0.18)', accentColor: '#658ea0', iconBg: 'rgba(109, 156, 176, 0.10)' },
   { key: 'assignments', label: 'Assignments', sublabel: 'Class Work', icon: '??', gradient: 'from-violet-400 to-fuchsia-500', glowColor: 'rgba(168,85,247,0.2)', accentColor: '#7c3aed', iconBg: 'rgba(168,85,247,0.12)' },
   { key: 'study-materials', label: 'Study Materials', sublabel: 'Downloads', icon: '??', gradient: 'from-emerald-400 to-teal-500', glowColor: 'rgba(16, 185, 129, 0.18)', accentColor: '#059669', iconBg: 'rgba(16,185,129,0.12)' },
+  { key: 'exams', label: 'Exams', sublabel: 'Marks Board', icon: '📝', gradient: 'from-fuchsia-400 to-pink-500', glowColor: 'rgba(236,72,153,0.18)', accentColor: '#ec4899', iconBg: 'rgba(236,72,153,0.10)' },
 ];
 
 function getNavIcon(key: ParentScreen) {
@@ -59,6 +62,8 @@ function getNavIcon(key: ParentScreen) {
     case 'settings': return '\u{2699}\u{FE0F}';
     case 'assignments': return '\u{1F4DD}';
     case 'study-materials': return '\u{1F4C1}';
+    case 'exams': return '\u{1F4DD}';
+    case 'exams-marks': return '\u{1F4C4}';
     case 'games': return '\u{1F3AE}';
     case 'report': return '\u{1F4C4}';
     case 'brain-boost': return '\u{1F331}';
@@ -176,7 +181,7 @@ const BottomTab: React.FC<{
   return (
     <motion.button
       onClick={handleClick}
-      className="relative flex flex-col items-center justify-center gap-0.5 py-1 flex-1 cursor-pointer"
+      className="relative flex flex-col items-center justify-center gap-0.5 py-2 w-full cursor-pointer"
       style={isFillBlanks ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'none' } : {}}
       whileTap={!isFillBlanks ? { scale: 0.88 } : {}}
       disabled={isFillBlanks}
@@ -216,13 +221,15 @@ interface Props {
   onNavigate: (screen: ParentScreen) => void;
 }
 
-export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
+export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) => {
+
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, []);
+
 
   return (
     <>
@@ -281,7 +288,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#0d617f', lineHeight: '16px', whiteSpace: 'nowrap' }}>Guardian Panel</p>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 500, color: '#5e9eb2', lineHeight: '14px', whiteSpace: 'nowrap' }}>Std 6 · Analytics View</p>
+              <p style={{ margin: 0, fontSize: 9, fontWeight: 500, color: '#5e9eb2', lineHeight: '14px', whiteSpace: 'nowrap' }}>Std 6 Â· Analytics View</p>
             </div>
           </div>
         </div>
@@ -373,7 +380,7 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
       </motion.aside>
 
       <motion.nav
-        className="fixed bottom-0 left-0 right-0 h-16 z-40 flex items-center justify-around px-2 lg:hidden"
+        className="fixed right-3 top-[84px] bottom-3 z-40 w-[76px] flex flex-col items-stretch gap-2 px-2 py-2 lg:hidden"
         style={{
           background: 'linear-gradient(180deg, rgba(239,252,255,0.94) 0%, rgba(248,255,255,0.98) 100%)',
           backdropFilter: 'blur(28px)',
@@ -394,6 +401,8 @@ export const ParentNav: React.FC<Props> = React.memo(({ active, onNavigate }) =>
 });
 
 ParentNav.displayName = 'ParentNav';
+
+
 
 
 

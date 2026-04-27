@@ -24,6 +24,7 @@ export interface StudentProfile {
   grade?: number;
   status?: string;
   studentId?: string;
+  parentAccessKey?: string;
   password?: string;
   admissionNumber?: string;
   grNo?: string;
@@ -53,13 +54,18 @@ export interface AuthContextType {
   user: AuthUser;
   isAuthenticated: boolean;
   studentProfile: StudentProfile | null;
+  isParentAccessPromptOpen: boolean;
   login: (input: LoginInput) => Promise<AuthActionResult>;
   logout: () => void;
   switchRole: () => void;
   setRole: (role: 'student' | 'parent') => void;
+  requestParentAccess: () => void;
+  cancelParentAccess: () => void;
+  verifyParentAccessKey: (accessKey: string) => AuthActionResult;
 }
 
 const STORAGE_KEY = 'ssms_std4_auth_session_v1';
+const LOGIN_REDIRECT_URL = `${window.location.protocol}//${window.location.hostname}:5000/student-login`;
 const DEFAULT_USER: AuthUser = {
   role: 'student',
   grade: 4,
@@ -74,6 +80,11 @@ type PersistedSession = {
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+function buildParentAccessKey(username: string): string {
+  const normalized = username.trim().toUpperCase();
+  return normalized ? `${normalized}-PARENT` : '';
+}
 
 function prettyName(value: string): string {
   const trimmed = value.trim();
@@ -100,7 +111,12 @@ function loadSession(): PersistedSession {
         name: parsed.user.name,
         username: parsed.user.username,
       },
-      studentProfile: parsed.studentProfile || null,
+      studentProfile: parsed.studentProfile
+        ? {
+          ...parsed.studentProfile,
+          parentAccessKey: parsed.studentProfile.parentAccessKey || buildParentAccessKey(parsed.user.username),
+        }
+        : null,
     };
   } catch {
     return { isAuthenticated: false, user: DEFAULT_USER };
@@ -121,6 +137,7 @@ function persistSession(session: PersistedSession | null): void {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<PersistedSession>(loadSession);
+  const [isParentAccessPromptOpen, setParentAccessPromptOpen] = useState(false);
 
   const updateSession = useCallback((next: PersistedSession | null) => {
     if (!next) {
@@ -142,6 +159,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const role = input.role === 'parent' ? 'parent' : 'student';
     const grade = Number(input.grade) || 4;
     const name = prettyName(input.name || username);
+    const parentAccessKey = buildParentAccessKey(username);
+    const studentProfile: StudentProfile = {
+      studentName: name,
+      className: `Std ${grade}`,
+      grade,
+      status: 'Active',
+      studentId: username,
+      parentAccessKey,
+      parentName: `Parent of ${name}`,
+      fatherName: `Parent of ${name}`,
+    };
 
     updateSession({
       isAuthenticated: true,
@@ -151,16 +179,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name,
         username,
       },
+      studentProfile,
     });
 
     return { ok: true };
   }, [updateSession]);
 
   const logout = useCallback(() => {
+    setParentAccessPromptOpen(false);
     updateSession(null);
-  }, [updateSession]);
+    if (session.user.role === 'parent') {
+      window.location.replace(LOGIN_REDIRECT_URL);
+    }
+  }, [session.user.role, updateSession]);
 
   const switchRole = useCallback(() => {
+    if (session.user.role === 'student') {
+      setParentAccessPromptOpen(true);
+      return;
+    }
     setSession(prev => {
       if (!prev.isAuthenticated) return prev;
       const next: PersistedSession = {
@@ -173,9 +210,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       persistSession(next);
       return next;
     });
-  }, []);
+    setParentAccessPromptOpen(false);
+  }, [session.user.role]);
 
   const setRole = useCallback((role: 'student' | 'parent') => {
+    if (role === 'parent') {
+      setParentAccessPromptOpen(true);
+      return;
+    }
     setSession(prev => {
       if (!prev.isAuthenticated || prev.user.role === role) return prev;
       const next: PersistedSession = {
@@ -190,15 +232,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
+  const requestParentAccess = useCallback(() => {
+    if (!session.isAuthenticated) return;
+    setParentAccessPromptOpen(true);
+  }, [session.isAuthenticated]);
+
+  const cancelParentAccess = useCallback(() => {
+    setParentAccessPromptOpen(false);
+  }, []);
+
+  const verifyParentAccessKey = useCallback((accessKey: string): AuthActionResult => {
+    if (!session.isAuthenticated) {
+      return { ok: false, error: 'Please login first' };
+    }
+    const expected = session.studentProfile?.parentAccessKey || buildParentAccessKey(session.user.username);
+    if (accessKey.trim() !== expected) {
+      return { ok: false, error: 'Invalid Parent Access Key' };
+    }
+
+    const next: PersistedSession = {
+      ...session,
+      user: {
+        ...session.user,
+        role: 'parent',
+      },
+      studentProfile: {
+        ...(session.studentProfile || {
+          studentName: session.user.name,
+          className: `Std ${session.user.grade}`,
+          grade: session.user.grade,
+          studentId: session.user.username,
+        }),
+        parentAccessKey: expected,
+      },
+    };
+    setSession(next);
+    persistSession(next);
+    setParentAccessPromptOpen(false);
+    return { ok: true };
+  }, [session]);
+
   const value = useMemo<AuthContextType>(() => ({
     user: session.user,
     isAuthenticated: session.isAuthenticated,
     studentProfile: session.studentProfile || null,
+    isParentAccessPromptOpen,
     login,
     logout,
     switchRole,
     setRole,
-  }), [session.user, session.isAuthenticated, session.studentProfile, login, logout, switchRole, setRole]);
+    requestParentAccess,
+    cancelParentAccess,
+    verifyParentAccessKey,
+  }), [
+    session.user,
+    session.isAuthenticated,
+    session.studentProfile,
+    isParentAccessPromptOpen,
+    login,
+    logout,
+    switchRole,
+    setRole,
+    requestParentAccess,
+    cancelParentAccess,
+    verifyParentAccessKey,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

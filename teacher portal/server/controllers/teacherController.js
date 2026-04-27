@@ -21,6 +21,7 @@ const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 const adminDbPath = path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'database.sqlite');
 const BetterSqlite3 = require(path.join(__dirname, '..', '..', '..', 'Admin Dashboard', 'backend', 'node_modules', 'better-sqlite3'));
+const { upsertExamRecord } = require(path.join(__dirname, '..', '..', '..', 'shared', 'examSync.js'));
 let adminDb = null;
 const fallbackDataDir = path.join(__dirname, '..', 'data');
 const fallbackAssignmentsFile = path.join(fallbackDataDir, 'fallback-assignments.json');
@@ -40,6 +41,73 @@ function extractStandard(value) {
 
 function normalizeDivision(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function formatDateForSync(dateValue) {
+  const date = dateValue ? new Date(dateValue) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function formatClassLabel(classDoc, fallbackClassId = '') {
+  if (!classDoc) {
+    const fallbackStd = extractStandard(fallbackClassId);
+    return fallbackStd || String(fallbackClassId || '').trim();
+  }
+  const className = String(classDoc.className || '').trim();
+  const section = String(classDoc.section || '').trim().toUpperCase();
+  const digits = String(className || '').match(/\d+/)?.[0] || '';
+  return digits || className || String(fallbackClassId || '').trim();
+}
+
+function serializeExamForAdminSync(exam, classLabelFallback = '', subjectNameFallback = '') {
+  return {
+    id: String(exam?._id || exam?.id || '').trim(),
+    name: String(exam?.examName || exam?.name || 'Exam').trim(),
+    class: formatClassLabel(exam?.class, classLabelFallback),
+    subject: String(exam?.subject?.subjectName || exam?.subject || subjectNameFallback || '').trim(),
+    date: formatDateForSync(exam?.date),
+    duration: `${String(exam?.startTime || '').trim()} - ${String(exam?.endTime || '').trim()}`.trim(),
+    maxMarks: Number(exam?.totalMarks || exam?.maxMarks || 100) || 100,
+    status: 'Scheduled',
+    examType: String(exam?.examType || '').trim(),
+    startTime: String(exam?.startTime || '').trim(),
+    endTime: String(exam?.endTime || '').trim(),
+    passingMarks: Number(exam?.passingMarks || 0) || 0,
+    description: String(exam?.description || '').trim(),
+    teacherId: String(exam?.teacher || exam?.teacherId || '').trim(),
+    source: 'teacher-portal',
+  };
+}
+
+function syncExamToAdminDb(examRecord) {
+  const db = getAdminDb();
+  const record = serializeExamForAdminSync(examRecord);
+  if (!record.id) return;
+
+  const stmt = db.prepare(`
+    INSERT INTO exams (id, name, class, subject, date, duration, max_marks, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      class = excluded.class,
+      subject = excluded.subject,
+      date = excluded.date,
+      duration = excluded.duration,
+      max_marks = excluded.max_marks,
+      status = excluded.status
+  `);
+
+  stmt.run(
+    record.id,
+    record.name,
+    String(record.class || '').trim(),
+    String(record.subject || '').trim(),
+    record.date,
+    record.duration,
+    Number(record.maxMarks || 100) || 100,
+    String(record.status || 'Scheduled').trim(),
+  );
 }
 
 function getTeacherIdentifier(req) {
@@ -726,6 +794,11 @@ export const getExams = async (req, res) => {
       .populate('subject', 'subjectName')
       .sort({ date: -1 });
 
+    exams.forEach((exam) => {
+      upsertExamRecord(serializeExamForAdminSync(exam));
+      syncExamToAdminDb(exam);
+    });
+
     res.json({
       success: true,
       data: exams
@@ -739,6 +812,10 @@ export const getExams = async (req, res) => {
 export const createExam = async (req, res) => {
   try {
     const { examName, examType, subject, class: classId, date, startTime, endTime, totalMarks, passingMarks, description } = req.body;
+    const [classDoc, subjectDoc] = await Promise.all([
+      Class.findById(classId).select('className section'),
+      Subject.findById(subject).select('subjectName'),
+    ]);
 
     const exam = new Exam({
       examName,
@@ -755,6 +832,13 @@ export const createExam = async (req, res) => {
     });
 
     await exam.save();
+    const examPayload = {
+      ...exam.toObject(),
+      class: classDoc,
+      subject: subjectDoc,
+    };
+    upsertExamRecord(serializeExamForAdminSync(examPayload, classId, subjectDoc?.subjectName || subject));
+    syncExamToAdminDb(examPayload);
 
     res.status(201).json({
       success: true,

@@ -28,7 +28,8 @@ export const AIResponseCard: React.FC<AIResponseCardProps> = React.memo(({
   const [isTyping, setIsTyping] = useState(true);
   const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const displayText = isStudentMode ? response.explanation : (viewMode === 'parent' ? response.explanation : response.simplified_explanation);
+  const displayText = (isStudentMode ? response.explanation : (viewMode === 'parent' ? response.explanation : response.simplified_explanation)).trim()
+    || "Let's use the chapter clues and answer simply.";
 
   // Typing animation
   useEffect(() => {

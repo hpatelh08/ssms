@@ -10,7 +10,7 @@
 import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
 
-export type Grade3Screen = 'home' | 'play' | 'space-war' | 'solar-system' | 'journey';
+export type Grade3Screen = 'home' | 'play' | 'garden' | 'color-magic' | 'space-war' | 'solar-system' | 'journey';
 
 /* ── Nav Items ── */
 

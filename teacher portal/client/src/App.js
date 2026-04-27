@@ -65,6 +65,21 @@ function parseAdminTeacherClass(rawClass, rawDivision) {
   };
 }
 
+function mergeTeacherSessionWithAdmin(baseUser, adminUser = {}) {
+  if (!baseUser) return null;
+
+  const parsedClass = parseAdminTeacherClass(adminUser.class, adminUser.division);
+  return normalizeTeacherSession({
+    ...baseUser,
+    name: adminUser.name || baseUser.name,
+    email: adminUser.email || baseUser.email,
+    teacherId: baseUser.teacherId || adminUser.teacher_id || adminUser.emp || adminUser.email,
+    assignedClass: parsedClass.assignedClass || baseUser.assignedClass,
+    division: parsedClass.division || baseUser.division,
+    subject: adminUser.subject || baseUser.subject
+  });
+}
+
 function shouldResolveTeacherName(user) {
   const teacherId = String(user?.teacherId || '').trim();
   const email = String(user?.email || '').trim();
@@ -182,8 +197,8 @@ function App() {
           name: match.name || currentUser.name,
           email: match.email || currentUser.email,
           teacherId: currentUser.teacherId || match.teacher_id || match.emp || match.email,
-          assignedClass: currentUser.assignedClass || parsedClass.assignedClass,
-          division: currentUser.division || parsedClass.division,
+          assignedClass: parsedClass.assignedClass || currentUser.assignedClass,
+          division: parsedClass.division || currentUser.division,
           subject: currentUser.subject || match.subject
         });
 
@@ -208,8 +223,8 @@ function App() {
             name: match.name || currentUser.name,
             email: match.email || currentUser.email,
             teacherId: currentUser.teacherId || match.teacher_id || match.emp || match.email,
-            assignedClass: currentUser.assignedClass || parsedClass.assignedClass,
-            division: currentUser.division || parsedClass.division,
+            assignedClass: parsedClass.assignedClass || currentUser.assignedClass,
+            division: parsedClass.division || currentUser.division,
             subject: currentUser.subject || match.subject
           });
 
@@ -234,6 +249,86 @@ function App() {
       if (retryTimer) clearTimeout(retryTimer);
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!authReady || !currentUser) return;
+
+    const teacherKey = String(currentUser.teacherId || currentUser.email || '').trim();
+    if (!teacherKey) return;
+
+    let cancelled = false;
+
+    const commitIfChanged = (adminUser) => {
+      if (!adminUser || cancelled) return false;
+
+      const updatedUser = mergeTeacherSessionWithAdmin(currentUser, adminUser);
+      if (!updatedUser) return false;
+
+      const hasChanges = ['name', 'email', 'teacherId', 'assignedClass', 'division', 'subject']
+        .some((key) => String(updatedUser?.[key] || '').trim() !== String(currentUser?.[key] || '').trim());
+
+      if (hasChanges) {
+        setCurrentUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+
+      return hasChanges;
+    };
+
+    const syncTeacherProfile = async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      try {
+        const response = await axios.get(apiUrl('/api/auth/teacher-profile'), {
+          headers,
+          timeout: 4000
+        });
+        if (commitIfChanged(response?.data?.user)) return;
+      } catch {
+        // Try lookup and master file sync below.
+      }
+
+      try {
+        const response = await axios.get(apiUrl('/api/auth/teacher-lookup'), {
+          params: { teacherId: teacherKey },
+          timeout: 4000
+        });
+        if (commitIfChanged(response?.data?.user)) return;
+      } catch {
+        // Fall through to local master data.
+      }
+
+      try {
+        const response = await axios.get(`${getAdminBackendBaseUrl()}/api/master/teacher-data`, {
+          timeout: 4000
+        });
+        const payload = response?.data?.data || response?.data || {};
+        const teachers = Array.isArray(payload) ? payload : Array.isArray(payload?.teachers) ? payload.teachers : [];
+        const match = findTeacherFromMaster(teachers, currentUser);
+        if (!cancelled && match) {
+          commitIfChanged(match);
+        }
+      } catch {
+        // No-op; keep the current session until the next retry.
+      }
+    };
+
+    syncTeacherProfile();
+    const intervalId = setInterval(syncTeacherProfile, 15000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncTeacherProfile();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [authReady, currentUser]);
 
   useEffect(() => {
     const handlePopState = () => {

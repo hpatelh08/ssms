@@ -12,6 +12,10 @@ const {
 const router = Router();
 router.use(authMiddleware);
 
+function normalizeTeacherIdentity(row = {}) {
+  return String(row.teacher_id || row.teacherId || row.email || row.name || '').trim().toLowerCase();
+}
+
 function findActiveTeacherClassConflict(classInfo, excludeId = null) {
   if (!classInfo || classInfo.error || !classInfo.key) return null;
 
@@ -27,6 +31,36 @@ function findActiveTeacherClassConflict(classInfo, excludeId = null) {
     const normalized = normalizeTeacherClassAssignment(row);
     return normalized.key && normalized.key === classInfo.key;
   }) || null;
+}
+
+function findActiveTeacherIdentityConflict(identityKey, excludeId = null) {
+  const key = String(identityKey || '').trim().toLowerCase();
+  if (!key) return null;
+
+  const rows = db.prepare(`
+    SELECT id, name, teacher_id, email, class, division, status
+    FROM teachers
+    WHERE status = 'Active'
+      AND TRIM(COALESCE(class, '')) != ''
+  `).all();
+
+  return rows.find((row) => {
+    if (excludeId !== null && Number(row.id) === Number(excludeId)) return false;
+    const rowKey = normalizeTeacherIdentity(row);
+    return rowKey && rowKey === key;
+  }) || null;
+}
+
+function renameTeacherInTimetable(oldName, newName) {
+  const previous = String(oldName || '').trim();
+  const next = String(newName || '').trim();
+  if (!previous || !next || previous.toLowerCase() === next.toLowerCase()) return;
+
+  db.prepare(`
+    UPDATE timetable
+    SET teacher = ?
+    WHERE LOWER(teacher) = LOWER(?)
+  `).run(next, previous);
 }
 
 // GET /api/teachers - list with search, filter, pagination (default 10)
@@ -124,6 +158,16 @@ router.post('/', authorize('super_admin', 'admin'), (req, res) => {
     }
   }
 
+  const identityKey = normalizeTeacherIdentity({ teacher_id: req.body.teacher_id, email, name });
+  if (identityKey) {
+    const identityConflict = findActiveTeacherIdentityConflict(identityKey);
+    if (identityConflict) {
+      return res.status(409).json({
+        error: `Teacher ${identityConflict.name} is already assigned to a class.`,
+      });
+    }
+  }
+
   const maxEmpRow = db.prepare("SELECT MAX(CAST(SUBSTR(emp, 5) AS INTEGER)) as n FROM teachers WHERE emp LIKE 'EMP-%'").get();
   const empId = `EMP-${String((maxEmpRow.n || 0) + 1).padStart(3, '0')}`;
 
@@ -163,6 +207,8 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
   const existing = db.prepare('SELECT id FROM teachers WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Teacher not found.' });
 
+  const previousTeacher = db.prepare('SELECT name, teacher_id, email FROM teachers WHERE id = ?').get(req.params.id);
+
   const { name, emp, subject, class: cls, division, salary, phone, email, status, qualification, join, teacher_id, teacher_password } = req.body;
   const assignment = normalizeTeacherClassAssignment({ class: cls, division });
   if (assignment.error) {
@@ -174,6 +220,16 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
     if (conflict) {
       return res.status(409).json({
         error: `Class ${assignment.key} already has a class teacher (${conflict.name}).`,
+      });
+    }
+  }
+
+  const identityKey = normalizeTeacherIdentity({ teacher_id: teacher_id || previousTeacher?.teacher_id, email: email || previousTeacher?.email, name: name || previousTeacher?.name });
+  if (identityKey) {
+    const identityConflict = findActiveTeacherIdentityConflict(identityKey, req.params.id);
+    if (identityConflict) {
+      return res.status(409).json({
+        error: `Teacher ${identityConflict.name} is already assigned to a class.`,
       });
     }
   }
@@ -199,6 +255,11 @@ router.put('/:id', authorize('super_admin', 'admin'), (req, res) => {
     teacher_password || null,
     req.params.id
   );
+
+  if (previousTeacher?.name && name && previousTeacher.name !== name) {
+    renameTeacherInTimetable(previousTeacher.name, name);
+  }
+
   syncTeacherMasterFileFromDb();
   res.json({ success: true });
 });

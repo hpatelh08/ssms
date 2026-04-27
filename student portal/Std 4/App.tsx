@@ -26,7 +26,7 @@ import { GlobalTimerProvider } from './child/GlobalTimerContext';
 import { ReadingBookTimerProvider } from './child/ReadingBookTimerContext';
 import RoleRouter from "./auth/RoleRouter";
 
-const DEMO_PDF_URL = 'https://ncert.nic.in/textbook/pdf/maen101.pdf'; // Replace with actual PDF URL
+const DEMO_PDF_URL = '/books/ncert/NCERT_English.pdf'; // Local PDF example from public/books
 const DEMO_BOOK_NAME = 'NCERT Mathematics Class 4';
 
 const App: React.FC = () => (

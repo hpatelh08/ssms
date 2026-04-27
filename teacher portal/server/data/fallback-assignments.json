@@ -1,5 +1,46 @@
 [
   {
+    "_id": "FB_ASG_1775887194877",
+    "title": "maths",
+    "description": "1,2 chapter",
+    "subject": {
+      "_id": "Mathematics",
+      "subjectName": "Mathematics"
+    },
+    "class": {
+      "_id": "admin-class-1-C",
+      "className": "1",
+      "section": "C"
+    },
+    "standard": "1",
+    "division": "C",
+    "teacher": "teacher109@teacher.com",
+    "uploadedByTeacherId": "teacher109@teacher.com",
+    "dueDate": "2026-04-16",
+    "totalMarks": "20",
+    "assignmentType": "homework",
+    "attachment": {
+      "filename": "1775887194868-Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+      "path": "d:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775887194868-Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+      "originalName": "Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+      "size": 10713,
+      "mimetype": "application/pdf"
+    },
+    "attachments": [
+      {
+        "filename": "1775887194868-Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+        "path": "d:\\smart_school_system\\teacher portal\\server\\uploads\\study-materials\\1775887194868-Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+        "originalName": "Sub_Order_Labels_c189c789-5cc5-4707-a840-1e5d45cd2e24.pdf",
+        "size": 10713,
+        "mimetype": "application/pdf"
+      }
+    ],
+    "status": "active",
+    "createdAt": "2026-04-11T05:59:54.877Z",
+    "updatedAt": "2026-04-11T05:59:54.877Z",
+    "fallbackMode": true
+  },
+  {
     "_id": "FB_ASG_1775657925860",
     "title": "assignment 4",
     "description": "math ch 4",

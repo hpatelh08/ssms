@@ -33,3 +33,39 @@ export const SUBJECT_COLORS = {
   English: 'bg-orange-100 text-orange-600 border-orange-200',
   Math: 'bg-purple-100 text-purple-600 border-purple-200'
 };
+
+/* ═══════════════════════════════════════════════════
+   STD 2 UNIQUE SELLING PROPOSITION (USP)
+   ─────────────────────────────────────────────
+   Theme: "Garden Theme" - Playful outdoor learning
+   Color Palette: Pink & Green (flowers, garden)
+   
+   Unique Features:
+   • Garden-themed Book Reader with flower decorations
+   • Interactive story time with nature sounds
+   • Simple puzzles with garden elements
+   • Growth tracking (plants growing = learning progress)
+   ═══════════════════════════════════════════════════ */
+export const STD2_THEME = {
+  primary: '#ec4899',       // Pink-500
+  secondary: '#10b981',   // Emerald-500
+  accent: '#f472b6',       // Pink-400
+  background: '#fdf2f8',  // Pink-50
+  success: '#22c55e',    // Green-500
+  cardBg: 'bg-pink-50',
+  headerBg: 'bg-gradient-to-r from-pink-400 to-emerald-400',
+  buttonBg: 'bg-pink-500 hover:bg-pink-600',
+  textPrimary: 'text-pink-600',
+  borderColor: 'border-pink-200',
+  mascotEmoji: '🐝',
+  mascotName: 'Bee',
+  bookReaderTheme: 'garden',
+};
+
+export const GARDEN_CONFIG = {
+  enabled: true,
+  showFlowers: true,
+  showButterflies: true,
+  natureSounds: true,
+  plantGrowth: true,
+};

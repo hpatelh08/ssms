@@ -31,7 +31,8 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 function getGroqApiKey(): string {
-  return process.env.GROQ_API_KEY || '';
+  const viteGroqKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY || '';
+  return (viteGroqKey || process.env.GROQ_API_KEY || '').trim();
 }
 
 // ─── Types ────────────────────────────────────────────────
@@ -343,8 +344,8 @@ async function _executeRAG(
     } as RAGAuditEntry);
 
     return {
-      explanation: data.explanation || 'No explanation generated.',
-      simplified_explanation: data.simplified || 'Please ask your teacher!',
+      explanation: data.explanation || 'Use the chapter clue and one detail.',
+      simplified_explanation: data.simplified || 'Use the main idea and one detail.',
       chapter: chapterRaw,
       page_numbers: pages,
       similarity_scores: searchResults.map(r => +r.score.toFixed(4)),

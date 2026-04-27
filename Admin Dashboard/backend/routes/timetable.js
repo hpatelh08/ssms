@@ -30,6 +30,16 @@ const SUBJECTS_BY_STD = {
   upper:   ['Mathematics', 'Science', 'Social Science', 'English', 'Hindi', 'Gujarati', 'Sanskrit', 'Computer', 'PT', 'Drawing']
 };
 
+const LECTURE_ONE_SUBJECTS = new Set([
+  'Mathematics',
+  'Gujarati',
+  'Hindi',
+  'Sanskrit',
+  'Science',
+  'Moral Science',
+  'Social Science',
+]);
+
 // Maps DB subject names → timetable subject names
 const SUBJECT_MAP = {
   'Mathematics':      'Mathematics',
@@ -65,6 +75,35 @@ function getTeacherSubjectForName(teacherName) {
   if (!name) return '';
   const row = db.prepare('SELECT subject FROM teachers WHERE LOWER(name) = LOWER(?) LIMIT 1').get(name);
   return normalizeSubjectName(row?.subject || '');
+}
+
+function getAllowedTeachersForSubject(std, subjectName) {
+  const subject = normalizeSubjectName(subjectName);
+  if (!subject) return [];
+
+  const subjectRow = db.prepare(`
+    SELECT id
+    FROM subjects
+    WHERE standard = ? AND name = ?
+    LIMIT 1
+  `).get(Number(std), subject);
+
+  if (!subjectRow?.id) return [];
+
+  const rows = db.prepare(`
+    SELECT DISTINCT t.name
+    FROM teachers t
+    JOIN teacher_subjects ts ON ts.teacher_id = t.id
+    WHERE ts.subject_id = ? AND ts.standard = ? AND t.status = 'Active'
+    ORDER BY t.name
+  `).all(subjectRow.id, Number(std));
+
+  return rows.map((row) => String(row.name || '').trim()).filter(Boolean);
+}
+
+function getLectureOneSubjectPool(std) {
+  const basePool = std <= PRIMARY_STANDARD_MAX ? SUBJECTS_BY_STD.primary : SUBJECTS_BY_STD.upper;
+  return basePool.filter((subject) => LECTURE_ONE_SUBJECTS.has(subject));
 }
 
 function getClassTeacherForClass(std, section) {
@@ -161,6 +200,7 @@ function parseStdSection(stdRaw, sectionRaw) {
 function generateTimetable(std, section) {
   const isPrimary = std <= PRIMARY_STANDARD_MAX;
   const subjectPool = isPrimary ? SUBJECTS_BY_STD.primary : SUBJECTS_BY_STD.upper;
+  const lectureOnePool = getLectureOneSubjectPool(std);
   const classTeacher = getClassTeacherForClass(std, section);
   const classTeacherName = String(classTeacher?.name || '').trim();
   const classTeacherSubject = normalizeSubjectName(classTeacher?.subject || '');
@@ -182,12 +222,16 @@ function generateTimetable(std, section) {
     const slots = day === 'Saturday' ? TT_SLOTS_SATURDAY : TT_SLOTS_WEEKDAY;
     const lectures = [];
     const shuffled = [...subjectPool].sort(() => rand() - 0.5);
+    const lectureOnePoolShuffled = [...lectureOnePool].sort(() => rand() - 0.5);
     let si = 0;
     slots.forEach(slot => {
       if (slot.isBreak) {
         lectures.push({ ...slot, subject: null, teacher: null });
       } else {
         let subj = shuffled[si % shuffled.length];
+        if (slot.num === 1 && lectureOnePoolShuffled.length) {
+          subj = lectureOnePoolShuffled[0];
+        }
         let teacher = getTeacher(subj);
         if (slot.num === 1 && classTeacherName) {
           subj = classTeacherSubject || subj;
@@ -449,6 +493,23 @@ router.put('/cell', authorize('super_admin', 'admin'), (req, res) => {
   }
 
   if (lectureNum === 1 && !overrideLecture1) {
+    const allowedLectureOneSubjects = getLectureOneSubjectPool(std);
+    if (!allowedLectureOneSubjects.includes(normalizeSubjectName(subject))) {
+      return res.status(409).json({
+        error: 'Lecture 1 must use Mathematics, Gujarati, Hindi, Sanskrit, Science, Moral Science, or Social Science.',
+      });
+    }
+    const allowedTeachers = getAllowedTeachersForSubject(std, subject);
+    if (!allowedTeachers.length) {
+      return res.status(400).json({
+        error: `No timetable dropdown teachers are available for Std ${std} ${subject}.`,
+      });
+    }
+    if (!allowedTeachers.some((name) => name.toLowerCase() === teacher.toLowerCase())) {
+      return res.status(409).json({
+        error: 'Lecture 1 must be assigned to a teacher from the timetable dropdown list.',
+      });
+    }
     const classTeacher = getClassTeacherForClass(std, section);
     if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== teacher.toLowerCase()) {
       return res.status(409).json({
@@ -520,6 +581,23 @@ router.put('/bulk-cells', authorize('super_admin', 'admin'), (req, res) => {
     }
 
     if (lectureNum === 1 && !overrideLecture1) {
+      const allowedLectureOneSubjects = getLectureOneSubjectPool(std);
+      if (!allowedLectureOneSubjects.includes(normalizeSubjectName(subject))) {
+        return res.status(409).json({
+          error: 'Lecture 1 must use Mathematics, Gujarati, Hindi, Sanskrit, Science, Moral Science, or Social Science.',
+        });
+      }
+      const allowedTeachers = getAllowedTeachersForSubject(std, subject);
+      if (!allowedTeachers.length) {
+        return res.status(400).json({
+          error: `No timetable dropdown teachers are available for Std ${std} ${subject}.`,
+        });
+      }
+      if (!allowedTeachers.some((name) => name.toLowerCase() === teacher.toLowerCase())) {
+        return res.status(409).json({
+          error: 'Lecture 1 must be assigned to a teacher from the timetable dropdown list.',
+        });
+      }
       const classTeacher = getClassTeacherForClass(std, section);
       if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== teacher.toLowerCase()) {
         return res.status(409).json({
@@ -594,6 +672,23 @@ router.post('/import', authorize('super_admin', 'admin'), (req, res) => {
     }
 
     if (item.lecture_num === 1 && !overrideLecture1) {
+      const allowedLectureOneSubjects = getLectureOneSubjectPool(std);
+      if (!allowedLectureOneSubjects.includes(normalizeSubjectName(item.subject))) {
+        return res.status(409).json({
+          error: 'Lecture 1 must use Mathematics, Gujarati, Hindi, Sanskrit, Science, Moral Science, or Social Science.',
+        });
+      }
+      const allowedTeachers = getAllowedTeachersForSubject(std, item.subject);
+      if (!allowedTeachers.length) {
+        return res.status(400).json({
+          error: `No timetable dropdown teachers are available for Std ${std} ${item.subject}.`,
+        });
+      }
+      if (!allowedTeachers.some((name) => name.toLowerCase() === item.teacher.toLowerCase())) {
+        return res.status(409).json({
+          error: 'Lecture 1 must be assigned to a teacher from the timetable dropdown list.',
+        });
+      }
       const classTeacher = getClassTeacherForClass(std, section);
       if (classTeacher?.name && String(classTeacher.name).trim().toLowerCase() !== item.teacher.toLowerCase()) {
         return res.status(409).json({

@@ -68,13 +68,13 @@ const THEMES: Record<string, Theme> = {
     shadow: '0 24px 50px rgba(99,102,241,0.22)',
   },
   4: {
-    hero: 'linear-gradient(135deg, rgba(249,115,22,0.96), rgba(239,68,68,0.96), rgba(236,72,153,0.94))',
+    hero: 'linear-gradient(135deg, rgba(120,53,15,0.98), rgba(245,158,11,0.96), rgba(217,119,6,0.94))',
     panel: 'rgba(255,255,255,0.16)',
     label: 'text-white/75',
-    accent: '#fff7ed',
+    accent: '#fffbeb',
     chip: 'rgba(255,255,255,0.16)',
     border: 'rgba(255,255,255,0.18)',
-    shadow: '0 24px 50px rgba(249,115,22,0.22)',
+    shadow: '0 24px 50px rgba(245,158,11,0.24)',
   },
 };
 
@@ -123,6 +123,38 @@ function statusLabel(status: string): string {
   return 'Scheduled';
 }
 
+function getTodayIsoDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isOnOrAfterToday(value: string): boolean {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+
+  const dateOnly = raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    return dateOnly >= getTodayIsoDate();
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return parsed.getTime() >= startOfToday.getTime();
+}
+
+function isUpcomingExam(exam: ExamItem): boolean {
+  if (!isOnOrAfterToday(exam.date)) return false;
+  const status = String(exam.status || '').trim().toLowerCase();
+  if (status === 'completed' || status === 'cancelled') return false;
+  return true;
+}
+
 function subjectColumnsForClass(classNo: string | number): string[] {
   const n = parseInt(String(classNo || 4), 10);
   return n <= 5
@@ -147,7 +179,8 @@ export const ExamsMarksPage: React.FC = () => {
     let cancelled = false;
 
     async function load() {
-      if (!profile?.studentId || !String(profile?.parentAccessKey || '').trim()) {
+      const queryReady = Boolean(query) && /studentId=/.test(query) && /accessKey=/.test(query);
+      if (!queryReady) {
         setLoading(false);
         setExams([]);
         setMarks([]);
@@ -193,7 +226,7 @@ export const ExamsMarksPage: React.FC = () => {
   const subjectColumns = useMemo(() => subjectColumnsForClass(classNo), [classNo]);
 
   const upcomingExams = useMemo(
-    () => exams.filter((exam) => exam.upcoming || exam.status === 'ongoing' || exam.status === 'scheduled'),
+    () => exams.filter((exam) => isUpcomingExam(exam)),
     [exams],
   );
 
@@ -221,7 +254,7 @@ export const ExamsMarksPage: React.FC = () => {
     ? Math.round(currentMarks.reduce((sum, item) => sum + (item.percent || 0), 0) / currentMarks.length)
     : 0;
 
-  const nextExam = upcomingExams[0] || exams[0] || null;
+  const nextExam = upcomingExams[0] || null;
 
   return (
     <div className="w-full px-3 lg:px-6 py-6 space-y-5 max-w-7xl mx-auto">
@@ -272,7 +305,7 @@ export const ExamsMarksPage: React.FC = () => {
           <p className="font-semibold text-slate-500">Loading exams and marks...</p>
         </div>
       ) : error ? (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 font-semibold text-rose-700">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 font-semibold text-amber-800">
           {error}
         </div>
       ) : (
@@ -292,36 +325,36 @@ export const ExamsMarksPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-3">
-                  {upcomingExams.length === 0 ? (
+                  {!nextExam ? (
                     <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-center text-slate-500">
                       No upcoming exams found for this class.
                     </div>
-                  ) : upcomingExams.map((exam) => (
+                  ) : (
                     <div
-                      key={exam.id}
+                      key={nextExam.id}
                       className={`rounded-2xl border p-4 ${
-                        exam.isToday ? 'border-fuchsia-300 bg-fuchsia-50/70' : 'border-slate-200 bg-slate-50/70'
+                        nextExam.isToday ? 'border-fuchsia-300 bg-fuchsia-50/70' : 'border-slate-200 bg-slate-50/70'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-xs font-black tracking-[0.24em] uppercase text-fuchsia-500">{exam.subject || 'Subject'}</p>
-                          <h3 className="mt-1 text-lg font-black text-slate-800 truncate">{exam.name}</h3>
+                          <p className="text-xs font-black tracking-[0.24em] uppercase text-fuchsia-500">{nextExam.subject || 'Subject'}</p>
+                          <h3 className="mt-1 text-lg font-black text-slate-800 truncate">{nextExam.name}</h3>
                           <p className="mt-1 text-sm text-slate-500">
-                            {formatDate(exam.date)} · {exam.duration || 'Duration N/A'} · Max {exam.maxMarks} marks
+                            {formatDate(nextExam.date)} · {nextExam.duration || 'Duration N/A'} · Max {nextExam.maxMarks} marks
                           </p>
                         </div>
                         <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
-                          exam.status === 'ongoing' ? 'bg-amber-100 text-amber-700' :
-                          exam.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                          exam.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
+                          nextExam.status === 'ongoing' ? 'bg-amber-100 text-amber-700' :
+                          nextExam.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                          nextExam.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
                           'bg-fuchsia-100 text-fuchsia-700'
                         }`}>
-                          {statusLabel(exam.status)}
+                          {statusLabel(nextExam.status)}
                         </span>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 

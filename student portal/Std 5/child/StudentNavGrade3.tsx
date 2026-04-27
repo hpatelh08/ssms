@@ -7,7 +7,7 @@ import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { SidebarTimerPill } from './SidebarTimerPill';
 
-export type Grade3Screen = 'home' | 'play' | 'brain-boost' | 'puzzle-zone';
+export type Grade3Screen = 'home' | 'play' | 'color-magic' | 'brain-boost' | 'puzzle-zone';
 
 interface NavItem {
   key: Grade3Screen;

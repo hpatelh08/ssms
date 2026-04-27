@@ -595,6 +595,82 @@ const TypingIndicator: React.FC = () => (
   </div>
 );
 
+function normalizeLookupText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097F\u0A80-\u0AFF]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getChapterVideoUrl(subject: Subject, chapter: ChapterInfo): string | null {
+  const subjectVideos = ((VIDEO_DATA as Record<string, VideoEntry[]>)[subject] || []).filter(Boolean);
+  if (!subjectVideos.length) return null;
+
+  const chapterName = normalizeLookupText(chapter.name);
+  const chapterNumber = String(chapter.chapter);
+  const words = chapterName.split(' ').filter(word => word.length > 2);
+
+  let bestMatch: VideoEntry | null = null;
+  let bestScore = 0;
+
+  for (const video of subjectVideos) {
+    const title = normalizeLookupText(video.title);
+    const context = normalizeLookupText(video.context);
+    let score = 0;
+
+    if (chapterName && title.includes(chapterName)) score += 8;
+    if (chapterName && context.includes(chapterName)) score += 7;
+    if (chapterNumber && title.includes(chapterNumber)) score += 3;
+    if (chapterNumber && context.includes(chapterNumber)) score += 2;
+
+    for (const word of words.slice(0, 4)) {
+      if (title.includes(word)) score += 2;
+      if (context.includes(word)) score += 1;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = video;
+    }
+  }
+
+  return bestScore >= 4 ? bestMatch?.url || null : null;
+}
+
+function appendVideoLinkIfExplain(answer: string, question: string, chapter: ChapterInfo, subject: Subject): string {
+  const normalizedQuestion = normalizeLookupText(question);
+  if (!normalizedQuestion.includes('explain')) return answer;
+
+  const videoUrl = getChapterVideoUrl(subject, chapter);
+  if (!videoUrl) return answer;
+  if (/youtu\.be|youtube\.com/i.test(answer)) return answer;
+
+  return `${answer}\n\nWatch video: ${videoUrl}`;
+}
+
+function renderTextWithLinks(text: string): React.ReactNode {
+  const parts = (text || '').split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2"
+          style={{ color: 'inherit', fontWeight: 700 }}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
 /* ═══════════════════════════════════════════════════
    CHAT BUBBLE
    ═══════════════════════════════════════════════════ */
@@ -626,7 +702,7 @@ const ChatBubble: React.FC<{ msg: ChatMsg; isStreaming?: boolean }> = ({ msg, is
           wordBreak: 'break-word' as const,
         }}
       >
-        {msg.text}
+        {renderTextWithLinks(msg.text?.trim() || 'I can help with a simple answer.')}
         {isStreaming && (
           <motion.span
             className="inline-block w-0.5 h-4 ml-0.5 align-text-bottom"
@@ -720,26 +796,60 @@ const AskAiSection: React.FC<{
     ];
 
     try {
+      const upsertAiMessage = (textValue: string) => {
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === aiMsgId);
+          if (!exists) return [...prev, { id: aiMsgId, role: 'assistant', text: textValue }];
+          return prev.map(m => (m.id === aiMsgId ? { ...m, text: textValue } : m));
+        });
+      };
+
       await aiService.streamNCERTChat(
         history,
         selectedChapter.subject,
         selectedChapter.name,
         selectedChapter.context,
         (partial) => {
-          setMessages(prev =>
-            prev.map(m => (m.id === aiMsgId ? { ...m, text: partial } : m)),
-          );
+          upsertAiMessage(partial);
         },
-        (_full) => { setIsStreaming(false); },
+        (full) => {
+          setIsStreaming(false);
+          const finalText = appendVideoLinkIfExplain(
+            full?.trim() || `Let's use "${selectedChapter.name}" and answer simply from the chapter.`,
+            text.trim(),
+            selectedChapter,
+            selectedChapter.subject,
+          );
+          upsertAiMessage(finalText);
+        },
         (err) => {
           setIsStreaming(false);
-          setError(err.message || 'Something went wrong. Please try again.');
-          setMessages(prev => prev.filter(m => m.id !== aiMsgId));
+          upsertAiMessage(
+            appendVideoLinkIfExplain(
+              `Let's use "${selectedChapter.name}" and answer simply from the chapter.`,
+              text.trim(),
+              selectedChapter,
+              selectedChapter.subject,
+            ),
+          );
+          setError(null);
+          console.warn('[NCERTAssistant] Fallback used:', err.message);
         },
       );
     } catch {
       setIsStreaming(false);
-      setError('Failed to connect. Please check your connection.');
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === aiMsgId);
+        const fallbackText = appendVideoLinkIfExplain(
+          `Let's use "${selectedChapter.name}" and answer simply from the chapter.`,
+          text.trim(),
+          selectedChapter,
+          selectedChapter.subject,
+        );
+        if (!exists) return [...prev, { id: aiMsgId, role: 'assistant', text: fallbackText }];
+        return prev.map(m => (m.id === aiMsgId ? { ...m, text: fallbackText } : m));
+      });
+      setError(null);
     }
   }, [isStreaming, messages, selectedChapter, subject]);
 

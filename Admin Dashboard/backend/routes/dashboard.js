@@ -2,9 +2,11 @@
 //  DASHBOARD ROUTES — Stats & Chart Data
 // =============================================
 const { Router } = require('express');
+const path = require('path');
 const db = require('../config/db');
 const { authMiddleware } = require('../middleware/auth');
 const { MIN_STANDARD, MAX_STANDARD } = require('../config/standards');
+const { readExamSyncFile, normalizeExamRecord } = require(path.join(__dirname, '..', '..', '..', 'shared', 'examSync.js'));
 
 const router = Router();
 router.use(authMiddleware);
@@ -37,6 +39,54 @@ function shiftLocalDateYmd(offsetDays, baseDate = new Date()) {
   const next = new Date(baseDate);
   next.setDate(next.getDate() + offsetDays);
   return formatLocalDateYmd(next);
+}
+
+function parseClassNumber(value) {
+  const match = String(value || '').match(/\d+/);
+  return match ? parseInt(match[0], 10) : NaN;
+}
+
+function normalizeDashboardExam(exam = {}, source = 'admin') {
+  const normalized = normalizeExamRecord(exam);
+  return {
+    id: String(exam.id || exam._id || normalized.id || '').trim(),
+    name: String(exam.name || normalized.name || 'Exam').trim(),
+    class: String(exam.class || normalized.class || '').trim(),
+    subject: String(exam.subject || normalized.subject || '').trim(),
+    date: String(exam.date || normalized.date || '').trim(),
+    status: String(exam.status || normalized.status || 'Scheduled').trim(),
+    source,
+  };
+}
+
+function loadUpcomingExamRows() {
+  const sqlRows = db.prepare(`
+    SELECT id, name, class, subject, date, status
+    FROM exams
+    WHERE CAST(class AS INTEGER) BETWEEN ${MIN_STANDARD} AND ${MAX_STANDARD}
+  `).all();
+  const sharedRows = readExamSyncFile().map((exam) => normalizeDashboardExam(exam, 'teacher'));
+
+  const merged = [...sqlRows.map((row) => normalizeDashboardExam(row, 'admin')), ...sharedRows]
+    .filter((exam) => {
+      const classNumber = parseClassNumber(exam.class);
+      if (!Number.isInteger(classNumber) || classNumber < MIN_STANDARD || classNumber > MAX_STANDARD) return false;
+      return ['Scheduled', 'Upcoming'].includes(String(exam.status || '').trim());
+    });
+
+  const seen = new Map();
+  merged.forEach((exam) => {
+    const key = [
+      String(exam.id || ''),
+      String(exam.name || '').toLowerCase(),
+      String(exam.class || ''),
+      String(exam.subject || '').toLowerCase(),
+      String(exam.date || ''),
+    ].join('|');
+    if (!seen.has(key)) seen.set(key, exam);
+  });
+
+  return Array.from(seen.values()).sort((a, b) => String(a.date || '9999-12-31').localeCompare(String(b.date || '9999-12-31')));
 }
 
 function buildAttendanceSnapshot(dateStr, focusType = null) {
@@ -140,8 +190,9 @@ router.get('/stats', (req, res) => {
   `).get().c;
 
   // Exams
-  const upcomingExams  = db.prepare(`SELECT COUNT(*) as c FROM exams WHERE CAST(class AS INTEGER) BETWEEN ${MIN_STANDARD} AND ${MAX_STANDARD} AND status IN ('Scheduled','Upcoming')`).get().c;
-  const nextExamRow    = db.prepare(`SELECT name, date FROM exams WHERE CAST(class AS INTEGER) BETWEEN ${MIN_STANDARD} AND ${MAX_STANDARD} AND status IN ('Scheduled','Upcoming') AND date IS NOT NULL AND date != '' ORDER BY date ASC LIMIT 1`).get();
+  const upcomingExamRows = loadUpcomingExamRows();
+  const upcomingExams  = upcomingExamRows.length;
+  const nextExamRow    = upcomingExamRows.find((exam) => String(exam.date || '').trim());
   const nextExamName   = nextExamRow ? nextExamRow.name : null;
   const nextExamDate   = nextExamRow ? nextExamRow.date : null;
 

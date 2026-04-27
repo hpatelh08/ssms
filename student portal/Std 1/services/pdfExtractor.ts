@@ -14,6 +14,7 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { fetchPdfBytes } from './pdfSource';
 
 // Configure the worker — use local worker that matches installed pdfjs-dist version
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -95,7 +96,16 @@ export async function extractTextFromPDF(
   console.log(`[PDF] Extracting text from ${pdfUrl}...`);
 
   try {
-    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdfData = await fetchPdfBytes(pdfUrl);
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfData,
+      useSystemFonts: true,
+      disableFontFace: true,
+      isEvalSupported: false,
+      disableRange: true,
+      disableStream: true,
+      disableAutoFetch: true,
+    });
     const pdf = await loadingTask.promise;
     const totalPages = pdf.numPages;
     const pages: ExtractedPage[] = [];

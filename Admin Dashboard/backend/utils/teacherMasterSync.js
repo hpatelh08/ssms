@@ -43,6 +43,10 @@ function normalizeTeacherClassAssignment(input = {}) {
   };
 }
 
+function normalizeTeacherIdentity(input = {}) {
+  return String(input.teacher_id || input.teacherId || input.name || '').trim().toLowerCase();
+}
+
 function mapTeacherRow(row) {
   return {
     id: row.id,
@@ -137,9 +141,16 @@ function cleanupTeacherClassAssignments() {
     resetMappings.run();
 
     const seen = new Set();
+    const seenTeachers = new Set();
     for (const row of activeRows) {
       const normalized = normalizeTeacherClassAssignment(row);
+      const teacherKey = normalizeTeacherIdentity(row);
       if (normalized.error || !normalized.key || !normalized.classValue) {
+        clearTeacherClass.run(row.id);
+        continue;
+      }
+
+      if (teacherKey && seenTeachers.has(teacherKey)) {
         clearTeacherClass.run(row.id);
         continue;
       }
@@ -149,6 +160,7 @@ function cleanupTeacherClassAssignments() {
         continue;
       }
 
+      if (teacherKey) seenTeachers.add(teacherKey);
       seen.add(normalized.key);
       normalizeTeacherClass.run(normalized.classValue, normalized.divisionValue, row.id);
 

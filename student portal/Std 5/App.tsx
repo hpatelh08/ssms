@@ -25,7 +25,7 @@ import { TreeProvider } from './context/TreeContext';
 import { GlobalTimerProvider } from './child/GlobalTimerContext';
 import RoleRouter from "./auth/RoleRouter";
 
-const DEMO_PDF_URL = 'https://ncert.nic.in/textbook/pdf/maen101.pdf'; // Replace with actual PDF URL
+const DEMO_PDF_URL = '/books/ncert/english.pdf'; // Local PDF example from public/books
 const DEMO_BOOK_NAME = 'NCERT Mathematics Class 5';
 
 const App: React.FC = () => (

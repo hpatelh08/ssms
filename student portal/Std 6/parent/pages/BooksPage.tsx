@@ -454,14 +454,6 @@ interface BooksPageProps {
   onOpenBook?: (book: BookEntry) => void;
 }
 
-const resolveBookPdfUrl = (rawUrl: string): string => {
-  if (!rawUrl) return rawUrl;
-  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
-  const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
-  const path = rawUrl.replace(/^\/+/, '');
-  return `${base}/${path}`;
-};
-
 export const BooksPage: React.FC<BooksPageProps> = ({ onOpenBook }) => {
   const [board, setBoard] = useState<BoardType>('ncert');
   const [lastOpened, setLastOpened] = useState<string | null>(null);
@@ -509,7 +501,7 @@ export const BooksPage: React.FC<BooksPageProps> = ({ onOpenBook }) => {
         setIndexProgress(`Extracting ${book.title} (${i + 1}/${ALL_BOOKS.length})...`);
         try {
           const extraction = await extractTextFromPDF(
-            resolveBookPdfUrl(book.pdfUrl),
+            book.pdfUrl,
             book.id,
             (done, total) => { setIndexProgress(`${book.title}: page ${done}/${total}`); }
           );

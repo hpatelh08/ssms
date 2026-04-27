@@ -33,3 +33,39 @@ export const SUBJECT_COLORS = {
   English: 'bg-orange-100 text-orange-600 border-orange-200',
   Math: 'bg-purple-100 text-purple-600 border-purple-200'
 };
+
+/* ═══════════════════════════════════════════════════
+   STD 5 UNIQUE SELLING PROPOSITION (USP)
+   ─────────────────────────────────────────────
+   Theme: "Forest Theme" - Deep nature exploration
+   Color Palette: Green & Brown (trees, forest)
+   
+   Unique Features:
+   • Forest-themed Book Reader with tree decorations
+   • Advanced reading with chapter navigation
+   • Forest animal companions
+   • Deep progress tracking (exploring the forest)
+   ═══════════════════════════════════════════════════ */
+export const STD5_THEME = {
+  primary: '#15803d',       // Green-700
+  secondary: '#78350f',   // Brown-700
+  accent: '#22c55e',       // Green-500
+  background: '#f0fdf4',  // Green-50
+  success: '#84cc16',    // Lime-500
+  cardBg: 'bg-green-50',
+  headerBg: 'bg-gradient-to-r from-green-700 to-brown-700',
+  buttonBg: 'bg-green-600 hover:bg-green-700',
+  textPrimary: 'text-green-700',
+  borderColor: 'border-green-200',
+  mascotEmoji: '🦌',
+  mascotName: 'Deer',
+  bookReaderTheme: 'forest',
+};
+
+export const FOREST_CONFIG = {
+  enabled: true,
+  showTrees: true,
+  showAnimals: true,
+  chapterNav: true,
+  deepTracking: true,
+};

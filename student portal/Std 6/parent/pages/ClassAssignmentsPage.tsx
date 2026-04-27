@@ -120,19 +120,19 @@ const ASSIGNMENT_THEME_MAP: Record<string, Theme> = {
     accent: 'text-emerald-600',
   },
   '6': {
-    hero: 'linear-gradient(135deg, rgba(14,165,233,0.96), rgba(59,130,246,0.96), rgba(34,197,94,0.92))',
-    heroShadow: '0 22px 50px rgba(14,165,233,0.22)',
+    hero: 'linear-gradient(135deg, rgba(8,47,73,0.98), rgba(14,165,233,0.96), rgba(6,182,212,0.94))',
+    heroShadow: '0 22px 50px rgba(14,165,233,0.26)',
     panelBg: 'rgba(255,255,255,0.16)',
     panelBorder: 'rgba(255,255,255,0.15)',
     label: 'text-white/75',
-    chipBg: 'bg-cyan-50',
-    chipText: 'text-cyan-700',
+    chipBg: 'bg-sky-50',
+    chipText: 'text-sky-800',
     buttonFrom: 'from-cyan-600',
     buttonTo: 'to-sky-600',
     buttonShadow: 'shadow-[0_12px_28px_rgba(14,165,233,0.24)]',
     cardBorder: 'border-white/70',
     cardShadow: 'shadow-[0_16px_40px_rgba(14,165,233,0.10)]',
-    accent: 'text-cyan-600',
+    accent: 'text-sky-700',
   },
 };
 
@@ -150,6 +150,42 @@ function getClassLabel(item: AssignmentRecord, student?: StudentLike | null) {
 function getAssignmentFileLink(item: AssignmentRecord) {
   const attachment = item.attachment || item.attachments?.[0] || null;
   return toTeacherFileUrl(attachment?.path || '');
+}
+
+function getAssignmentDownloadName(item: AssignmentRecord, fallbackLink: string) {
+  const attachment = item.attachment || item.attachments?.[0] || null;
+  const candidate =
+    attachment?.originalName ||
+    attachment?.filename ||
+    (fallbackLink ? (() => {
+      try {
+        const parsed = new URL(fallbackLink);
+        return decodeURIComponent(parsed.pathname.split('/').pop() || '');
+      } catch {
+        return '';
+      }
+    })() : '') ||
+    item.title ||
+    'assignment';
+  return String(candidate)
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim() || 'assignment';
+}
+
+function buildTeacherFileActionUrl(source: string, disposition: 'inline' | 'attachment', filename: string) {
+  const url = String(source || '').trim();
+  if (!url) return '';
+  const teacherPortalBase = `${window.location.protocol}//${window.location.hostname}:5002`;
+  if (/^https?:\/\//i.test(url) && !url.startsWith(teacherPortalBase)) {
+    return url;
+  }
+  const params = new URLSearchParams({
+    url,
+    disposition,
+  });
+  if (filename) params.set('filename', filename);
+  return `/teacher-file?${params.toString()}`;
 }
 
 export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null }> = ({ studentProfile }) => {
@@ -232,7 +268,7 @@ export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null
           <p className="font-semibold text-slate-500">Loading assignments...</p>
         </div>
       ) : error ? (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 font-semibold text-rose-700">
+        <div className="rounded-3xl border border-sky-200 bg-sky-50 p-5 font-semibold text-sky-800">
           {error}
         </div>
       ) : items.length === 0 ? (
@@ -244,6 +280,9 @@ export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {items.map((item) => {
             const fileLink = getAssignmentFileLink(item);
+            const downloadName = getAssignmentDownloadName(item, fileLink);
+            const viewLink = buildTeacherFileActionUrl(fileLink, 'inline', downloadName);
+            const downloadLink = buildTeacherFileActionUrl(fileLink, 'attachment', downloadName);
             const subject = typeof item.subject === 'object' ? item.subject?.subjectName : item.subject;
             return (
               <article
@@ -286,14 +325,23 @@ export const ClassAssignmentsPage: React.FC<{ studentProfile: StudentLike | null
                     Uploaded {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN') : 'recently'}
                   </p>
                   {fileLink ? (
-                    <a
-                      href={fileLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
-                    >
-                      View / Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={viewLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        View
+                      </a>
+                      <a
+                        href={downloadLink}
+                        download={downloadName}
+                        className={`inline-flex items-center justify-center rounded-full bg-gradient-to-r ${theme.buttonFrom} ${theme.buttonTo} px-4 py-2 text-xs font-black text-white ${theme.buttonShadow} transition-shadow hover:shadow-lg`}
+                      >
+                        Download
+                      </a>
+                    </div>
                   ) : (
                     <span className="text-xs font-semibold text-slate-400">No attachment</span>
                   )}

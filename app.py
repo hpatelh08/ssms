@@ -2,7 +2,7 @@ from flask import Flask, render_template, render_template_string, request, redir
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
-from datetime import datetime
+from datetime import datetime, date
 import json
 import time
 import socket
@@ -10,6 +10,8 @@ import subprocess
 import re
 import secrets
 import random
+from urllib.parse import unquote, urlparse
+from flask import send_file
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -62,6 +64,318 @@ def _add_api_cors_headers(response):
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         response.headers['Vary'] = 'Origin'
     return response
+
+
+def _teacher_portal_base_url() -> str:
+    host = request.host.split(':')[0]
+    return f"{request.scheme}://{host}:5002"
+
+
+def _normalize_teacher_file_source(source: str) -> str:
+    value = str(source or '').strip()
+    if not value:
+        return ''
+    if value.startswith('/'):
+        return f"{_teacher_portal_base_url()}{value}"
+    if re.match(r'^https?://', value, re.IGNORECASE):
+        return value
+    return f"{_teacher_portal_base_url()}/{value.lstrip('/')}"
+
+
+def _safe_download_filename(filename: str, fallback: str = 'download') -> str:
+    raw = str(filename or '').strip()
+    name = unquote(raw) if raw else ''
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', '_', name).strip(' .')
+    if name:
+        return name
+    fallback_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', '_', str(fallback or 'download')).strip(' .')
+    return fallback_name or 'download'
+
+
+def _shared_exam_sync_path() -> str:
+    return os.path.join(os.path.dirname(__file__), 'shared', 'exam-sync.json')
+
+
+def _read_shared_exam_sync() -> list[dict]:
+    path = _shared_exam_sync_path()
+    try:
+        if not os.path.exists(path):
+            return []
+        with open(path, 'r', encoding='utf-8') as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, list) else []
+    except Exception:
+        return []
+
+
+def _write_shared_exam_sync(items: list[dict]) -> None:
+    path = _shared_exam_sync_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as handle:
+        json.dump(items if isinstance(items, list) else [], handle, indent=2, ensure_ascii=False)
+
+
+def _normalize_exam_sync_record(record: dict) -> dict:
+    class_value_raw = str(record.get('class', '') or '').strip()
+    class_match = re.search(r'\d+', class_value_raw)
+    class_value = class_match.group(0) if class_match else class_value_raw
+    date_value = str(record.get('date', '') or '').strip()
+    time_value = str(record.get('startTime', '') or record.get('time_slot', '') or record.get('time', '') or '').strip()
+    subject_value = str(record.get('subject', '') or '').strip()
+    name_value = str(record.get('name', '') or 'Exam').strip()
+    record_id = str(record.get('id', '') or '').strip()
+    if not record_id:
+        record_id = f"FLASK_{class_value}_{subject_value}_{date_value}_{time_value}".strip('_') or f"FLASK_{int(time.time())}"
+
+    return {
+        'id': record_id,
+        'name': name_value,
+        'class': class_value,
+        'subject': subject_value,
+        'date': date_value,
+        'duration': str(record.get('duration', '') or '').strip(),
+        'max_marks': int(record.get('maxMarks', record.get('max_marks', 100)) or 100),
+        'status': str(record.get('status', 'Scheduled') or 'Scheduled').strip(),
+        'examType': str(record.get('examType', '') or '').strip(),
+        'startTime': str(record.get('startTime', '') or '').strip(),
+        'endTime': str(record.get('endTime', '') or '').strip(),
+        'passingMarks': int(record.get('passingMarks', 0) or 0),
+        'description': str(record.get('description', '') or '').strip(),
+        'teacherId': str(record.get('teacherId', '') or '').strip(),
+        'source': str(record.get('source', 'flask') or 'flask').strip(),
+    }
+
+
+def _upsert_shared_exam_sync(record: dict) -> None:
+    next_record = _normalize_exam_sync_record(record)
+    if not next_record['class'] or not next_record['date'] or not next_record['subject']:
+        return
+
+    items = _read_shared_exam_sync()
+    match_id = str(next_record.get('id', '')).strip()
+    signature = (
+        str(next_record.get('class', '')).strip(),
+        str(next_record.get('subject', '')).strip().lower(),
+        str(next_record.get('date', '')).strip(),
+        str(next_record.get('startTime', '')).strip().lower(),
+    )
+
+    updated = False
+    for index, item in enumerate(items):
+        item_signature = (
+            str(item.get('class', '')).strip(),
+            str(item.get('subject', '')).strip().lower(),
+            str(item.get('date', '')).strip(),
+            str(item.get('startTime', '')).strip().lower(),
+        )
+        if match_id and str(item.get('id', '')).strip() == match_id:
+            items[index] = {**item, **next_record}
+            updated = True
+            break
+        if item_signature == signature:
+            items[index] = {**item, **next_record}
+            updated = True
+            break
+
+    if not updated:
+        items.append(next_record)
+
+    _write_shared_exam_sync(items)
+
+
+def _shared_exam_rows_for_class(student_class: str) -> list[tuple]:
+    class_match = re.search(r'\d+', str(student_class or '').strip())
+    class_value = class_match.group(0) if class_match else str(student_class or '').strip()
+    if not class_value:
+        return []
+
+    rows = []
+    for item in _read_shared_exam_sync():
+        item_class_match = re.search(r'\d+', str(item.get('class', '') or '').strip())
+        item_class_value = item_class_match.group(0) if item_class_match else str(item.get('class', '') or '').strip()
+        if item_class_value != class_value:
+            continue
+        date_value = str(item.get('date', '')).strip()
+        if date_value and date_value < date.today().isoformat():
+            continue
+        rows.append((
+            item.get('id', ''),
+            item.get('class', ''),
+            item.get('subject', ''),
+            date_value,
+            item.get('startTime') or item.get('time') or item.get('time_slot') or '',
+            item.get('description', ''),
+        ))
+    return rows
+
+
+def _load_upcoming_exams_for_class(student_class: str):
+    conn = sqlite3.connect('school.db')
+    c = conn.cursor()
+
+    exam_rows = []
+    query = """
+        SELECT id, class, subject, exam_date, time_slot, description
+        FROM {table}
+        WHERE CAST(class AS INTEGER)=? AND exam_date >= date('now')
+        ORDER BY exam_date, time_slot
+    """
+
+    class_number_match = re.search(r'\d+', str(student_class or '').strip())
+    class_number = int(class_number_match.group(0)) if class_number_match else 0
+
+    for table in ('exams', 'exam_timetables'):
+        try:
+            c.execute(query.format(table=table), (class_number,))
+            exam_rows.extend(c.fetchall())
+        except sqlite3.OperationalError:
+            continue
+
+    exam_rows.extend(_shared_exam_rows_for_class(student_class))
+
+    conn.close()
+
+    seen = set()
+    merged = []
+    for row in sorted(
+        exam_rows,
+        key=lambda item: (
+            str(item[3] or '9999-12-31'),
+            str(item[4] or ''),
+            str(item[1] or ''),
+            str(item[2] or ''),
+            str(item[0] or ''),
+        ),
+    ):
+        signature = tuple(str(value or '').strip() for value in row[1:])
+        if signature in seen:
+            continue
+        seen.add(signature)
+        merged.append(row)
+
+    return merged
+
+
+def _backfill_shared_exam_sync_from_local_db():
+    try:
+        conn = sqlite3.connect('school.db')
+        c = conn.cursor()
+
+        local_rows = []
+        c.execute("""
+            SELECT id, class, subject, exam_date, time_slot, description
+            FROM exams
+            WHERE exam_date >= date('now')
+        """)
+        local_rows.extend(c.fetchall())
+
+        try:
+            c.execute("""
+                SELECT id, class, subject, exam_date, time_slot, description
+                FROM exam_timetables
+                WHERE exam_date >= date('now')
+            """)
+            local_rows.extend(c.fetchall())
+        except sqlite3.OperationalError:
+            pass
+
+        conn.close()
+
+        for row in local_rows:
+            _upsert_shared_exam_sync({
+                'id': row[0],
+                'name': row[5] or 'Exam',
+                'class': row[1],
+                'subject': row[2],
+                'date': row[3],
+                'duration': row[4] or '',
+                'status': 'Scheduled',
+                'startTime': str(row[4] or '').split('-')[0].strip(),
+                'endTime': str(row[4] or '').split('-')[1].strip() if '-' in str(row[4] or '') else '',
+                'description': row[5] or '',
+                'source': 'flask-backfill',
+            })
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _candidate_teacher_file_paths(source: str) -> list[str]:
+    raw = unquote(str(source or '').strip())
+    if not raw:
+        return []
+
+    parsed = urlparse(raw)
+    path = unquote(parsed.path or raw)
+    path = path.replace('\\', '/')
+
+    repo_root = os.path.dirname(__file__)
+    teacher_server_root = os.path.join(repo_root, 'teacher portal', 'server')
+
+    candidates: list[str] = []
+
+    def add_candidate(value: str):
+        cleaned = str(value or '').strip()
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    add_candidate(path)
+    add_candidate(path.lstrip('/'))
+    add_candidate(path.replace('/', os.sep))
+    add_candidate(path.lstrip('/').replace('/', os.sep))
+    add_candidate(os.path.join(repo_root, path.lstrip('/').replace('/', os.sep)))
+    add_candidate(os.path.join(teacher_server_root, path.lstrip('/').replace('/', os.sep)))
+
+    upload_match = re.search(r'(?:^|/)(uploads/.+)$', path, re.IGNORECASE)
+    if upload_match:
+        upload_tail = upload_match.group(1).replace('/', os.sep)
+        add_candidate(os.path.join(teacher_server_root, upload_tail))
+        add_candidate(os.path.join(repo_root, upload_tail))
+
+    if re.match(r'^[A-Za-z]:/', path):
+        add_candidate(path.replace('/', os.sep))
+
+    return candidates
+
+
+def _resolve_teacher_file_local_path(source: str) -> str | None:
+    for candidate in _candidate_teacher_file_paths(source):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _proxy_teacher_file_response(source: str, disposition: str = 'inline', filename: str = ''):
+    normalized_source = _normalize_teacher_file_source(source)
+    if not normalized_source:
+        return {'error': 'File URL is required.'}, 400
+
+    parsed = urlparse(normalized_source)
+    fallback_name = os.path.basename(parsed.path) or 'download'
+    safe_name = _safe_download_filename(filename or fallback_name, fallback_name)
+
+    local_path = _resolve_teacher_file_local_path(normalized_source)
+    if local_path:
+        return send_file(
+            local_path,
+            as_attachment=disposition == 'attachment',
+            download_name=safe_name,
+            conditional=True,
+        )
+
+    return {'error': 'File was not found on the teacher portal.'}, 404
+
+
+@app.route('/teacher-file')
+def teacher_file_proxy():
+    source = request.args.get('url') or request.args.get('source') or ''
+    disposition = (request.args.get('disposition') or 'inline').strip().lower()
+    filename = request.args.get('filename') or request.args.get('name') or ''
+    if disposition not in {'inline', 'attachment'}:
+        disposition = 'inline'
+    return _proxy_teacher_file_response(source, disposition=disposition, filename=filename)
 
 # Admin Dashboard (React build) location
 ADMIN_DASHBOARD_DIST_DIR = os.path.join(
@@ -150,6 +464,44 @@ STUDENT_DASHBOARD_DIST_DIR = os.path.join(
 )
 
 STUDENT_PORTAL_ROOT_DIR = os.path.join(os.path.dirname(__file__), 'student portal')
+
+
+def _find_student_portal_books_dir(grade: int) -> str | None:
+    # Expected structure: student portal/Std N/public/books
+    root = os.path.join(STUDENT_PORTAL_ROOT_DIR, f"Std {grade}")
+    candidates = [
+        os.path.join(root, "public", "books"),
+        os.path.join(root, f"Std {grade}", "public", "books"),
+    ]
+
+    for books_dir in candidates:
+        if os.path.isdir(books_dir):
+            return books_dir
+
+    try:
+        if os.path.isdir(root):
+            for entry in os.listdir(root):
+                books_dir = os.path.join(root, entry, 'public', 'books')
+                if os.path.isdir(books_dir):
+                    return books_dir
+    except Exception:
+        pass
+
+    return None
+
+
+def _find_any_student_portal_books_dir(filename: str, preferred_grade: int | None = None) -> str | None:
+    grades = list(range(1, 8))
+    if preferred_grade in grades:
+        grades.remove(preferred_grade)
+        grades.insert(0, preferred_grade)
+
+    for grade in grades:
+        books_dir = _find_student_portal_books_dir(grade)
+        if books_dir and os.path.isfile(os.path.join(books_dir, filename)):
+            return books_dir
+    return None
+
 STUDENT_LOGIN_ACCOUNTS = {
     'STU20240001': {'grade': 1, 'password': 'Stu@001'},
     'STU20240121': {'grade': 2, 'password': 'Stu@121'},
@@ -553,6 +905,17 @@ def init_db():
                     time_slot TEXT NOT NULL,
                     description TEXT
                 )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS exam_timetables (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    class TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    exam_date DATE NOT NULL,
+                    time_slot TEXT NOT NULL,
+                    room_number TEXT DEFAULT '',
+                    duration TEXT DEFAULT '120',
+                    description TEXT
+                )''')
                 
     c.execute('''CREATE TABLE IF NOT EXISTS marks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -653,6 +1016,8 @@ def init_db():
             conn.close()
         except:
             pass
+
+    _backfill_shared_exam_sync_from_local_db()
 
 # Sample data creation
 def create_sample_data():
@@ -1311,8 +1676,6 @@ def student_login():
             'bg_start': theme['bg_start'],
             'bg_end': theme['bg_end'],
         }
-        if grade == 1:
-            return _render_student_portal_html(grade, demo_student_id)
         return redirect(url_for('student_portal', grade=grade))
 
     response = make_response(render_template(
@@ -1377,8 +1740,6 @@ def student_login_grade(grade: int):
             'bg_start': theme['bg_start'],
             'bg_end': theme['bg_end'],
         }
-        if grade == 1:
-            return _render_student_portal_html(grade, account['student_id'])
         return redirect(url_for('student_portal', grade=grade))
 
     return render_login(student_id=demo_student_id)
@@ -2220,6 +2581,33 @@ def _find_any_student_portal_asset(filename: str) -> str | None:
     return None
 
 
+def _extract_student_grade_from_referrer() -> int | None:
+    ref = request.headers.get('Referer', '')
+    if not ref:
+        return None
+    match = re.search(r'/student-portal/(\d+)', ref)
+    if not match:
+        return None
+    try:
+        grade = int(match.group(1))
+    except Exception:
+        return None
+    return grade if 1 <= grade <= 7 else None
+
+
+def _append_grade_to_asset_urls(html: str, grade: int) -> str:
+    # Prevent cache/key collisions across different standard bundles.
+    def _repl(match: re.Match) -> str:
+        raw = match.group(1)
+        if 'grade=' in raw:
+            return match.group(0)
+        sep = '&' if '?' in raw else '?'
+        updated = f"{raw}{sep}grade={grade}"
+        return match.group(0).replace(raw, updated)
+
+    return re.sub(r'(["\']\/assets\/[^"\']+)', _repl, html)
+
+
 @app.route('/student-portal')
 def student_portal_home():
     if session.get('role') != 'student':
@@ -2234,8 +2622,6 @@ def student_portal_home():
 def student_portal(grade: int, path: str = ''):
     if not (1 <= grade <= 7):
         return redirect(url_for('student_dashboard_portal'))
-    if grade == 1:
-        abort(404)
 
     demo_student_id = next(
         (
@@ -2367,7 +2753,11 @@ def student_portal(grade: int, path: str = ''):
     elif '</head>' in html:
         html = html.replace('</head>', theme_bootstrap + auth_bootstrap + '</head>', 1)
 
-    return Response(html, mimetype='text/html')
+    html = _append_grade_to_asset_urls(html, grade)
+
+    response = Response(html, mimetype='text/html')
+    response.set_cookie('ssms_portal_grade', str(grade), samesite='Lax', path='/')
+    return response
 
 
 @app.route('/student-dashboard')
@@ -2425,20 +2815,48 @@ def student_dashboard_portal(path: str = ''):
 
 @app.route('/assets/<path:filename>')
 def shared_assets(filename):
-    # Student Portal (Std 1-7)
+    # Student Portal (Std 1-7): resolve grade deterministically.
+    explicit_grade = None
+    try:
+        q = (request.args.get('grade') or '').strip()
+        if q.isdigit():
+            g = int(q)
+            if 1 <= g <= 7:
+                explicit_grade = g
+    except Exception:
+        explicit_grade = None
+
+    cookie_grade = None
+    try:
+        raw_cookie_grade = (request.cookies.get('ssms_portal_grade') or '').strip()
+        if raw_cookie_grade.isdigit():
+            parsed_cookie_grade = int(raw_cookie_grade)
+            if 1 <= parsed_cookie_grade <= 7:
+                cookie_grade = parsed_cookie_grade
+    except Exception:
+        cookie_grade = None
+
+    session_grade = None
     if session.get('role') in ('student', 'parent') and session.get('student_app') == 'portal':
         try:
-            grade = int(session.get('student_grade') or 0)
+            sg = int(session.get('student_grade') or 0)
+            if 1 <= sg <= 7:
+                session_grade = sg
         except Exception:
-            grade = 0
-        dist_dir = _find_student_portal_dist_dir(grade) if grade else None
+            session_grade = None
+
+    ref_grade = _extract_student_grade_from_referrer()
+    portal_grade = explicit_grade or cookie_grade or session_grade or ref_grade
+
+    if portal_grade:
+        dist_dir = _find_student_portal_dist_dir(portal_grade)
         if dist_dir:
             assets_dir = os.path.join(dist_dir, 'assets')
             if os.path.isfile(os.path.join(assets_dir, filename)):
                 return send_from_directory(assets_dir, filename)
+        return {'error': 'Not found'}, 404
 
-    # Fallback: serve any matching student portal asset even if the
-    # session cookie is not ready yet on the very first navigation.
+    # Last-resort fallback only if grade could not be resolved at all.
     assets_dir = _find_any_student_portal_asset(filename)
     if assets_dir:
         return send_from_directory(assets_dir, filename)
@@ -2567,7 +2985,11 @@ def _render_student_portal_html(grade: int, demo_student_id: str, path: str = ''
     elif '</head>' in html:
         html = html.replace('</head>', theme_bootstrap + auth_bootstrap + '</head>', 1)
 
-    return Response(html, mimetype='text/html')
+    html = _append_grade_to_asset_urls(html, grade)
+
+    response = Response(html, mimetype='text/html')
+    response.set_cookie('ssms_portal_grade', str(grade), samesite='Lax', path='/')
+    return response
 
 
 @app.route('/css/<path:filename>')
@@ -2580,6 +3002,63 @@ def admin_portal_css(filename):
 def admin_portal_js(filename):
     js_dir = os.path.join(ADMIN_DASHBOARD_DIST_DIR, 'js')
     return send_from_directory(js_dir, filename)
+
+
+def _apply_books_cors_headers(response):
+    origin = request.headers.get('Origin', '')
+    if origin in ('http://127.0.0.1:3000', 'http://localhost:3000', 'http://127.0.0.1:3001', 'http://localhost:3001', 'http://127.0.0.1:5000', 'http://localhost:5000'):
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Range'
+    response.headers['Access-Control-Expose-Headers'] = 'Accept-Ranges, Content-Range, Content-Length, ETag, Last-Modified'
+    response.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+    response.headers['Accept-Ranges'] = 'bytes'
+    response.headers['Vary'] = 'Origin'
+    return response
+
+
+@app.route('/books/<path:filename>', methods=['GET', 'HEAD', 'OPTIONS'])
+def student_portal_books(filename: str):
+    if request.method == 'OPTIONS':
+        return _apply_books_cors_headers(app.make_default_options_response())
+
+    preferred_grade = None
+    query_grade = None
+    try:
+        raw_query_grade = (request.args.get('grade') or '').strip()
+        if raw_query_grade.isdigit():
+            parsed_query_grade = int(raw_query_grade)
+            if 1 <= parsed_query_grade <= 7:
+                query_grade = parsed_query_grade
+    except Exception:
+        query_grade = None
+
+    if query_grade:
+        preferred_grade = query_grade
+    else:
+        try:
+            preferred_grade = int(session.get('student_grade') or 0) or None
+        except Exception:
+            preferred_grade = None
+
+    def _serve_books_file(books_dir: str):
+        response = send_from_directory(books_dir, filename)
+        return _apply_books_cors_headers(response)
+
+    books_dir = None
+    if preferred_grade:
+        books_dir = _find_student_portal_books_dir(preferred_grade)
+        if books_dir and os.path.isfile(os.path.join(books_dir, filename)):
+            return _serve_books_file(books_dir)
+        return {'error': 'Not found'}, 404
+
+    books_dir = _find_any_student_portal_books_dir(filename, preferred_grade)
+    if books_dir:
+        return _serve_books_file(books_dir)
+
+    return {'error': 'Not found'}, 404
 
 
 @app.route('/teacher-portal')
@@ -2923,21 +3402,44 @@ def upload_exam_timetable_teacher():
     
     if request.method == 'POST':
         # Process exam timetable upload
-        exam_class = request.form['class']
+        exam_class_raw = request.form['class']
+        exam_class_match = re.search(r'\d+', str(exam_class_raw or '').strip())
+        exam_class = exam_class_match.group(0) if exam_class_match else str(exam_class_raw or '').strip()
         subject = request.form['subject']
         exam_date = request.form['exam_date']
         time_slot = request.form['time_slot']
         room_number = request.form.get('room_number', '')
         duration = request.form.get('duration', '120')
         description = request.form.get('description', '')
-        
-        c.execute("""INSERT INTO exam_timetables (class, subject, exam_date, time_slot, room_number, duration, description) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                  (exam_class, subject, exam_date, time_slot, room_number, duration, description))
-        conn.commit()
-        conn.close()
-        
-        flash('Exam timetable uploaded successfully!', 'success')
+
+        try:
+            c.execute("""INSERT INTO exam_timetables (class, subject, exam_date, time_slot, room_number, duration, description) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                      (exam_class, subject, exam_date, time_slot, room_number, duration, description))
+            c.execute("""INSERT INTO exams (class, subject, exam_date, time_slot, description) 
+                         VALUES (?, ?, ?, ?, ?)""",
+                      (exam_class, subject, exam_date, time_slot, description))
+            _upsert_shared_exam_sync({
+                'name': description or 'Exam',
+                'class': exam_class,
+                'subject': subject,
+                'date': exam_date,
+                'duration': duration,
+                'status': 'Scheduled',
+                'startTime': time_slot.split('-')[0].strip() if '-' in time_slot else time_slot,
+                'endTime': time_slot.split('-')[1].strip() if '-' in time_slot else '',
+                'description': description,
+                'teacherId': session.get('username', ''),
+                'source': 'flask-teacher',
+            })
+            conn.commit()
+            flash('Exam timetable uploaded successfully!', 'success')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Failed to upload exam timetable: {e}', 'error')
+        finally:
+            conn.close()
+
         return redirect(url_for('upload_exam_timetable_teacher'))
     
     # Get upcoming exams for the teacher's assigned class
@@ -3226,10 +3728,8 @@ def student_exams():
     c = conn.cursor()
     c.execute("SELECT class FROM students WHERE student_id=?", (current_user['username'],))
     student_class = c.fetchone()[0]
-    
-    # Get upcoming exams for the class
-    c.execute("SELECT * FROM exams WHERE class=? AND exam_date >= date('now') ORDER BY exam_date", (student_class,))
-    exams = c.fetchall()
+
+    exams = _load_upcoming_exams_for_class(student_class)
     conn.close()
     
     return render_template('upcoming_exams.html', exams=exams)
@@ -3291,10 +3791,8 @@ def upcoming_exams():
     c = conn.cursor()
     c.execute("SELECT class FROM students WHERE student_id=?", (session['username'],))
     student_class = c.fetchone()[0]
-    
-    # Get upcoming exams for the class
-    c.execute("SELECT * FROM exams WHERE class=? AND exam_date >= date('now') ORDER BY exam_date", (student_class,))
-    exams = c.fetchall()
+
+    exams = _load_upcoming_exams_for_class(student_class)
     conn.close()
     
     return render_template('upcoming_exams.html', exams=exams)

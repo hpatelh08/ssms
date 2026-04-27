@@ -576,6 +576,7 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pdfError, setPdfError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPdfFallback, setShowPdfFallback] = useState(false);
 
   /* ── PDF page aspect ratio (height / width) ── */
   const [pdfPageRatio, setPdfPageRatio] = useState(1.414);
@@ -657,9 +658,24 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
     let cancelled = false;
     setIsLoading(true);
     setPdfError(false);
+    setShowPdfFallback(false);
+    setPdfDoc(null);
+    setNumPages(0);
+    setCurrentPage(0);
+    setPageCache({});
+    setTextCache({});
+    loadingRef.current.clear();
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setShowPdfFallback(true);
+    }, 2500);
     const load = async () => {
       try {
-        const doc = await pdfjs.getDocument(book.pdfUrl).promise;
+        const doc = await pdfjs.getDocument({
+          url: book.pdfUrl,
+          useSystemFonts: true,
+          disableFontFace: true,
+          isEvalSupported: false,
+        }).promise;
         if (cancelled) return;
         // Get actual page aspect ratio from first page
         try {
@@ -668,17 +684,30 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
           setPdfPageRatio(vp.height / vp.width);
           p1.cleanup();
         } catch { /* fallback ratio already set */ }
+
+        const firstPage = await renderPdfPage(doc, 1, isMobile ? 1.0 : 1.2);
+        if (cancelled) {
+          doc.destroy?.();
+          return;
+        }
+
         setPdfDoc(doc);
         setNumPages(doc.numPages);
+        setPageCache({ 1: firstPage.image });
+        setTextCache(firstPage.text ? { 1: firstPage.text } : {});
         setIsLoading(false);
+        setShowPdfFallback(false);
       } catch (err) {
         console.error('[BookReader] PDF load error:', err);
-        if (!cancelled) { setPdfError(true); setIsLoading(false); }
+        if (!cancelled) { setPdfError(true); setIsLoading(false); setShowPdfFallback(true); }
       }
     };
-    load();
-    return () => { cancelled = true; };
-  }, [book.pdfUrl]);
+    void load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [book.pdfUrl, isMobile]);
 
   /* ── Pre-render pages (with cache eviction) ───── */
   const renderPage = useCallback(async (pageNum: number) => {
@@ -1129,7 +1158,7 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
             {mode === 'story' && <StoryModeOverlay animations={currentAnimations} />}
 
             {/* Error state */}
-            {pdfError && (
+            {false && (
               <motion.div style={{ textAlign: 'center', maxWidth: 320, padding: '0 24px' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                 <span style={{ fontSize: 60, display: 'inline-block', marginBottom: 20 }}>📚</span>
                 <h2 style={{ fontSize: 18, fontWeight: 900, color: '#E2E8F0', marginBottom: 8 }}>Unable to load book</h2>
@@ -1159,6 +1188,29 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                 />
                 <p style={{ fontSize: 13, fontWeight: 600, color: '#E2E8F0', marginTop: 20 }}>Preparing your animated storybook…</p>
                 <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 6 }}>{book.title}</p>
+              </motion.div>
+            )}
+
+            {/* THE FLIPBOOK */}
+            {(pdfError || (!isLoading && numPages === 0)) && (
+              <motion.div
+                style={{
+                  width: 'min(100%, 1180px)',
+                  height: 'min(78vh, 900px)',
+                  borderRadius: 24,
+                  overflow: 'hidden',
+                  background: '#fff',
+                  boxShadow: '0 24px 60px rgba(0,0,0,0.12)',
+                  border: '1px solid rgba(255,255,255,0.65)',
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <iframe
+                  title={book.title}
+                  src={book.pdfUrl}
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                />
               </motion.div>
             )}
 

@@ -52,11 +52,26 @@ pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
    ═══════════════════════════════════════════════════ */
 const TOOLBAR_H = 64;
 const PROGRESS_H = 6;
-const BOTTOM_BAR_H = 40;
+const BOTTOM_BAR_H = 0;
 const ACTIVITIES_H = 60;
+const CLASS_LABEL = 'Class 5';
 const PRELOAD_BUFFER = 4;
 const MAX_CACHED_PAGES = 16;
 const BOOKMARK_KEY = 'ncert_bookmarks_';
+const getReaderBg = () => `
+  radial-gradient(circle at 16% 15%, rgba(34,197,94,0.24) 0%, transparent 28%),
+  radial-gradient(circle at 82% 10%, rgba(132,204,22,0.18) 0%, transparent 24%),
+  radial-gradient(circle at 50% 100%, rgba(20,83,45,0.34) 0%, transparent 42%),
+  linear-gradient(180deg, #102114 0%, #1F3A21 55%, #102114 100%)
+`;
+
+const READER_PANEL_BG = 'linear-gradient(135deg, rgba(245,255,246,0.98), rgba(225,252,228,0.98))';
+const READER_PANEL_BORDER = '1px solid rgba(34,197,94,0.16)';
+const READER_PANEL_SHADOW = '0 24px 60px rgba(20,83,45,0.18)';
+const READER_ACCENT = '#22c55e';
+const READER_TEXT = '#13351d';
+const READER_TEXT_SOFT = '#4f7a5a';
+const READER_BUTTON = 'linear-gradient(135deg, #22c55e, #16a34a)';
 
 /* ─── Helpers ─────────────────────────────────── */
 function getBookmarks(bookId: string): number[] {
@@ -145,8 +160,8 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
         overflow: 'hidden',
         position: 'relative',
         /* Enhanced paper texture */
-        boxShadow: 'inset 0 0 60px rgba(63,143,58,0.04), inset -3px 0 10px rgba(63,143,58,0.03)',
-        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(63,143,58,0.015) 28px, rgba(63,143,58,0.015) 29px)',
+        boxShadow: 'inset 0 0 60px rgba(20,83,45,0.04), inset -3px 0 10px rgba(120,53,15,0.03)',
+        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(20,83,45,0.015) 28px, rgba(20,83,45,0.015) 29px)',
       }}
     >
       {storyMode && animCSS && (
@@ -176,8 +191,9 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'fill',
-                borderRadius: 3,
+                objectFit: 'contain',
+                objectPosition: 'center center',
+                borderRadius: 14,
                 transition: 'transform 0.6s cubic-bezier(.25,.8,.25,1)',
                 willChange: 'transform',
                 animation: storyMode && animations.length > 0 ? animations[0].cssAnimation : 'none',
@@ -194,10 +210,11 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
                       fontSize: 10,
                       padding: '2px 6px',
                       borderRadius: 8,
-                      background: 'rgba(255,255,255,0.85)',
-                      backdropFilter: 'blur(4px)',
+                      background: 'rgba(24,56,30,0.72)',
+                      backdropFilter: 'blur(8px)',
                       fontWeight: 700,
-                      color: '#3F8F3A',
+                      color: '#DCFCE7',
+                      border: '1px solid rgba(132,204,22,0.28)',
                     }}
                   >
                     {a.emoji} {a.label}
@@ -223,14 +240,14 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
               />
             ))}
             <style>{`@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }`}</style>
-            <p style={{ fontSize: 11, color: '#A5B4FC', marginTop: 6, fontWeight: 600, textAlign: 'center' }}>
+            <p style={{ fontSize: 11, color: '#5F8B3D', marginTop: 6, fontWeight: 600, textAlign: 'center' }}>
               Loading page {pageNum}…
             </p>
           </div>
         ) : (
           <div style={{ textAlign: 'center' }}>
             <span style={{ fontSize: 36, opacity: 0.2 }}>📄</span>
-            <p style={{ fontSize: 11, color: '#D1D5DB', marginTop: 8, fontWeight: 600 }}>
+            <p style={{ fontSize: 11, color: '#DCFCE7', marginTop: 8, fontWeight: 600 }}>
               Page {pageNum}
             </p>
           </div>
@@ -255,7 +272,7 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
             style={{
               fontSize: 15,
               lineHeight: 2,
-              color: '#2C3A63',
+              color: '#24402A',
               fontWeight: 500,
               textAlign: 'justify',
               wordSpacing: 2,
@@ -278,7 +295,7 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
                   style={{
                     cursor: isWord ? 'pointer' : 'default',
                     background: isHighlighted ? 'rgba(250,204,21,0.45)' : 'transparent',
-                    borderRadius: isHighlighted ? 3 : 0,
+                    borderRadius: isHighlighted ? 8 : 0,
                     padding: isHighlighted ? '1px 2px' : 0,
                     transition: 'background 0.2s',
                   }}
@@ -298,11 +315,11 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
           display: 'flex',
           justifyContent: pageNum % 2 === 0 ? 'flex-start' : 'flex-end',
           alignItems: 'center',
-          borderTop: '1px solid rgba(63,143,58,0.06)',
+          borderTop: '1px solid rgba(34,197,94,0.06)',
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#A5B4FC', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#5F8B3D', fontVariantNumeric: 'tabular-nums' }}>
           {pageNum}
         </span>
       </div>
@@ -314,8 +331,8 @@ const FlipPage = memo(forwardRef<HTMLDivElement, FlipPageProps>(({
           [pageNum % 2 === 1 ? 'right' : 'left']: 0,
           bottom: 0, width: 3, pointerEvents: 'none',
           background: pageNum % 2 === 1
-            ? 'linear-gradient(to left, rgba(63,143,58,0.06), transparent)'
-            : 'linear-gradient(to right, rgba(63,143,58,0.06), transparent)',
+            ? 'linear-gradient(to left, rgba(34,197,94,0.06), transparent)'
+            : 'linear-gradient(to right, rgba(34,197,94,0.06), transparent)',
         }}
       />
     </div>
@@ -360,25 +377,43 @@ const TBtn: React.FC<{
   onClick: () => void; active?: boolean; disabled?: boolean;
   children?: React.ReactNode;
   tooltip?: string;
-}> = ({ icon, emoji, label, onClick, active, disabled, children, tooltip }) => (
-  <motion.button
-    onClick={onClick}
-    disabled={disabled}
-    title={tooltip || label}
-    className={`flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed rounded-xl transition-colors ${
-      active
-        ? 'bg-green-50 text-green-600 border border-green-200'
-        : 'text-gray-500 hover:bg-green-50 hover:text-green-500 border border-transparent'
-    }`}
-    style={{ minWidth: 36, height: 36, padding: children ? '0 10px' : 0, gap: 4, fontSize: 13 }}
-    whileHover={!disabled ? { scale: 1.06 } : {}}
-    whileTap={!disabled ? { scale: 0.92 } : {}}
-  >
-    {icon && <Icon name={icon} size={16} />}
-    {emoji && <span style={{ fontSize: 14 }}>{emoji}</span>}
-    {children}
-  </motion.button>
-);
+}> = ({ icon, emoji, label, onClick, active, disabled, children, tooltip }) => {
+  const baseBg = active
+    ? 'linear-gradient(135deg, #22c55e, #78350f)'
+    : 'rgba(24,56,30,0.68)';
+  const baseColor = active ? '#F0FDF4' : '#DCFCE7';
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={disabled}
+      title={tooltip || label}
+      style={{
+        minWidth: 36,
+        height: 36,
+        padding: children ? '0 10px' : 0,
+        gap: 4,
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'all 0.2s ease',
+        opacity: disabled ? 0.3 : 1,
+        background: baseBg,
+        color: baseColor,
+        border: active ? '1px solid rgba(132,204,22,0.4)' : '1px solid rgba(34,197,94,0.2)',
+        boxShadow: active ? '0 8px 18px rgba(20,83,45,0.28)' : 'none',
+      }}
+      whileHover={!disabled ? { scale: 1.06, backgroundColor: 'rgba(24,56,30,0.86)' } : {}}
+      whileTap={!disabled ? { scale: 0.92 } : {}}
+    >
+      {icon && <Icon name={icon} size={16} />}
+      {emoji && <span style={{ fontSize: 14 }}>{emoji}</span>}
+      {children}
+    </motion.button>
+  );
+};
 
 /* ═══════════════════════════════════════════════════
    MODE TOGGLE PILL (Professional)
@@ -396,7 +431,7 @@ const ModeToggle: React.FC<{
     <div
       style={{
         display: 'inline-flex', borderRadius: 20, padding: 3, gap: 2,
-        background: 'rgba(63,143,58,0.04)', border: '1px solid rgba(63,143,58,0.08)',
+        background: 'rgba(24,56,30,0.72)', border: '1px solid rgba(132,204,22,0.18)',
       }}
     >
       {modes.map((m) => (
@@ -407,8 +442,10 @@ const ModeToggle: React.FC<{
           style={{
             padding: '5px 12px', borderRadius: 16, border: 'none',
             fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            background: mode === m.key ? '#3F8F3A' : 'transparent',
-            color: mode === m.key ? '#fff' : '#6B7280',
+            background: mode === m.key
+              ? 'linear-gradient(135deg, #22c55e, #84cc16)'
+              : 'transparent',
+            color: mode === m.key ? '#fff' : '#DCFCE7',
             display: 'flex', alignItems: 'center', gap: 4,
           }}
           whileTap={{ scale: 0.95 }}
@@ -449,27 +486,27 @@ const ReadingAnalyticsPanel: React.FC<{
         right: 16,
         zIndex: 170,
         width: 280,
-        background: 'rgba(255,255,255,0.98)',
+        background: 'linear-gradient(145deg, rgba(24,56,30,0.96), rgba(58,102,61,0.92))',
         backdropFilter: 'blur(20px)',
         borderRadius: 16,
-        border: '1px solid rgba(63,143,58,0.1)',
-        boxShadow: '0 12px 40px rgba(63,143,58,0.12)',
+        border: '1px solid rgba(132,204,22,0.18)',
+        boxShadow: '0 16px 42px rgba(20,83,45,0.55)',
         overflow: 'hidden',
       }}
     >
       <div style={{
         padding: '14px 16px 10px',
-        background: 'linear-gradient(135deg, #E7F4DF, #D7EDD0)',
+        background: 'linear-gradient(135deg, rgba(34,197,94,0.55), rgba(120,53,15,0.38))',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <h4 style={{ fontSize: 13, fontWeight: 800, color: '#2C3A63', margin: 0 }}>📊 Reading Stats</h4>
+        <h4 style={{ fontSize: 13, fontWeight: 800, color: '#E2E8F0', margin: 0 }}>📊 Reading Stats</h4>
         <motion.button
           onClick={onClose}
           style={{
             width: 24, height: 24, borderRadius: '50%', border: 'none',
-            background: 'rgba(63,143,58,0.08)', cursor: 'pointer',
+            background: 'rgba(120,53,15,0.2)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 11, color: '#6B7280',
+            fontSize: 11, color: '#F0FDF4',
           }}
           whileTap={{ scale: 0.9 }}
         >✕</motion.button>
@@ -478,12 +515,12 @@ const ReadingAnalyticsPanel: React.FC<{
         {items.map((item) => (
           <div key={item.label} style={{
             padding: '10px 12px', borderRadius: 12,
-            background: 'rgba(249,250,251,0.8)', border: '1px solid rgba(63,143,58,0.06)',
+            background: 'rgba(24,56,30,0.72)', border: '1px solid rgba(132,204,22,0.14)',
             textAlign: 'center',
           }}>
             <span style={{ fontSize: 18 }}>{item.emoji}</span>
-            <p style={{ fontSize: 14, fontWeight: 900, color: '#2C3A63', margin: '2px 0 0' }}>{item.value}</p>
-            <p style={{ fontSize: 9, color: '#9CA3AF', fontWeight: 600, margin: 0 }}>{item.label}</p>
+            <p style={{ fontSize: 14, fontWeight: 900, color: '#F0FDF4', margin: '2px 0 0' }}>{item.value}</p>
+            <p style={{ fontSize: 9, color: '#A7F3D0', fontWeight: 600, margin: 0 }}>{item.label}</p>
           </div>
         ))}
       </div>
@@ -545,10 +582,11 @@ export interface BookReaderPageProps {
 const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
   /* ── Core PDF state ─────────────────────────── */
   const [numPages, setNumPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pdfError, setPdfError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPdfFallback, setShowPdfFallback] = useState(false);
 
   /* ── PDF page aspect ratio (height / width) ── */
   const [pdfPageRatio, setPdfPageRatio] = useState(1.414);
@@ -603,7 +641,7 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
     const maxW = window.innerWidth;
     const aiPanelW = askAIOpen && !askAIMinimized && !isMobile ? 400 : 0;
     const availW = maxW - aiPanelW;
-    const bottomExtra = isFullscreen ? 5 : (BOTTOM_BAR_H + 16);
+    const bottomExtra = isFullscreen ? 5 : 10;
     const maxH = window.innerHeight - TOOLBAR_H - PROGRESS_H - bottomExtra;
     if (isMobile) {
       const w = Math.min(availW - 8, 580);
@@ -630,9 +668,28 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
     let cancelled = false;
     setIsLoading(true);
     setPdfError(false);
+    setShowPdfFallback(false);
+    setPdfDoc(null);
+    setNumPages(0);
+    setCurrentPage(0);
+    setPageCache({});
+    setTextCache({});
+    loadingRef.current.clear();
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setShowPdfFallback(true);
+    }, 2500);
     const load = async () => {
       try {
-        const doc = await pdfjs.getDocument(book.pdfUrl).promise;
+        const doc = await pdfjs.getDocument({
+          url: book.pdfUrl,
+          useSystemFonts: true,
+          disableFontFace: true,
+          isEvalSupported: false,
+        }).promise;
+        if (!doc.numPages || doc.numPages <= 0) {
+          doc.destroy?.();
+          throw new Error('PDF has no pages');
+        }
         if (cancelled) return;
         // Get actual page aspect ratio from first page
         try {
@@ -641,17 +698,30 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
           setPdfPageRatio(vp.height / vp.width);
           p1.cleanup();
         } catch { /* fallback ratio already set */ }
+
+        const firstPage = await renderPdfPage(doc, 1, isMobile ? 1.0 : 1.2);
+        if (cancelled) {
+          doc.destroy?.();
+          return;
+        }
+
         setPdfDoc(doc);
         setNumPages(doc.numPages);
+        setPageCache({ 1: firstPage.image });
+        setTextCache(firstPage.text ? { 1: firstPage.text } : {});
         setIsLoading(false);
+        setShowPdfFallback(false);
       } catch (err) {
         console.error('[BookReader] PDF load error:', err);
-        if (!cancelled) { setPdfError(true); setIsLoading(false); }
+        if (!cancelled) { setPdfError(true); setIsLoading(false); setShowPdfFallback(true); }
       }
     };
-    load();
-    return () => { cancelled = true; };
-  }, [book.pdfUrl]);
+    void load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [book.pdfUrl, isMobile]);
 
   /* ── Pre-render pages (with cache eviction) ───── */
   const renderPage = useCallback(async (pageNum: number) => {
@@ -712,10 +782,16 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
   /* ── Track page views ───────────────────────── */
   useEffect(() => {
     if (numPages > 0) {
-      const trackedPage = Math.max(1, Math.min(numPages, currentPage + 1));
-      tracker.trackPageView(trackedPage, numPages);
+      tracker.trackBookTotalPages(numPages);
     }
-  }, [currentPage, numPages, tracker.trackPageView]);
+  }, [numPages, tracker]);
+
+  useEffect(() => {
+    const trackedPage = currentPage + 1;
+    if (trackedPage > 0 && trackedPage <= numPages) {
+      tracker.trackPageView(trackedPage);
+    }
+  }, [currentPage, numPages, tracker]);
 
   /* ── Cleanup on unmount: release PDF memory ─── */
   useEffect(() => {
@@ -744,7 +820,11 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
     if (!bookRef.current || page < 1 || page > numPages) return;
     // In no-cover mode pages are 0-indexed: pdf page 1 = flip index 0
     const flipIndex = page - 1;
-    bookRef.current.pageFlip().turnToPage(flipIndex);
+    try {
+      bookRef.current.pageFlip().turnToPage(flipIndex);
+    } catch {
+      bookRef.current.pageFlip().flip(flipIndex);
+    }
     setCurrentPage(flipIndex);
   }, [numPages]);
 
@@ -934,21 +1014,17 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
         width: '100vw',
         height: '100vh',
         overflow: 'hidden',
-        /* Immersive reading background — dark vignette for focus */
-        background: `
-          radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, rgba(63,143,58,0.04) 50%, rgba(30,27,75,0.10) 100%),
-          linear-gradient(180deg, #EDF7E6 0%, #E7F4DF 30%, #DCECCF 70%, #CFE4C3 100%)
-        `,
+        background: getReaderBg(),
       }}
     >
       {/* ═══════ PROFESSIONAL TOP BAR ═══════ */}
       <header
         style={{
           height: TOOLBAR_H,
-          background: 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(63,143,58,0.08)',
-          boxShadow: '0 1px 8px rgba(63,143,58,0.06)',
+          background: 'linear-gradient(135deg, rgba(20,83,45,0.96), rgba(58,95,42,0.92))',
+          borderBottom: '1px solid rgba(132,204,22,0.18)',
+          boxShadow: '0 10px 30px rgba(20,83,45,0.45)',
+          backdropFilter: 'blur(14px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -965,37 +1041,40 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '6px 10px', borderRadius: 12, cursor: 'pointer',
-              background: 'rgba(243,244,246,0.85)', border: '1px solid rgba(63,143,58,0.08)',
+              background: 'rgba(24,56,30,0.82)', border: '1px solid rgba(132,204,22,0.16)',
               flexShrink: 0,
             }}
             whileHover={{ scale: 1.05, x: -2 }}
             whileTap={{ scale: 0.94 }}
           >
-            <Icon name="back" size={14} className="text-gray-500" />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7280' }} className="hidden sm:inline">Back</span>
+            <Icon name="back" size={14} className="text-lime-200" />
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#DCFCE7' }} className="hidden sm:inline">Back</span>
           </motion.button>
 
           {/* Book title & info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 8,
-              background: `linear-gradient(135deg, ${book.accentColor}30, ${book.accentColor}15)`,
+              background: 'linear-gradient(135deg, rgba(34,197,94,0.32), rgba(120,53,15,0.22))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
               <span style={{ fontSize: 14 }}>{book.coverEmoji}</span>
             </div>
             <div style={{ minWidth: 0 }} className="hidden sm:block">
-              <h1 style={{ fontSize: 13, fontWeight: 800, color: '#2C3A63', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <h1 style={{ fontSize: 13, fontWeight: 800, color: '#F0FDF4', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {book.title}
               </h1>
-              <p style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 600, margin: 0 }}>
-                {book.board === 'ncert' ? 'NCERT' : 'GSEB'} · Class 5
+              <p style={{ fontSize: 10, color: '#DCFCE7', fontWeight: 600, margin: 0 }}>
+                {book.board === 'ncert' ? 'NCERT' : 'GSEB'} · {CLASS_LABEL}
               </p>
             </div>
           </div>
 
         </div>
+
+        {/* CENTER — spacer (mode + page info moved below canvas) */}
+        <div style={{ flex: '1 1 0' }} />
 
         {/* RIGHT — Reader Tools */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flex: '0 1 auto' }}>
@@ -1026,23 +1105,23 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
           />
 
           {/* Separator */}
-          <div style={{ width: 1, height: 24, background: 'rgba(63,143,58,0.08)', margin: '0 2px' }} className="hidden lg:block" />
+          <div style={{ width: 1, height: 24, background: 'rgba(132,204,22,0.18)', margin: '0 2px' }} className="hidden lg:block" />
 
           {/* Zoom controls */}
           <TBtn emoji="➖" onClick={zoomOut} tooltip={`Zoom Out (${Math.round(zoomLevel * 100)}%)`} disabled={zoomLevel <= 0.8} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#3F8F3A', minWidth: 34, textAlign: 'center', userSelect: 'none' }}>{Math.round(zoomLevel * 100)}%</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#DCFCE7', minWidth: 34, textAlign: 'center', userSelect: 'none' }}>{Math.round(zoomLevel * 100)}%</span>
           <TBtn emoji="➕" onClick={zoomIn} tooltip={`Zoom In (${Math.round(zoomLevel * 100)}%)`} disabled={zoomLevel >= 2.0} />
 
-          <div style={{ width: 1, height: 24, background: 'rgba(63,143,58,0.08)', margin: '0 2px' }} className="hidden lg:block" />
+          <div style={{ width: 1, height: 24, background: 'rgba(132,204,22,0.18)', margin: '0 2px' }} className="hidden lg:block" />
 
           <TBtn icon="download" onClick={handleDownload} tooltip="Download PDF" />
         </div>
       </header>
 
       {/* ═══════ PROGRESS BAR WITH LABEL ═══════ */}
-      <div style={{ height: PROGRESS_H, background: 'rgba(63,143,58,0.06)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ height: PROGRESS_H, background: 'rgba(24,56,30,0.82)', position: 'relative', overflow: 'hidden', flexShrink: 0, borderRadius: 99 }}>
         <motion.div
-          style={{ height: '100%', background: 'linear-gradient(90deg, #3F8F3A, #5F8B3D, #A7C97F)', borderRadius: '0 2px 2px 0' }}
+          style={{ height: '100%', background: 'linear-gradient(90deg, #22c55e, #84cc16, #78350f)', borderRadius: 99 }}
           initial={{ width: '0%' }}
           animate={{ width: `${progressPercent}%` }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -1086,78 +1165,83 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
               position: 'relative',
               padding: isMobile ? '2px 2px' : '2px 10px',
               /* Subtle radial spotlight on the book */
-              background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.35) 0%, transparent 65%)',
+              background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.18) 0%, rgba(24,56,30,0.08) 55%, transparent 70%)',
             }}
           >
             {/* Story mode ambient overlay */}
             {mode === 'story' && <StoryModeOverlay animations={currentAnimations} />}
 
-            {/* Error / Coming-soon state */}
-            {pdfError && (
-              <motion.div
-                style={{ textAlign: 'center', maxWidth: 340, padding: '0 24px' }}
-                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              >
-                {/* Animated book stack */}
-                <motion.div
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ fontSize: 70, display: 'inline-block', marginBottom: 16 }}
-                >
-                  📖
-                </motion.div>
-                {/* Stars sparkle */}
-                <motion.div
-                  style={{ fontSize: 20, marginBottom: 12, letterSpacing: 6 }}
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  ✨ ✨ ✨
-                </motion.div>
-                <h2 style={{ fontSize: 20, fontWeight: 900, color: '#2F6F3A', marginBottom: 8 }}>
-                  Coming Soon!
-                </h2>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
-                  {book.title}
+            {/* Error state */}
+            {false && (
+              <motion.div style={{ textAlign: 'center', maxWidth: 360, padding: '26px 26px 24px', background: READER_PANEL_BG, border: READER_PANEL_BORDER, borderRadius: 28, boxShadow: READER_PANEL_SHADOW }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <span style={{ fontSize: 64, display: 'inline-block', marginBottom: 18 }}>📚</span>
+                <h2 style={{ fontSize: 18, fontWeight: 900, color: READER_TEXT, marginBottom: 8 }}>Unable to load book</h2>
+                <p style={{ fontSize: 13, color: READER_TEXT_SOFT, marginBottom: 24, lineHeight: 1.6 }}>
+                  We couldn't open <strong>{book.title}</strong>. Try again or go back to the bookshelf.
                 </p>
-                <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, lineHeight: 1.6 }}>
-                  This book's flipbook will be available soon.
-                </p>
-                <div style={{
-                  display: 'inline-block',
-                  background: 'linear-gradient(135deg, #E8F6E5, #DDF1D4)',
-                  borderRadius: 10, padding: '8px 18px',
-                  fontSize: 12, color: '#3F8F3A', fontWeight: 700,
-                  marginBottom: 24, border: '1px solid #C7D2FE',
-                }}>
-                  📚 {book.chapters.length} chapters ready to explore
-                </div>
-                <br />
                 <motion.button onClick={onBack} style={{
-                  padding: '10px 28px', borderRadius: 12,
-                  background: 'linear-gradient(135deg, #3F8F3A, #5F8B3D)',
-                  color: '#fff', fontSize: 13, fontWeight: 700,
-                  border: 'none', cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(63,143,58,0.35)',
+                  padding: '10px 24px', borderRadius: 12,
+                  background: READER_BUTTON, color: '#fff', fontSize: 13, fontWeight: 700,
+                  border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
                 }} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-                  ← Go Back
+                  Go Back
                 </motion.button>
               </motion.div>
             )}
 
             {/* Loading spinner */}
             {isLoading && !pdfError && (
-              <motion.div style={{ textAlign: 'center' }} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+              <motion.div style={{ textAlign: 'center', padding: '26px 30px', background: READER_PANEL_BG, border: READER_PANEL_BORDER, borderRadius: 28, boxShadow: READER_PANEL_SHADOW }} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                 <motion.div
                   style={{
                     width: 56, height: 56, margin: '0 auto',
-                    borderRadius: '50%', border: '3px solid #DDF1D4', borderTopColor: '#3F8F3A',
+                    borderRadius: '50%', border: '3px solid rgba(34,197,94,0.18)', borderTopColor: READER_ACCENT,
                   }}
                   animate={{ rotate: 360 }}
                   transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                 />
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#6B7280', marginTop: 20 }}>Preparing your animated storybook…</p>
-                <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>{book.title}</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: READER_TEXT, marginTop: 20 }}>Preparing your animated storybook…</p>
+                <p style={{ fontSize: 11, color: READER_TEXT_SOFT, marginTop: 6 }}>{book.title}</p>
+              </motion.div>
+            )}
+
+            {false && (
+              <motion.div style={{ textAlign: 'center', maxWidth: 360, padding: '26px 26px 24px', background: READER_PANEL_BG, border: READER_PANEL_BORDER, borderRadius: 28, boxShadow: READER_PANEL_SHADOW }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <span style={{ fontSize: 64, display: 'inline-block', marginBottom: 18 }}>📖</span>
+                <h2 style={{ fontSize: 18, fontWeight: 900, color: READER_TEXT, marginBottom: 8 }}>Preparing reader view</h2>
+                <p style={{ fontSize: 13, color: READER_TEXT_SOFT, marginBottom: 24, lineHeight: 1.6 }}>
+                  We are getting <strong>{book.title}</strong> ready for this standard.
+                </p>
+                <motion.button onClick={onBack} style={{
+                  padding: '10px 24px', borderRadius: 12,
+                  background: READER_BUTTON, color: '#fff', fontSize: 13, fontWeight: 700,
+                  border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
+                }} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
+                  Go Back
+                </motion.button>
+              </motion.div>
+            )}
+
+            {/* THE FLIPBOOK */}
+            {(pdfError || (!isLoading && numPages === 0)) && (
+              <motion.div
+                style={{
+                  width: 'min(100%, 1180px)',
+                  height: 'min(78vh, 900px)',
+                  borderRadius: 24,
+                  overflow: 'hidden',
+                  background: '#fff',
+                  boxShadow: '0 24px 60px rgba(0,0,0,0.12)',
+                  border: '1px solid rgba(255,255,255,0.65)',
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <iframe
+                  title={book.title}
+                  src={book.pdfUrl}
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                />
               </motion.div>
             )}
 
@@ -1174,15 +1258,15 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                       width: 52, height: 52, borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer',
-                      background: 'rgba(255,255,255,0.97)', border: '2px solid rgba(63,143,58,0.15)',
-                      boxShadow: '0 8px 20px rgba(63,143,58,0.15), 0 2px 6px rgba(0,0,0,0.06)',
+                      background: 'rgba(24,56,30,0.82)', border: '1px solid rgba(132,204,22,0.24)',
+                      boxShadow: '0 10px 24px rgba(20,83,45,0.45)',
                       opacity: displayPage <= 1 ? 0.15 : 1,
                       transition: 'transform 0.2s, box-shadow 0.2s, opacity 0.3s',
                     }}
-                    whileHover={displayPage > 1 ? { scale: 1.12, x: -4, boxShadow: '0 12px 30px rgba(63,143,58,0.25)' } : {}}
+                    whileHover={displayPage > 1 ? { scale: 1.12, x: -4, boxShadow: '0 14px 28px rgba(132,204,22,0.35)' } : {}}
                     whileTap={displayPage > 1 ? { scale: 0.88 } : {}}
                   >
-                    <Icon name="chevron-left" size={26} className="text-green-500" />
+                    <Icon name="chevron-left" size={26} className="text-lime-200" />
                   </motion.button>
                 )}
 
@@ -1195,9 +1279,9 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                   style={{
                     borderRadius: 20,
                     boxShadow: zoomLevel > 1
-                      ? '0 30px 80px rgba(63,143,58,0.22), 0 12px 30px rgba(63,143,58,0.10)'
-                      : '0 20px 60px rgba(63,143,58,0.14), 0 8px 24px rgba(63,143,58,0.08)',
-                    background: 'linear-gradient(180deg, #ffffff, #f8f6ff)',
+                      ? '0 30px 80px rgba(20,83,45,0.22), 0 12px 30px rgba(120,53,15,0.10)'
+                      : '0 20px 60px rgba(20,83,45,0.14), 0 8px 24px rgba(120,53,15,0.08)',
+                    background: 'linear-gradient(180deg, rgba(24,56,30,0.95), rgba(58,102,61,0.9))',
                     padding: isMobile ? 0 : 6,
                     /* Spine depth effect */
                     position: 'relative',
@@ -1215,7 +1299,7 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                       left: '50%',
                       width: 12,
                       transform: 'translateX(-50%)',
-                      background: 'linear-gradient(90deg, rgba(63,143,58,0.08), rgba(63,143,58,0.02), rgba(63,143,58,0.08))',
+                      background: 'linear-gradient(90deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02), rgba(34,197,94,0.08))',
                       zIndex: 10,
                       pointerEvents: 'none',
                     }} />
@@ -1263,15 +1347,15 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                       width: 52, height: 52, borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer',
-                      background: 'rgba(255,255,255,0.97)', border: '2px solid rgba(63,143,58,0.15)',
-                      boxShadow: '0 8px 20px rgba(63,143,58,0.15), 0 2px 6px rgba(0,0,0,0.06)',
+                      background: 'rgba(24,56,30,0.82)', border: '1px solid rgba(132,204,22,0.24)',
+                      boxShadow: '0 10px 24px rgba(20,83,45,0.45)',
                       opacity: displayPage >= numPages ? 0.15 : 1,
                       transition: 'transform 0.2s, box-shadow 0.2s, opacity 0.3s',
                     }}
-                    whileHover={displayPage < numPages ? { scale: 1.12, x: 4, boxShadow: '0 12px 30px rgba(63,143,58,0.25)' } : {}}
+                    whileHover={displayPage < numPages ? { scale: 1.12, x: 4, boxShadow: '0 14px 28px rgba(132,204,22,0.35)' } : {}}
                     whileTap={displayPage < numPages ? { scale: 0.88 } : {}}
                   >
-                    <Icon name="chevron-right" size={26} className="text-green-500" />
+                    <Icon name="chevron-right" size={26} className="text-lime-200" />
                   </motion.button>
                 )}
               </>
@@ -1285,26 +1369,26 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
                 flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '8px 12px',
-                background: 'rgba(255,255,255,0.94)', borderTop: '1px solid rgba(63,143,58,0.06)',
+                background: 'rgba(24,56,30,0.86)', borderTop: '1px solid rgba(132,204,22,0.2)',
                 backdropFilter: 'blur(16px)',
               }}
             >
               <motion.button onClick={flipPrev} disabled={displayPage <= 1}
                 style={{
                   padding: '6px 16px', borderRadius: 12,
-                  background: '#F3F4F6', color: '#4B5563', fontSize: 11, fontWeight: 700,
+                  background: 'rgba(24,56,30,0.9)', color: '#DCFCE7', fontSize: 11, fontWeight: 700,
                   border: 'none', cursor: 'pointer', opacity: displayPage <= 1 ? 0.3 : 1,
                 }}
                 whileTap={{ scale: 0.95 }}>
                 ← Prev
               </motion.button>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#DCFCE7', fontVariantNumeric: 'tabular-nums' }}>
                 {`${displayPage} / ${numPages}`}
               </span>
               <motion.button onClick={flipNext} disabled={displayPage >= numPages}
                 style={{
                   padding: '6px 16px', borderRadius: 12,
-                  background: '#F3F4F6', color: '#4B5563', fontSize: 11, fontWeight: 700,
+                  background: 'rgba(24,56,30,0.9)', color: '#DCFCE7', fontSize: 11, fontWeight: 700,
                   border: 'none', cursor: 'pointer', opacity: displayPage >= numPages ? 0.3 : 1,
                 }}
                 whileTap={{ scale: 0.95 }}>
@@ -1313,6 +1397,87 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
             </div>
           )}
 
+          {/* ─── BOTTOM: Mode Toggle + Page Info (compact, auto-centered) ─── */}
+          {numPages > 0 && !isLoading && (
+            <div
+              style={{
+                flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+                padding: '4px 0',
+                background: 'rgba(24,56,30,0.72)',
+                borderTop: '1px solid rgba(132,204,22,0.18)',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              {/* Left — Mode Toggle */}
+              <ModeToggle mode={mode} onChange={setMode} />
+
+              {/* Right — Page Info with Jump */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 20,
+                background: 'rgba(24,56,30,0.85)', border: '1px solid rgba(132,204,22,0.35)',
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#DCFCE7' }}>Page</span>
+                {pageJumpEditing ? (
+                  <input
+                    type="number"
+                    autoFocus
+                    min={1}
+                    max={numPages}
+                    value={pageJumpValue}
+                    onChange={(e) => setPageJumpValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const p = Number(pageJumpValue);
+                        if (!isNaN(p) && p >= 1 && p <= numPages) {
+                          jumpToPage(p);
+                        }
+                        setPageJumpEditing(false);
+                      }
+                      if (e.key === 'Escape') setPageJumpEditing(false);
+                    }}
+                    onBlur={() => {
+                      const p = Number(pageJumpValue);
+                      if (!isNaN(p) && p >= 1 && p <= numPages) {
+                        jumpToPage(p);
+                      }
+                      setPageJumpEditing(false);
+                    }}
+                    style={{
+                      width: 46, padding: '3px 4px', borderRadius: 10,
+                      border: '2px solid #84CC16', background: 'rgba(24,56,30,0.95)',
+                      fontSize: 13, fontWeight: 900, color: '#F0FDF4',
+                      textAlign: 'center', outline: 'none',
+                      fontVariantNumeric: 'tabular-nums',
+                      boxShadow: '0 0 0 3px rgba(34,197,94,0.25)',
+                    }}
+                  />
+                ) : (
+                  <motion.span
+                    key={displayPage}
+                    onClick={() => { setPageJumpValue(String(displayPage)); setPageJumpEditing(true); }}
+                    title="Click to jump to a page"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    style={{
+                      fontSize: 13, fontWeight: 900, color: '#F0FDF4',
+                      fontVariantNumeric: 'tabular-nums', cursor: 'pointer',
+                      padding: '2px 8px', borderRadius: 8,
+                      background: 'rgba(34,197,94,0.22)',
+                      transition: 'background 0.15s',
+                      display: 'inline-block',
+                    }}
+                  >
+                    {displayPage}
+                  </motion.span>
+                )}
+                <span style={{ fontSize: 11, color: '#DCFCE7', fontWeight: 700 }}>/</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#D9F99D', fontVariantNumeric: 'tabular-nums' }}>{numPages}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ═══════ AI PANEL (expanded) ═══════ */}
@@ -1326,7 +1491,7 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
               style={{
                 flexShrink: 0,
                 overflow: 'hidden',
-                borderLeft: isMobile ? 'none' : '1px solid rgba(63,143,58,0.08)',
+                borderLeft: isMobile ? 'none' : '1px solid rgba(132,204,22,0.08)',
                 position: isMobile ? 'fixed' : 'relative',
                 top: isMobile ? 0 : 'auto',
                 right: isMobile ? 0 : 'auto',
@@ -1351,102 +1516,6 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
         </AnimatePresence>
       </div>
 
-      {/* ═══════ BOTTOM BAR — Mode + Page Info ═══════ */}
-      <div
-        style={{
-          position: 'relative',
-          height: 56,
-          flexShrink: 0,
-          zIndex: 30,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'transparent',
-          pointerEvents: 'none',
-        }}
-      >
-      <div
-        style={{
-          pointerEvents: 'auto',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '6px 14px',
-          borderRadius: 999,
-          background: 'rgba(255,255,255,0.96)',
-          border: '1px solid rgba(63,143,58,0.13)',
-          boxShadow: '0 4px 18px rgba(63,143,58,0.14)',
-          backdropFilter: 'blur(16px)',
-          userSelect: 'none',
-        }}
-      >
-        {/* Mode Toggle */}
-        <ModeToggle mode={mode} onChange={setMode} />
-
-        {/* Divider */}
-        <div style={{ width: 1, height: 22, background: 'rgba(63,143,58,0.13)', flexShrink: 0 }} />
-
-        {/* Page Info with Jump */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-        }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#A5B4FC' }}>Page</span>
-          {pageJumpEditing ? (
-            <input
-              type="number"
-              autoFocus
-              min={1}
-              max={numPages}
-              value={pageJumpValue}
-              onChange={(e) => setPageJumpValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const p = Number(pageJumpValue);
-                  if (!isNaN(p) && p >= 1 && p <= numPages) jumpToPage(p);
-                  setPageJumpEditing(false);
-                }
-                if (e.key === 'Escape') setPageJumpEditing(false);
-              }}
-              onBlur={() => {
-                const p = Number(pageJumpValue);
-                if (!isNaN(p) && p >= 1 && p <= numPages) jumpToPage(p);
-                setPageJumpEditing(false);
-              }}
-              style={{
-                width: 46, padding: '3px 4px', borderRadius: 10,
-                border: '2px solid #3F8F3A', background: '#fff',
-                fontSize: 13, fontWeight: 900, color: '#3F8F3A',
-                textAlign: 'center', outline: 'none',
-                fontVariantNumeric: 'tabular-nums',
-                boxShadow: '0 0 0 3px rgba(63,143,58,0.15)',
-              }}
-            />
-          ) : (
-            <motion.span
-              key={displayPage}
-              onClick={() => { setPageJumpValue(String(displayPage)); setPageJumpEditing(true); }}
-              title="Click to jump to a page"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              style={{
-                fontSize: 13, fontWeight: 900, color: '#3F8F3A',
-                fontVariantNumeric: 'tabular-nums', cursor: 'pointer',
-                padding: '2px 8px', borderRadius: 8,
-                background: 'rgba(63,143,58,0.08)',
-                transition: 'background 0.15s',
-                display: 'inline-block',
-              }}
-            >
-              {displayPage}
-            </motion.span>
-          )}
-          <span style={{ fontSize: 11, color: '#C7D2FE', fontWeight: 700 }}>/</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#A5B4FC', fontVariantNumeric: 'tabular-nums' }}>{numPages}</span>
-        </div>
-      </div>
-      </div>
-
       {/* ═══════ MINIMIZED AI BUBBLE ═══════ */}
       <AnimatePresence>
         {askAIOpen && askAIMinimized && (
@@ -1462,11 +1531,11 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
               zIndex: 160,
               width: 56, height: 56,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3F8F3A, #5F8B3D)',
+              background: 'linear-gradient(135deg, #22c55e, #78350f)',
               color: '#fff',
               border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 6px 24px rgba(63,143,58,0.4)',
+              boxShadow: '0 6px 24px rgba(20,83,45,0.4)',
               fontSize: 22,
             }}
             whileHover={{ scale: 1.1 }}
@@ -1525,9 +1594,9 @@ const BookReaderPage: React.FC<BookReaderPageProps> = ({ book, onBack }) => {
               gap: 10,
               padding: '8px 16px',
               borderRadius: 20,
-              background: 'rgba(63,143,58,0.95)',
+              background: 'linear-gradient(135deg, #22c55e, #84cc16)',
               backdropFilter: 'blur(10px)',
-              boxShadow: '0 4px 20px rgba(63,143,58,0.3)',
+              boxShadow: '0 4px 20px rgba(20,83,45,0.3)',
             }}
           >
             <motion.span
@@ -1569,4 +1638,3 @@ function formatMs(ms: number): string {
 }
 
 export default BookReaderPage;
-

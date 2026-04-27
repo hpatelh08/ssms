@@ -280,6 +280,10 @@ db.exec(`
     UNIQUE(class, section)
   );
 
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_class_teacher_mapping_teacher_id
+    ON class_teacher_mapping(teacher_id)
+    WHERE teacher_id IS NOT NULL;
+
   CREATE TABLE IF NOT EXISTS subject_teacher_mapping (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     class         INTEGER NOT NULL,
